@@ -1,0 +1,78 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Kotlin / Java
+*.class
+hs_err_pid*
+
+# Rust
+target/
+Cargo.lock
+
+# Keep Cargo.lock once a runnable application crate exists. Remove the ignore
+# above at that time; it is normally committed for applications.
+
+# Go
+bin/
+coverage.out
+*.test
+
+# Node / Tauri UI if introduced
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Logs, diagnostics, and network captures
+*.log
+logs/
+diagnostics/
+*.pcap
+*.pcapng
+*.har
+
+# Test and coverage output
+.coverage
+coverage/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
