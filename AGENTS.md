@@ -88,4 +88,3 @@ Before declaring work complete:
 - Update documentation affected by the change.
 - Update `docs/PROJECT_STATUS.md` with what changed and the next concrete action.
 - Summarize unresolved risks rather than silently choosing around them.
-

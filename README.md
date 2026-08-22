@@ -249,4 +249,3 @@ The repository is personal and private at present. Contributions should follow
 No open-source license has been selected yet. Until a license file is added, the
 source is not licensed for redistribution or reuse. Selecting a license is an
 explicit pre-publication decision; see [the decision log](docs/DECISIONS.md).
-

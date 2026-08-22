@@ -149,4 +149,3 @@ A change is complete when:
 - Architecture, decision, experiment, test, and status documents are updated as
   needed.
 - The next exact task is left in `docs/PROJECT_STATUS.md`.
-

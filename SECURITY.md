@@ -39,4 +39,3 @@ Useful reports include:
 
 There are currently no supported versions or releases. Security fixes should be
 applied to the active development branch and documented in the project status.
-

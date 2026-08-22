@@ -191,4 +191,3 @@ These ideas are deliberately deferred:
 
 Move an item out of the parking lot only by adding a decision entry and placing it
 behind the current milestone.
-

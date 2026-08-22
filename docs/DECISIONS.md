@@ -13,8 +13,7 @@ Statuses:
 
 ## D-001 — Keep the baseline unrooted
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -37,8 +36,7 @@ but cannot become a dependency of the main architecture.
 
 ## D-002 — Optimize for a personal project first
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -53,8 +51,7 @@ app-store review, installer polish, and universal compatibility are deferred.
 
 ## D-003 — Begin with Android SOCKS5 plus a Linux companion over ADB
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -76,8 +73,7 @@ a new tunnel protocol.
 
 ## D-004 — Keep Android as the control plane
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -87,8 +83,7 @@ they do not become independent product controllers.
 
 ## D-005 — Separate transport from relay semantics
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -102,8 +97,7 @@ adapters around the same conceptual relay/session layer.
 
 ## D-006 — Evaluate a WireGuard-compatible long-term endpoint
 
-**Status:** Proposed  
-**Date:** 2026-08-22
+**Status:** Proposed · **Date:** 2026-08-22
 
 ### Proposal
 
@@ -122,8 +116,7 @@ Retain a private authenticated relay protocol and provide thin Teather receivers
 
 ## D-007 — Use Kotlin for Android platform integration
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -135,8 +128,7 @@ require all packet processing to be written in Kotlin.
 
 ## D-008 — Choose the permanent networking-core language after P0
 
-**Status:** Open  
-**Date:** 2026-08-22
+**Status:** Open · **Date:** 2026-08-22
 
 ### Candidates
 
@@ -154,8 +146,7 @@ require all packet processing to be written in Kotlin.
 
 ## D-009 — Do not advertise guaranteed carrier invisibility
 
-**Status:** Accepted  
-**Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-08-22
 
 ### Decision
 
@@ -172,8 +163,7 @@ brittle and the documentation misleading.
 
 ## D-010 — Defer licensing until before public access
 
-**Status:** Open  
-**Date:** 2026-08-22
+**Status:** Open · **Date:** 2026-08-22
 
 ### Decision needed
 
@@ -195,4 +185,3 @@ changes is acceptable.
 2. State status, date, decision, rationale, and consequences.
 3. If replacing an accepted decision, mark it superseded and link the new entry.
 4. Update README, architecture, roadmap, and project status where affected.
-

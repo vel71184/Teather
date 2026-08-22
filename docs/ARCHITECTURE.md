@@ -230,4 +230,3 @@ UI or networking parser.
 
 The permanent core language is deliberately open until P0 clarifies how much of
 the system is relay logic versus platform integration.
-

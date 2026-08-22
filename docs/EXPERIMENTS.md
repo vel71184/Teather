@@ -72,8 +72,7 @@ captures containing personal traffic.
 
 ## E-001 — TCP relay through Android over ADB
 
-**Date:** not run  
-**Status:** planned  
+**Date:** not run · **Status:** planned
 **Question:** Can a Linux TCP client reach the Internet through an unrooted Android
 application relay reached over USB/ADB, using an explicitly selected Android
 upstream?
@@ -150,4 +149,3 @@ Not run.
 | E-008 | How do USB and Wi-Fi compare for throughput, latency, battery, and heat? | P3 |
 | E-009 | Can a userspace WireGuard endpoint relay Linux TCP/UDP correctly? | P4 |
 | E-010 | Can a mobile WireGuard receiver use the Android-hosted relay? | P4 |
-

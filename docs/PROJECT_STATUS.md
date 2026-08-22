@@ -1,9 +1,9 @@
 # Project status
 
-**Snapshot date:** 2026-08-22  
-**Lifecycle:** planning / pre-alpha  
-**Active milestone:** P0 — Android relay over USB/ADB  
-**Runnable build:** none yet
+- **Snapshot date:** 2026-08-22
+- **Lifecycle:** planning / pre-alpha
+- **Active milestone:** P0 — Android relay over USB/ADB
+- **Runnable build:** none yet
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -115,4 +115,3 @@ Replace this section's values or append a dated entry below after each session.
 - Risks or failures: all networking behavior remains untested.
 - Next exact action: fill in E-001's environment and implement the minimal Android
   TCP relay.
-

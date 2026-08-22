@@ -142,4 +142,3 @@ Before tagging any checkpoint:
 - Known failures are documented rather than hidden.
 - Diagnostics are reviewed for sensitive output.
 - Project status and decision log match the implementation.
-

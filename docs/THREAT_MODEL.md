@@ -176,4 +176,3 @@ Update this threat model before adding:
 - remote access or cloud services;
 - diagnostic packet capture;
 - automatic provider-specific behavior.
-
