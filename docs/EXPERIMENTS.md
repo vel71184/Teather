@@ -122,7 +122,7 @@ upstream?
 
 ### Results
 
-Implementation prepared in source on 2026-08-22. GitHub Actions run `32607224560` passed at commit `50da27a` (five JVM tests, Android lint, and debug APK assembly). Physical-phone/network results are not yet recorded; do not mark this experiment passed.
+Implementation prepared in source on 2026-08-22. GitHub Actions run `32607599774` passed at commit `0914eb5` (six JVM tests, Android lint, and debug APK assembly), including a one-way active-stream regression test for the connection-wide idle policy. Physical-phone/network results are not yet recorded; do not mark this experiment passed.
 
 ### Observation vs. inference
 
