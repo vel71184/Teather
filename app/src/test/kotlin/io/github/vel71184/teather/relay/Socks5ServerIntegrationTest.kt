@@ -5,6 +5,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -95,7 +96,86 @@ class Socks5ServerIntegrationTest {
         }
     }
 
+    @Test
+    fun `connection-wide idle timeout permits a one-way active stream`() {
+        val loopback = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+        val streamListener = ServerSocket(0, 1, loopback)
+        val streamDone = CountDownLatch(1)
+        thread(name = "test-stream", isDaemon = true) {
+            try {
+                streamListener.accept().use { socket ->
+                    repeat(8) { index ->
+                        socket.getOutputStream().write(index)
+                        socket.getOutputStream().flush()
+                        Thread.sleep(40)
+                    }
+                }
+            } catch (_: IOException) {
+                // The assertion below detects a relay that closes the one-way stream early.
+            } finally {
+                streamDone.countDown()
+            }
+        }
+
+        val server = Socks5Server(
+            port = 0,
+            connector = loopbackConnector(),
+            relayIdleTimeoutMs = 120,
+            idleCheckIntervalMs = 20,
+        )
+        val relayPort = server.start()
+
+        try {
+            Socket(loopback, relayPort).use { client ->
+                client.soTimeout = 2_000
+                val input = DataInputStream(client.getInputStream())
+                connectThroughSocks(input, client, streamListener.localPort)
+                val streamed = input.readBytes(8)
+                assertArrayEquals(ByteArray(8) { it.toByte() }, streamed)
+            }
+            assertTrue(streamDone.await(2, TimeUnit.SECONDS))
+        } finally {
+            server.close()
+            streamListener.close()
+        }
+    }
+
     private fun DataInputStream.readBytes(length: Int): ByteArray = ByteArray(length).also(::readFully)
+
+    private fun loopbackConnector(): OutboundConnector = OutboundConnector { destination, timeoutMs ->
+        Socket().apply {
+            val address = destination.address ?: InetAddress.getByName(destination.host)
+            connect(InetSocketAddress(address, destination.port), timeoutMs)
+        }
+    }
+
+    private fun connectThroughSocks(input: DataInputStream, client: Socket, targetPort: Int) {
+        val output = client.getOutputStream()
+        output.write(byteArrayOf(0x05, 0x01, 0x00))
+        output.flush()
+        assertArrayEquals(byteArrayOf(0x05, 0x00), input.readBytes(2))
+        output.write(
+            byteArrayOf(
+                0x05,
+                0x01,
+                0x00,
+                0x01,
+                127,
+                0,
+                0,
+                1,
+                ((targetPort ushr 8) and 0xff).toByte(),
+                (targetPort and 0xff).toByte(),
+            ),
+        )
+        output.flush()
+        assertEquals(0x05, input.readUnsignedByte())
+        assertEquals(Socks5Protocol.REPLY_SUCCEEDED, input.readUnsignedByte())
+        input.readUnsignedByte()
+        val addressType = input.readUnsignedByte()
+        input.readBytes(if (addressType == 0x04) 16 else 4)
+        input.readUnsignedShort()
+    }
 
     private fun awaitTransferredBytes(server: Socks5Server, expected: Long): RelayStatsSnapshot {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)

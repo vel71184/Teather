@@ -15,6 +15,8 @@ import io.github.vel71184.teather.R
 import io.github.vel71184.teather.network.UpstreamPreference
 
 class RelayService : Service() {
+    private var preserveFailureOnDestroy = false
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -43,13 +45,13 @@ class RelayService : Service() {
         if (status.lifecycle == RelayLifecycle.RUNNING) {
             notificationManager.notify(NOTIFICATION_ID, runningNotification(status))
         } else {
-            stopRelayAndSelf()
+            stopServicePreservingFailure()
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        RelayRuntime.stop()
+        if (!preserveFailureOnDestroy) RelayRuntime.stop()
         super.onDestroy()
     }
 
@@ -68,7 +70,14 @@ class RelayService : Service() {
     }
 
     private fun stopRelayAndSelf() {
+        preserveFailureOnDestroy = false
         RelayRuntime.stop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun stopServicePreservingFailure() {
+        preserveFailureOnDestroy = true
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

@@ -57,12 +57,15 @@ From the repository root:
 - selected relay port and upstream policy.
 
 `all` builds, installs, starts ADB forwarding, starts the Android foreground
-service, and makes ten HTTPS requests through the phone. `soak` repeats the same
-request for 1,800 seconds by default. A different harmless test URL or duration
-can be supplied without editing source:
+service, and makes ten HTTPS requests through the phone. `soak` holds one SOCKS
+session open with a rate-limited download for 1,800 seconds by default. It uses
+the pinned Gradle distribution at 8 KiB/s, consuming roughly 14 MiB over the
+30-minute gate. A different harmless streaming URL, rate, or duration can be
+supplied without editing source:
 
 ```bash
-TEATHER_TEST_URL=https://example.com/ TEATHER_SOAK_SECONDS=1800 \
+TEATHER_SOAK_URL=https://services.gradle.org/distributions/gradle-9.3.1-bin.zip \
+TEATHER_SOAK_RATE=8K TEATHER_SOAK_SECONDS=1800 \
   ./desktop/linux/teather-p0 soak
 ```
 
@@ -112,7 +115,8 @@ Do not start P1 TUN or route mutation until the P0 exit criteria pass.
 - No settled IPv6 policy, although literal IPv6 SOCKS destinations can be parsed
 - No Wi-Fi listener, discovery, pairing, or multi-client product support
 - No guarantee about provider classification or accounting
-- Five-minute per-direction idle read timeout
+- Five-minute connection-wide idle timeout; traffic in either direction keeps the
+  session alive
 - Maximum 64 simultaneous development sessions
 
 These are milestone boundaries, not filler. Change one only through a tested code

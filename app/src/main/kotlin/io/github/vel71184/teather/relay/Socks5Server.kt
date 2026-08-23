@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 fun interface OutboundConnector {
     @Throws(IOException::class)
@@ -31,6 +32,8 @@ class Socks5Server(
     private val connector: OutboundConnector,
     val stats: RelayStats = RelayStats(),
     private val maxConnections: Int = DEFAULT_MAX_CONNECTIONS,
+    private val relayIdleTimeoutMs: Int = RELAY_IDLE_TIMEOUT_MS,
+    private val idleCheckIntervalMs: Int = IDLE_CHECK_INTERVAL_MS,
     private val logger: (category: String) -> Unit = {},
 ) : Closeable {
     private val running = AtomicBoolean(false)
@@ -42,6 +45,12 @@ class Socks5Server(
 
     @Volatile
     private var serverSocket: ServerSocket? = null
+
+    init {
+        require(maxConnections > 0) { "Connection limit must be positive" }
+        require(relayIdleTimeoutMs > 0) { "Relay idle timeout must be positive" }
+        require(idleCheckIntervalMs > 0) { "Idle check interval must be positive" }
+    }
 
     @Synchronized
     fun start(): Int {
@@ -69,6 +78,7 @@ class Socks5Server(
                 stats.clientAccepted()
                 if (!connectionSlots.tryAcquire()) {
                     stats.clientRejected("connection-limit")
+                    logger("relay.socks.connection-limit")
                     client.closeQuietly()
                     continue
                 }
@@ -110,8 +120,9 @@ class Socks5Server(
             remote = connector.connect(destination, CONNECT_TIMEOUT_MS)
             sockets.add(remote)
             remote.tcpNoDelay = true
-            remote.soTimeout = RELAY_IDLE_TIMEOUT_MS
-            client.soTimeout = RELAY_IDLE_TIMEOUT_MS
+            val readPollInterval = minOf(idleCheckIntervalMs, relayIdleTimeoutMs)
+            remote.soTimeout = readPollInterval
+            client.soTimeout = readPollInterval
 
             Socks5Protocol.writeReply(
                 client.getOutputStream(),
@@ -124,17 +135,20 @@ class Socks5Server(
             relayBidirectionally(client, remote)
         } catch (error: SocksProtocolException) {
             stats.clientRejected("protocol")
+            logger("relay.socks.protocol")
             if (error.replyAllowed && !replySent) {
                 writeFailureReply(client, error.replyCode)
             }
         } catch (error: IOException) {
             val category = errorCategory(error)
             stats.clientRejected(category)
+            logger("relay.socks.$category")
             if (requestRead && !replySent) {
                 writeFailureReply(client, replyCode(error))
             }
         } catch (error: RuntimeException) {
             stats.clientRejected("runtime")
+            logger("relay.socks.runtime")
             if (requestRead && !replySent) {
                 writeFailureReply(client, Socks5Protocol.REPLY_GENERAL_FAILURE)
             }
@@ -150,6 +164,7 @@ class Socks5Server(
     private fun relayBidirectionally(client: Socket, remote: Socket) {
         val finished = CountDownLatch(2)
         val failed = AtomicBoolean(false)
+        val lastActivityNanos = AtomicLong(System.nanoTime())
 
         transferExecutor.execute {
             pump(
@@ -158,6 +173,7 @@ class Socks5Server(
                 onBytes = stats::addClientToInternetBytes,
                 failed = failed,
                 finished = finished,
+                lastActivityNanos = lastActivityNanos,
             )
         }
         transferExecutor.execute {
@@ -167,6 +183,7 @@ class Socks5Server(
                 onBytes = stats::addInternetToClientBytes,
                 failed = failed,
                 finished = finished,
+                lastActivityNanos = lastActivityNanos,
             )
         }
 
@@ -184,22 +201,34 @@ class Socks5Server(
         onBytes: (Int) -> Unit,
         failed: AtomicBoolean,
         finished: CountDownLatch,
+        lastActivityNanos: AtomicLong,
     ) {
         try {
             val input = source.getInputStream()
             val output = destination.getOutputStream()
             val buffer = ByteArray(COPY_BUFFER_BYTES)
             while (running.get()) {
-                val count = input.read(buffer)
+                val count = try {
+                    input.read(buffer)
+                } catch (error: SocketTimeoutException) {
+                    val idleNanos = System.nanoTime() - lastActivityNanos.get()
+                    if (idleNanos >= TimeUnit.MILLISECONDS.toNanos(relayIdleTimeoutMs.toLong())) {
+                        throw error
+                    }
+                    continue
+                }
                 if (count < 0) break
                 output.write(buffer, 0, count)
                 output.flush()
                 onBytes(count)
+                lastActivityNanos.set(System.nanoTime())
             }
             destination.shutdownOutputQuietly()
         } catch (error: IOException) {
             if (running.get() && failed.compareAndSet(false, true)) {
-                stats.error(errorCategory(error))
+                val category = errorCategory(error)
+                stats.error(category)
+                logger("relay.socks.$category")
                 source.closeQuietly()
                 destination.closeQuietly()
             }
@@ -257,6 +286,7 @@ class Socks5Server(
         const val HANDSHAKE_TIMEOUT_MS = 10_000
         const val CONNECT_TIMEOUT_MS = 15_000
         const val RELAY_IDLE_TIMEOUT_MS = 300_000
+        const val IDLE_CHECK_INTERVAL_MS = 30_000
         const val COPY_BUFFER_BYTES = 16 * 1024
 
         private fun namedThreads(prefix: String): ThreadFactory {

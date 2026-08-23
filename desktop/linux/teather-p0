@@ -9,6 +9,8 @@ readonly APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
 relay_port="${TEATHER_PORT:-1080}"
 relay_upstream="${TEATHER_UPSTREAM:-cellular}"
 test_url="${TEATHER_TEST_URL:-https://example.com/}"
+soak_url="${TEATHER_SOAK_URL:-https://services.gradle.org/distributions/gradle-9.3.1-bin.zip}"
+soak_rate="${TEATHER_SOAK_RATE:-8K}"
 device_serial="${TEATHER_SERIAL:-}"
 adb_command=(adb)
 
@@ -34,6 +36,8 @@ Optional environment variables:
   TEATHER_PORT=1080
   TEATHER_UPSTREAM=cellular|wifi|ethernet|auto
   TEATHER_TEST_URL=https://example.com/
+  TEATHER_SOAK_URL=https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+  TEATHER_SOAK_RATE=8K       Default consumes about 14 MiB over 30 minutes.
   TEATHER_SOAK_SECONDS=1800
   TEATHER_SERIAL=<adb-serial>   Required only with multiple attached devices.
 USAGE
@@ -195,15 +199,38 @@ smoke_test() {
 soak_test() {
   local duration="${TEATHER_SOAK_SECONDS:-1800}"
   [[ "$duration" =~ ^[0-9]+$ ]] || fail "TEATHER_SOAK_SECONDS must be numeric"
-  local deadline=$((SECONDS + duration))
-  local passes=0
-  while (( SECONDS < deadline )); do
-    one_request
-    passes=$((passes + 1))
-    printf 'Soak request %d passed (%ds remaining)\n' "$passes" "$((deadline - SECONDS))"
-    sleep 1
-  done
-  printf 'P0 soak gate passed: %ds, %d requests\n' "$duration" "$passes"
+  (( duration > 0 )) || fail "TEATHER_SOAK_SECONDS must be positive"
+  require_command curl
+  printf 'Starting one continuous %ds transfer at %s through Teather.\n' "$duration" "$soak_rate"
+  printf 'Default 30-minute data use is approximately 14 MiB.\n'
+  local started=$SECONDS
+  local curl_status
+  set +e
+  curl \
+    --fail \
+    --silent \
+    --show-error \
+    --connect-timeout 20 \
+    --max-time "$duration" \
+    --speed-limit 1 \
+    --speed-time 60 \
+    --limit-rate "$soak_rate" \
+    --location \
+    --socks5-hostname "127.0.0.1:${relay_port}" \
+    --output /dev/null \
+    "$soak_url"
+  curl_status=$?
+  set -e
+
+  local elapsed=$((SECONDS - started))
+  local minimum_elapsed=$((duration > 10 ? duration - 5 : duration - 1))
+  if (( elapsed < minimum_elapsed )); then
+    fail "continuous transfer ended after ${elapsed}s (curl status ${curl_status}); expected ${duration}s"
+  fi
+  if (( curl_status != 0 && curl_status != 28 )); then
+    fail "continuous transfer returned unexpected curl status ${curl_status} after ${elapsed}s"
+  fi
+  printf 'P0 continuous-transfer gate passed: %ds on one SOCKS session.\n' "$elapsed"
 }
 
 follow_logs() {
