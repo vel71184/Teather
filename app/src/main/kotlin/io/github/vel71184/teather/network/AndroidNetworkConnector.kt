@@ -55,6 +55,7 @@ class AndroidNetworkConnector(
         return addresses
     }
 
+    @Suppress("DEPRECATION") // P0 enumerates existing networks; P3 will own callback-based link lifecycle.
     private fun selectNetwork(): SelectedNetwork {
         val active = connectivityManager.activeNetwork
         val candidates = connectivityManager.allNetworks.mapNotNull { network ->

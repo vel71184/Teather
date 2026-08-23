@@ -85,7 +85,7 @@ class Socks5ServerIntegrationTest {
             }
 
             assertTrue(echoDone.await(5, TimeUnit.SECONDS))
-            val stats = server.stats.snapshot()
+            val stats = awaitTransferredBytes(server, "teather-p0".length.toLong())
             assertEquals(1L, stats.establishedSessions)
             assertEquals("teather-p0".length.toLong(), stats.bytesClientToInternet)
             assertEquals("teather-p0".length.toLong(), stats.bytesInternetToClient)
@@ -96,4 +96,17 @@ class Socks5ServerIntegrationTest {
     }
 
     private fun DataInputStream.readBytes(length: Int): ByteArray = ByteArray(length).also(::readFully)
+
+    private fun awaitTransferredBytes(server: Socks5Server, expected: Long): RelayStatsSnapshot {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        var snapshot = server.stats.snapshot()
+        while (
+            (snapshot.bytesClientToInternet < expected || snapshot.bytesInternetToClient < expected) &&
+            System.nanoTime() < deadline
+        ) {
+            Thread.sleep(10)
+            snapshot = server.stats.snapshot()
+        }
+        return snapshot
+    }
 }
