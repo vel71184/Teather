@@ -122,12 +122,12 @@ upstream?
 
 ### Results
 
-Implementation prepared in source on 2026-08-22. Host Gradle/CI and physical-phone results are not yet recorded; do not mark this experiment passed until both exist.
+Implementation prepared in source on 2026-08-22. GitHub Actions run `32607224560` passed at commit `50da27a` (five JVM tests, Android lint, and debug APK assembly). Physical-phone/network results are not yet recorded; do not mark this experiment passed.
 
 ### Observation vs. inference
 
-- Observed: none yet.
-- Inferred: the implemented path is buildable in principle from public Android
+- Observed: the host-side protocol/integration suite, lint, and debug APK build pass in CI; no phone/network observation exists yet.
+- Inferred: the implemented path is buildable from public Android
   APIs, but target-device/provider behavior remains unverified.
 
 ### Follow-up

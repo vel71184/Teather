@@ -3,7 +3,7 @@
 - **Snapshot date:** 2026-08-22
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P0 — Android relay over USB/ADB
-- **Runnable source:** present; physical-phone validation pending
+- **Runnable build:** CI-verified debug APK; physical-phone validation pending
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -76,7 +76,6 @@ See `docs/DECISIONS.md` for rationale and status.
 ## Important unknowns
 
 - The P0 source has not run on the owner's actual phone/provider connection.
-- GitHub CI outcome must be recorded after the implementation commit runs.
 - Screen-off, Doze, upstream changes, 30-minute transfer, and thermal behavior are
   unmeasured.
 - Provider classification/accounting behavior is unmeasured and cannot be
@@ -100,12 +99,11 @@ See `docs/DECISIONS.md` for rationale and status.
 
 ## Evidence recorded so far
 
-The source-level P0 implementation exists. Local checks available in the Android
-ChatGPT workspace were limited to shell syntax, XML well-formedness, and
-placeholder scanning because that workspace has neither a working JDK/Android SDK
-nor an attached phone. Gradle unit/lint/APK evidence is produced by GitHub Actions
-and must be recorded here after the branch runs. Device/network claims remain
-unverified until E-001 is executed.
+The source-level P0 implementation exists. GitHub Actions run `32607224560` passed
+at commit `50da27a`: all five JVM tests, Android lint, and debug APK assembly
+succeeded with the pinned wrapper/JDK/toolchain. The Android ChatGPT workspace
+also passed shell syntax, XML well-formedness, and placeholder scans. No attached
+phone was available, so device/network claims remain unverified until E-001 runs.
 
 ## Session closeout template
 
@@ -127,10 +125,10 @@ unverified until E-001 is executed.
 - Completed: pinned Android build, foreground relay lifecycle, loopback SOCKS5 TCP
   server, explicit Android network binding, UI/status, JVM tests, Linux ADB helper,
   CI workflow, and laptop/phone handoff.
-- Verified with: shell syntax, XML parsing, and placeholder scan in the source
-  workspace; Gradle/phone verification pending.
+- Verified with: shell syntax, XML parsing, placeholder scan, and GitHub Actions
+  run `32607224560` (`testDebugUnitTest`, `lintDebug`, and `assembleDebug`).
 - Decisions made: API/toolchain package identity and debug-only ADB lifecycle
   exposure, recorded as D-011 and D-012.
-- Risks or failures: no JDK/SDK or physical Android device was available in this
-  ChatGPT-on-Android session.
+- Risks or failures: the first CI run exposed and then verified the repair of an
+  asynchronous test-observation race; no physical Android device was available.
 - Next exact action: run the commands in `docs/P0_HANDOFF.md` from the laptop.
