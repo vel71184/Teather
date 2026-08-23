@@ -1,37 +1,45 @@
 # Development guide
 
-Teather has no runnable implementation yet. This guide defines the workflow and
-the minimum environment expected for P0 without pretending that unselected tools
-already exist.
+Teather now has a runnable P0 source implementation. This guide defines the pinned
+build, host workflow, and evidence boundary; physical Android validation remains
+outstanding.
 
-## Initial target environment
+## Pinned P0 toolchain
 
-Record exact values in experiment E-001 before coding:
-
-| Item | Required value |
+| Item | Pinned value |
 |---|---|
-| Phone | Model and manufacturer |
-| Android | Version and build family; omit device serial |
-| Linux | Distribution and version |
-| Desktop | Desktop environment and display session |
-| Network manager | NetworkManager, systemd-networkd, or other |
-| ADB | `adb version` output without identifiers |
-| Provider context | Provider and relevant plan behavior; no account data |
+| Application ID | `io.github.vel71184.teather` |
+| Minimum / target / compile API | 26 / 36 / 37 |
+| Android Gradle plugin | 9.1.1 |
+| Gradle wrapper | 9.3.1 |
+| JDK | 17 |
+| Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
+
+The wrapper distribution checksum and wrapper JAR checksum are both enforced.
+Android Studio is optional; the checked-in wrapper is the build interface.
+
+## Runtime environment discovery
+
+Do not hand-edit phone or laptop facts into code. With one authorized phone
+attached, run:
+
+```bash
+./desktop/linux/teather-p0 doctor
+```
+
+It reports the current commit, non-sensitive host/network-manager details, ADB and
+Java versions, and phone model/Android version while deliberately omitting the ADB
+serial. If multiple devices exist, set `TEATHER_SERIAL` in the shell only.
 
 ## P0 prerequisites
 
-Expected tools:
+- Linux with Git, Bash, curl, JDK 17, and Android platform tools (`adb`).
+- Physical stock/unrooted Android device with USB debugging enabled.
+- One-time approval of the laptop's ADB key on the unlocked phone.
+- Android API 37 installed locally, or network access for Gradle/SDK setup.
+- No stock hotspot or stock USB tethering during E-001.
 
-- Android Studio with a supported JDK and Android SDK.
-- Android platform tools (`adb`).
-- A physical unrooted Android device with USB debugging enabled and explicitly
-  authorized for the development computer.
-- Linux development environment with Git, a shell, and curl.
-- A test procedure that does not rely on sensitive production captures.
-
-Gradle, Android API levels, package identifiers, and exact dependency versions
-must be selected in the first implementation change and recorded in the decision
-log or build files.
+The exact continuation is maintained in `docs/P0_HANDOFF.md`.
 
 ## Development sequence
 
@@ -50,8 +58,8 @@ system before step 6 passes.
 
 ## Planned local workflow
 
-The eventual repository should expose a small number of obvious commands, for
-example through a `justfile` or checked-in scripts:
+The repository exposes these commands through the checked-in `Makefile` and
+`desktop/linux/teather-p0` helper:
 
 ```text
 check          format, lint, and unit tests
@@ -62,8 +70,9 @@ e2e-p0         run the non-destructive P0 test
 diagnose       print redacted environment and link state
 ```
 
-These are interface goals, not commands that currently exist. Do not add no-op
-scripts simply to make the names appear.
+Implemented equivalents are `make check`, `make android-build`, `make p0-doctor`,
+`make p0-run`, `make p0-test`, and `make p0-stop`. The helper additionally provides
+`status`, `logs`, and the 30-minute `soak` gate.
 
 ## Branches and commits
 

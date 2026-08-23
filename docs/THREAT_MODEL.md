@@ -39,11 +39,16 @@ flowchart TD
 
 **Mitigations:**
 
-- Bind P0 only to the ADB-forwarded local endpoint.
-- Require explicit pairing before shared-link use.
+- Bind P0 only to Android loopback and reach it through ADB forwarding.
+- Treat P0 no-auth SOCKS as a controlled debug experiment, not a releasable
+  authentication design. Android loopback is also reachable by other local apps.
+- Keep the lifecycle service unexported in release builds. The debug-only exported
+  override exists for ADB automation and must not ship.
+- Limit P0 to 64 sessions with handshake, connect, and idle timeouts.
+- Require explicit pairing before any shared-link or post-P0 daily-driver use.
 - Give every receiver a distinct revocable identity.
 - Apply connection, flow, and byte-rate limits where practical.
-- Show active receiver count and identity on Android.
+- Show active receiver count and identity on Android once identities exist.
 
 ### Traffic observation or modification on the local link
 
@@ -58,7 +63,10 @@ link security.
 - Bind identity to the pairing confirmation.
 
 ADB P0 relies on ADB host authorization and physical control but should not be
-mistaken for the final shared-link security model.
+mistaken for the final shared-link security model. Its no-auth loopback listener
+does not exclude other applications already running on the phone. Use only a
+development phone state the owner trusts, stop it after testing, and add receiver
+authentication before promoting the path beyond P0.
 
 ### Malicious protocol input
 
