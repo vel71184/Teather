@@ -79,14 +79,14 @@ upstream?
 
 ### Environment
 
-- Phone model: **to record**
-- Android version/build family: **to record**
-- Teather commit: **to record**
-- Linux distribution/version: **to record**
-- Desktop/network manager: **to record**
-- ADB version: **to record**
-- Upstream type: cellular initially
-- Provider context: **to record without account identifiers**
+- Phone model: collect with `./desktop/linux/teather-p0 doctor`
+- Android version/build family: collect with `./desktop/linux/teather-p0 doctor`
+- Teather commit: collect with `./desktop/linux/teather-p0 doctor`
+- Linux distribution/version: collect with `./desktop/linux/teather-p0 doctor`
+- Desktop/network manager: collect with `./desktop/linux/teather-p0 doctor`
+- ADB version: collect with `./desktop/linux/teather-p0 doctor`
+- Upstream type: cellular initially; helper default is explicit `cellular`
+- Provider context: add manually only if useful, without account identifiers
 
 ### Preconditions
 
@@ -100,14 +100,14 @@ upstream?
 
 ### Procedure
 
-1. Start the minimal Android foreground relay.
-2. Confirm it listens only on the intended development endpoint.
-3. Establish ADB port forwarding to a Linux loopback port.
-4. Configure one test client to use the proxy.
-5. Request a small known test resource ten times.
-6. Transfer a non-sensitive test payload continuously for thirty minutes.
-7. Record byte counts on Android and Linux.
-8. Stop the service and verify connections close.
+1. Run `make check`.
+2. Run `./desktop/linux/teather-p0 doctor` and retain only its redacted output.
+3. Confirm stock hotspot and stock USB tethering are off.
+4. Run `./desktop/linux/teather-p0 all`.
+5. Confirm the helper completes ten proxied HTTPS requests.
+6. Run `./desktop/linux/teather-p0 soak` for the 1,800-second gate.
+7. Compare helper output with the counters shown in the Android app.
+8. Run `./desktop/linux/teather-p0 stop` and then `status`.
 9. Disconnect USB and verify no Linux global network state was changed.
 
 ### Predetermined success criteria
@@ -122,13 +122,13 @@ upstream?
 
 ### Results
 
-Not run.
+Implementation prepared in source on 2026-08-22. GitHub Actions run `32607599774` passed at commit `0914eb5` (six JVM tests, Android lint, and debug APK assembly), including a one-way active-stream regression test for the connection-wide idle policy. Physical-phone/network results are not yet recorded; do not mark this experiment passed.
 
 ### Observation vs. inference
 
-- Observed: none yet.
-- Inferred: the architecture is feasible based on available Android socket and ADB
-  behavior, but target-device/provider behavior is unverified.
+- Observed: the host-side protocol/integration suite, lint, and debug APK build pass in CI; no phone/network observation exists yet.
+- Inferred: the implemented path is buildable from public Android
+  APIs, but target-device/provider behavior remains unverified.
 
 ### Follow-up
 

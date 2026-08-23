@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Teather</string>
+    <string name="screen_title">Teather P0 relay</string>
+    <string name="screen_description">Loopback-only SOCKS5 relay for an explicitly authorized ADB connection. TCP CONNECT only; no stock tethering is enabled.</string>
+    <string name="upstream_label">Android upstream</string>
+    <string name="port_label">SOCKS5 port</string>
+    <string name="start_relay">Start relay</string>
+    <string name="stop_relay">Stop relay</string>
+    <string name="copy_commands">Copy laptop commands</string>
+    <string name="status_label">Live status</string>
+    <string name="status_stopped">State: stopped</string>
+    <string name="notification_channel_name">Teather relay</string>
+    <string name="notification_channel_description">Status for the user-started Teather Internet relay</string>
+    <string name="notification_starting">Starting loopback relay…</string>
+    <string name="notification_running">Listening on 127.0.0.1:%1$d via %2$s</string>
+    <string name="notification_stop">Stop</string>
+    <string name="commands_copied">ADB and curl commands copied</string>
+    <string name="invalid_port">Choose a port from 1024 through 65535.</string>
+    <string name="upstream_auto">Automatic default</string>
+    <string name="upstream_cellular">Cellular</string>
+    <string name="upstream_wifi">Wi-Fi</string>
+    <string name="upstream_ethernet">Ethernet</string>
+</resources>

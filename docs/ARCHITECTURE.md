@@ -228,5 +228,25 @@ UI or networking parser.
 - **Rust receiver/core** remains an alternative where memory safety and native
   platform packaging outweigh reuse of Go networking components.
 
+
+## Implemented P0 component map
+
+The first concrete implementation preserves the planned boundaries:
+
+| Component | Current implementation | Boundary |
+|---|---|---|
+| Control/UI | `MainActivity` | Starts/stops relay and renders aggregate state |
+| Lifecycle | `RelayService` and `RelayRuntime` | Foreground-service ownership and idempotent teardown |
+| Upstream | `AndroidNetworkConnector` | Selects a non-VPN Android `Network`; binds DNS and sockets |
+| Protocol | `Socks5Protocol` | Parses negotiation and TCP `CONNECT` without Android imports |
+| Relay | `Socks5Server` | Loopback accept, limits, timeouts, bidirectional copying |
+| Metrics | `RelayStats` | Aggregate counts and coarse errors only |
+| Transport helper | `desktop/linux/teather-p0` | ADB forward, lifecycle, smoke/soak, cleanup |
+
+The debug build exports the lifecycle service solely for ADB automation. It does
+not alter the data-plane boundary: the server binds to `127.0.0.1`, and release
+builds keep the service unexported. No Linux routes, resolver settings, or
+firewall state are touched in P0.
+
 The permanent core language is deliberately open until P0 clarifies how much of
 the system is relay logic versus platform integration.

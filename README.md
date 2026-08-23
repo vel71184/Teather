@@ -9,8 +9,8 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** planning and proof-of-concept preparation. There is no runnable
-> Teather build yet.
+> **Status:** the P0 Android/Linux source path is implemented and awaiting its
+> first physical-phone validation. It is not yet a proven daily-driver build.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -205,6 +205,8 @@ directory when its first real file is ready.
 
 - [Project status](docs/PROJECT_STATUS.md) — the current milestone, next actions,
   unknowns, and resume point. Read this first when returning after a break.
+- [P0 laptop/phone handoff](docs/P0_HANDOFF.md) — exact, placeholder-free commands
+  for the first Codex session with the phone connected through ADB.
 - [Architecture](docs/ARCHITECTURE.md) — component boundaries, data flow, and
   technical risks.
 - [Roadmap](docs/ROADMAP.md) — ordered milestones and exit criteria.
@@ -221,15 +223,26 @@ directory when its first real file is ready.
 
 ## Getting started today
 
-There is no build to run yet. The correct starting sequence is:
+P0 now has runnable source and automation. Without a phone, run the deterministic
+host checks:
 
-1. Read [the project status](docs/PROJECT_STATUS.md).
-2. Fill in the target phone, Android version, Linux distribution, desktop/network
-   manager, and mobile provider in the local experiment record. Do not commit
-   subscriber identifiers, phone numbers, account details, or credentials.
-3. Complete experiment E-001 in [the experiment log](docs/EXPERIMENTS.md).
-4. Record results before choosing the permanent networking core.
-5. Update the decision log when a choice moves from proposed to accepted.
+```bash
+make check
+```
+
+With an unlocked phone attached to a Linux laptop through authorized ADB, the
+continuation is:
+
+```bash
+./desktop/linux/teather-p0 doctor
+./desktop/linux/teather-p0 all
+./desktop/linux/teather-p0 soak
+```
+
+The helper discovers the non-sensitive phone and host environment; there are no
+device-specific constants to fill into source. See [the P0 handoff](docs/P0_HANDOFF.md)
+for the physical boundary, exact checks, failure isolation, and experiment
+closeout requirements.
 
 ## Reference material
 

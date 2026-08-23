@@ -1,5 +1,29 @@
 # Test plan
 
+
+## Executable P0 checks
+
+Host-only verification:
+
+```bash
+make check
+```
+
+This runs JVM protocol/integration tests, Android lint, and a debug APK build.
+With an authorized phone attached, the exact device gates are:
+
+```bash
+./desktop/linux/teather-p0 all
+./desktop/linux/teather-p0 soak
+./desktop/linux/teather-p0 stop
+./desktop/linux/teather-p0 status
+```
+
+The `soak` command keeps one rate-limited SOCKS connection open for the entire
+gate; it is not a loop of short requests. The helper never changes Linux routes,
+resolver configuration, or firewall state. See `docs/P0_HANDOFF.md` for redacted
+environment capture and failure isolation.
+
 Teather modifies or depends on networking state across two devices. A successful
 web request is necessary but insufficient; recovery and cleanup are first-class
 correctness requirements.

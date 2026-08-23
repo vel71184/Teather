@@ -12,6 +12,7 @@ Read, in order:
 3. `docs/DECISIONS.md`
 4. `docs/ARCHITECTURE.md`
 5. The milestone-specific section of `docs/ROADMAP.md`
+6. For P0 device work, `docs/P0_HANDOFF.md`
 
 If those files disagree, stop and reconcile them. `docs/PROJECT_STATUS.md` is the
 resume point, while accepted entries in `docs/DECISIONS.md` are authoritative for
@@ -19,9 +20,10 @@ technical choices.
 
 ## Current priority
 
-The current milestone is P0: prove that one Linux browser connection can travel
-through an Android application relay over USB/ADB and exit through the selected
-Android upstream.
+The current milestone is P0. The source path is implemented; the next job is to
+run `make check` and the exact device sequence in `docs/P0_HANDOFF.md`, then record
+E-001 evidence. Do not rebuild the scaffold or ask the user for values the helper
+can discover.
 
 Do not start the full GUI, WireGuard endpoint, Wi-Fi Direct, AOA, Bluetooth,
 multi-client support, packaging, or cross-platform receivers until the relevant

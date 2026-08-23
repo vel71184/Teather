@@ -185,3 +185,55 @@ changes is acceptable.
 2. State status, date, decision, rationale, and consequences.
 3. If replacing an accepted decision, mark it superseded and link the new entry.
 4. Update README, architecture, roadmap, and project status where affected.
+
+
+## D-011 — Pin the initial Android identity and toolchain
+
+**Status:** Accepted · **Date:** 2026-08-22
+
+### Decision
+
+P0 uses application ID and namespace `io.github.vel71184.teather`, minimum API
+26, compile API 37, target API 36, Android Gradle plugin 9.1.1, Gradle 9.3.1, and
+JDK 17. The Gradle distribution and wrapper JAR checksums are verified.
+
+### Rationale
+
+API 26 matches the later local-only-hotspot floor while keeping the P0 code small.
+Compiling with API 37 validates against the current stable SDK. Targeting API 36
+deliberately avoids conflating Android 17's new local-network permission boundary
+with an ADB-to-loopback experiment; that boundary must be handled and tested when
+P3 opens a Wi-Fi listener.
+
+### Consequences
+
+- P0 does not claim Android 17 LAN-listener readiness.
+- A future target-SDK change requires device tests and a decision/status update.
+- The package identity should be treated as stable; changing it produces a
+  distinct installed application.
+
+## D-012 — Permit ADB lifecycle control only in debug builds
+
+**Status:** Accepted · **Date:** 2026-08-22
+
+### Decision
+
+The main/release manifest keeps `RelayService` unexported. The debug manifest
+overrides only that service lifecycle to exported so the checked-in ADB helper can
+start P0 without brittle UI automation. The relay listener remains fixed to
+Android loopback in every variant.
+
+### Rationale
+
+A personal-first ADB experiment should be reproducible from one command, but an
+exported production relay service would be unnecessary attack surface.
+
+### Consequences
+
+- Any local app can request lifecycle actions from an installed debug build; use
+  it only for development.
+- Android loopback is reachable by other local apps, so no-auth SOCKS remains a
+  controlled P0 experiment and must be stopped after testing.
+- This exception cannot be copied into release or Wi-Fi variants.
+- Receiver authentication is required before promotion beyond P0 and before any
+  future non-loopback listener.

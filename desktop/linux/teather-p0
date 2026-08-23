@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly PACKAGE_NAME="io.github.vel71184.teather"
+readonly SERVICE_NAME="${PACKAGE_NAME}/.service.RelayService"
+readonly START_ACTION="io.github.vel71184.teather.action.START"
+readonly APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+
+relay_port="${TEATHER_PORT:-1080}"
+relay_upstream="${TEATHER_UPSTREAM:-cellular}"
+test_url="${TEATHER_TEST_URL:-https://example.com/}"
+soak_url="${TEATHER_SOAK_URL:-https://services.gradle.org/distributions/gradle-9.3.1-bin.zip}"
+soak_rate="${TEATHER_SOAK_RATE:-8K}"
+device_serial="${TEATHER_SERIAL:-}"
+adb_command=(adb)
+
+usage() {
+  cat <<'USAGE'
+Teather P0 laptop helper
+
+Usage: ./desktop/linux/teather-p0 COMMAND
+
+Commands:
+  doctor   Print a redacted, Codex-friendly host and phone inventory.
+  build    Build the Android debug APK.
+  install  Install or replace the debug APK on the authorized phone.
+  start    Start the relay through ADB and create loopback port forwarding.
+  status   Show non-sensitive relay and forwarding status.
+  test     Run the required ten-request TCP smoke test.
+  soak     Repeatedly test for TEATHER_SOAK_SECONDS (default: 1800).
+  logs     Follow Teather's redacted Android log categories.
+  stop     Stop the app and remove only Teather's ADB forwarding rule.
+  all      Run doctor, build, install, start, and test.
+
+Optional environment variables:
+  TEATHER_PORT=1080
+  TEATHER_UPSTREAM=cellular|wifi|ethernet|auto
+  TEATHER_TEST_URL=https://example.com/
+  TEATHER_SOAK_URL=https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+  TEATHER_SOAK_RATE=8K       Default consumes about 14 MiB over 30 minutes.
+  TEATHER_SOAK_SECONDS=1800
+  TEATHER_SERIAL=<adb-serial>   Required only with multiple attached devices.
+USAGE
+}
+
+# Teather P0 laptop helper
+#
+# Usage: ./desktop/linux/teather-p0 COMMAND
+#
+# Commands:
+#   doctor   Print a redacted, Codex-friendly host and phone inventory.
+#   build    Build the Android debug APK.
+#   install  Install or replace the debug APK on the authorized phone.
+#   start    Start the relay through ADB and create loopback port forwarding.
+#   status   Show non-sensitive relay and forwarding status.
+#   test     Run the required ten-request TCP smoke test.
+#   soak     Repeatedly test for TEATHER_SOAK_SECONDS (default: 1800).
+#   logs     Follow Teather's redacted Android log categories.
+#   stop     Stop the app and remove only Teather's ADB forwarding rule.
+#   all      Run doctor, build, install, start, and test.
+#
+# Optional environment variables:
+#   TEATHER_PORT=1080
+#   TEATHER_UPSTREAM=cellular|wifi|ethernet|auto
+#   TEATHER_TEST_URL=https://example.com/
+#   TEATHER_SOAK_SECONDS=1800
+#   TEATHER_SERIAL=<adb-serial>   Required only when more than one device is attached.
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+configure_adb() {
+  require_command adb
+  if [[ -n "$device_serial" ]]; then
+    adb_command+=("-s" "$device_serial")
+    return
+  fi
+
+  local ready_count
+  ready_count="$(adb devices | awk 'NR > 1 && $2 == "device" { count++ } END { print count + 0 }')"
+  local unauthorized_count
+  unauthorized_count="$(adb devices | awk 'NR > 1 && $2 == "unauthorized" { count++ } END { print count + 0 }')"
+  if [[ "$unauthorized_count" -gt 0 ]]; then
+    fail "a phone is awaiting its USB debugging authorization prompt"
+  fi
+  if [[ "$ready_count" -eq 0 ]]; then
+    fail "no authorized ADB device is connected"
+  fi
+  if [[ "$ready_count" -gt 1 ]]; then
+    fail "multiple ADB devices are connected; set TEATHER_SERIAL without committing it"
+  fi
+}
+
+validate_configuration() {
+  [[ "$relay_port" =~ ^[0-9]+$ ]] || fail "TEATHER_PORT must be numeric"
+  (( relay_port >= 1024 && relay_port <= 65535 )) || fail "TEATHER_PORT must be 1024..65535"
+  case "$relay_upstream" in
+    cellular|wifi|ethernet|auto) ;;
+    *) fail "TEATHER_UPSTREAM must be cellular, wifi, ethernet, or auto" ;;
+  esac
+}
+
+doctor() {
+  configure_adb
+  printf 'Teather P0 environment (redacted)\n'
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf 'Teather commit: %s\n' "$(git rev-parse --short HEAD)"
+  fi
+  printf 'Host kernel: %s\n' "$(uname -srmo)"
+  if [[ -r /etc/os-release ]]; then
+    printf 'Linux distribution: %s\n' "$(awk -F= '$1 == "PRETTY_NAME" { gsub(/^\"|\"$/, "", $2); print $2 }' /etc/os-release)"
+  fi
+  printf 'Desktop: %s / %s\n' "${XDG_CURRENT_DESKTOP:-unknown}" "${XDG_SESSION_TYPE:-unknown}"
+  if command -v nmcli >/dev/null 2>&1; then
+    printf 'Network manager: %s\n' "$(nmcli --version | head -n1)"
+  elif command -v networkctl >/dev/null 2>&1; then
+    printf 'Network manager: systemd-networkd tools present\n'
+  else
+    printf 'Network manager: not automatically identified\n'
+  fi
+  printf 'ADB: %s\n' "$(adb version | head -n1)"
+  printf 'Authorized ADB devices: 1 (serial deliberately omitted)\n'
+  printf 'Phone manufacturer: %s\n' "$("${adb_command[@]}" shell getprop ro.product.manufacturer | tr -d '\r')"
+  printf 'Phone model: %s\n' "$("${adb_command[@]}" shell getprop ro.product.model | tr -d '\r')"
+  printf 'Android release: %s\n' "$("${adb_command[@]}" shell getprop ro.build.version.release | tr -d '\r')"
+  printf 'Android API: %s\n' "$("${adb_command[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
+  printf 'Requested relay: 127.0.0.1:%s via %s\n' "$relay_port" "$relay_upstream"
+  if command -v java >/dev/null 2>&1; then
+    printf 'Java: %s\n' "$(java -version 2>&1 | head -n1)"
+  else
+    printf 'Java: missing (JDK 17 required for the pinned Android toolchain)\n'
+  fi
+}
+
+build_apk() {
+  [[ -x ./gradlew ]] || fail "run this command from the Teather repository root"
+  ./gradlew --no-daemon :app:assembleDebug
+}
+
+install_apk() {
+  configure_adb
+  [[ -f "$APK_PATH" ]] || fail "$APK_PATH does not exist; run the build command first"
+  "${adb_command[@]}" install -r "$APK_PATH"
+}
+
+start_relay() {
+  validate_configuration
+  configure_adb
+  "${adb_command[@]}" forward "tcp:${relay_port}" "tcp:${relay_port}"
+  "${adb_command[@]}" shell am start-foreground-service \
+    -n "$SERVICE_NAME" \
+    -a "$START_ACTION" \
+    --ei relay_port "$relay_port" \
+    --es relay_upstream "$relay_upstream" >/dev/null
+  printf 'Teather requested on phone loopback and forwarded to laptop 127.0.0.1:%s.\n' "$relay_port"
+  printf 'If the first request fails, open Teather once and allow notifications, then retry.\n'
+}
+
+status() {
+  configure_adb
+  local forwarding_count
+  forwarding_count="$(adb forward --list | awk -v port="tcp:${relay_port}" '$2 == port && $3 == port { count++ } END { print count + 0 }')"
+  printf 'ADB forwarding rule present: %s\n' "$forwarding_count"
+  if "${adb_command[@]}" shell dumpsys activity services "$PACKAGE_NAME" | grep -q 'RelayService'; then
+    printf 'Android relay service: present\n'
+  else
+    printf 'Android relay service: not present\n'
+  fi
+}
+
+one_request() {
+  require_command curl
+  curl \
+    --fail \
+    --silent \
+    --show-error \
+    --connect-timeout 20 \
+    --max-time 60 \
+    --socks5-hostname "127.0.0.1:${relay_port}" \
+    --output /dev/null \
+    "$test_url"
+}
+
+smoke_test() {
+  local index
+  for index in $(seq 1 10); do
+    one_request
+    printf 'TCP request %d/10 passed\n' "$index"
+  done
+  printf 'P0 ten-request smoke gate passed using %s\n' "$test_url"
+}
+
+soak_test() {
+  local duration="${TEATHER_SOAK_SECONDS:-1800}"
+  [[ "$duration" =~ ^[0-9]+$ ]] || fail "TEATHER_SOAK_SECONDS must be numeric"
+  (( duration > 0 )) || fail "TEATHER_SOAK_SECONDS must be positive"
+  require_command curl
+  printf 'Starting one continuous %ds transfer at %s through Teather.\n' "$duration" "$soak_rate"
+  printf 'Default 30-minute data use is approximately 14 MiB.\n'
+  local started=$SECONDS
+  local curl_status
+  set +e
+  curl \
+    --fail \
+    --silent \
+    --show-error \
+    --connect-timeout 20 \
+    --max-time "$duration" \
+    --speed-limit 1 \
+    --speed-time 60 \
+    --limit-rate "$soak_rate" \
+    --location \
+    --socks5-hostname "127.0.0.1:${relay_port}" \
+    --output /dev/null \
+    "$soak_url"
+  curl_status=$?
+  set -e
+
+  local elapsed=$((SECONDS - started))
+  local minimum_elapsed=$((duration > 10 ? duration - 5 : duration - 1))
+  if (( elapsed < minimum_elapsed )); then
+    fail "continuous transfer ended after ${elapsed}s (curl status ${curl_status}); expected ${duration}s"
+  fi
+  if (( curl_status != 0 && curl_status != 28 )); then
+    fail "continuous transfer returned unexpected curl status ${curl_status} after ${elapsed}s"
+  fi
+  printf 'P0 continuous-transfer gate passed: %ds on one SOCKS session.\n' "$elapsed"
+}
+
+follow_logs() {
+  configure_adb
+  "${adb_command[@]}" logcat -s 'Teather:I' '*:S'
+}
+
+stop_relay() {
+  configure_adb
+  "${adb_command[@]}" shell am force-stop "$PACKAGE_NAME"
+  "${adb_command[@]}" forward --remove "tcp:${relay_port}" 2>/dev/null || true
+  printf 'Teather stopped and its tcp:%s forwarding rule removed.\n' "$relay_port"
+}
+
+main() {
+  local command="${1:-help}"
+  case "$command" in
+    doctor) doctor ;;
+    build) build_apk ;;
+    install) install_apk ;;
+    start) start_relay ;;
+    status) status ;;
+    test) smoke_test ;;
+    soak) soak_test ;;
+    logs) follow_logs ;;
+    stop) stop_relay ;;
+    all)
+      doctor
+      build_apk
+      install_apk
+      start_relay
+      smoke_test
+      ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; fail "unknown command: $command" ;;
+  esac
+}
+
+main "$@"
