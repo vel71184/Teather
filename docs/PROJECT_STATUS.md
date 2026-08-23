@@ -99,11 +99,13 @@ See `docs/DECISIONS.md` for rationale and status.
 
 ## Evidence recorded so far
 
-The source-level P0 implementation exists. GitHub Actions run `32607224560` passed
-at commit `50da27a`: all five JVM tests, Android lint, and debug APK assembly
-succeeded with the pinned wrapper/JDK/toolchain. The Android ChatGPT workspace
-also passed shell syntax, XML well-formedness, and placeholder scans. No attached
-phone was available, so device/network claims remain unverified until E-001 runs.
+The source-level P0 implementation exists. GitHub Actions run `32607599774` passed
+at commit `0914eb5`: all six JVM tests, Android lint, and debug APK assembly
+succeeded with the pinned wrapper/JDK/toolchain. That run includes a regression
+test proving one-way active streams survive the connection-wide idle policy. The
+Android ChatGPT workspace also passed shell syntax, XML well-formedness, and
+placeholder scans. No attached phone was available, so device/network claims
+remain unverified until E-001 runs.
 
 ## Session closeout template
 
@@ -126,9 +128,11 @@ phone was available, so device/network claims remain unverified until E-001 runs
   server, explicit Android network binding, UI/status, JVM tests, Linux ADB helper,
   CI workflow, and laptop/phone handoff.
 - Verified with: shell syntax, XML parsing, placeholder scan, and GitHub Actions
-  run `32607224560` (`testDebugUnitTest`, `lintDebug`, and `assembleDebug`).
+  run `32607599774` (`testDebugUnitTest`, `lintDebug`, and `assembleDebug`).
 - Decisions made: API/toolchain package identity and debug-only ADB lifecycle
   exposure, recorded as D-011 and D-012.
-- Risks or failures: the first CI run exposed and then verified the repair of an
-  asynchronous test-observation race; no physical Android device was available.
+- Risks or failures: CI exposed an asynchronous test-observation race; PR review
+  exposed per-direction idle handling, a non-continuous soak, discarded startup
+  failures, and missing coarse log events. All five defects were repaired and the
+  hardened commit passed CI. No physical Android device was available.
 - Next exact action: run the commands in `docs/P0_HANDOFF.md` from the laptop.
