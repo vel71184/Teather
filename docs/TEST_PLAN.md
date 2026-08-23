@@ -19,8 +19,10 @@ With an authorized phone attached, the exact device gates are:
 ./desktop/linux/teather-p0 status
 ```
 
-The helper never changes Linux routes, resolver configuration, or firewall state.
-See `docs/P0_HANDOFF.md` for redacted environment capture and failure isolation.
+The `soak` command keeps one rate-limited SOCKS connection open for the entire
+gate; it is not a loop of short requests. The helper never changes Linux routes,
+resolver configuration, or firewall state. See `docs/P0_HANDOFF.md` for redacted
+environment capture and failure isolation.
 
 Teather modifies or depends on networking state across two devices. A successful
 web request is necessary but insufficient; recovery and cleanup are first-class
