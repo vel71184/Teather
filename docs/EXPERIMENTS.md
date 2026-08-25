@@ -72,21 +72,24 @@ captures containing personal traffic.
 
 ## E-001 — TCP relay through Android over ADB
 
-**Date:** not run · **Status:** planned
+**Date:** 2026-08-24 · **Status:** inconclusive
 **Question:** Can a Linux TCP client reach the Internet through an unrooted Android
 application relay reached over USB/ADB, using an explicitly selected Android
 upstream?
 
 ### Environment
 
-- Phone model: collect with `./desktop/linux/teather-p0 doctor`
-- Android version/build family: collect with `./desktop/linux/teather-p0 doctor`
-- Teather commit: collect with `./desktop/linux/teather-p0 doctor`
-- Linux distribution/version: collect with `./desktop/linux/teather-p0 doctor`
-- Desktop/network manager: collect with `./desktop/linux/teather-p0 doctor`
-- ADB version: collect with `./desktop/linux/teather-p0 doctor`
-- Upstream type: cellular initially; helper default is explicit `cellular`
-- Provider context: add manually only if useful, without account identifiers
+- Phone model: Samsung SM-S266V, stock and unrooted
+- Android version/build family: Android 16, API 36
+- Teather commit: `eae4169`, plus the uncommitted helper hardening described
+  below
+- Linux distribution/version: Debian GNU/Linux 12, Linux 6.1.0-52-amd64
+- Desktop/network manager: GNOME/Wayland, NetworkManager 1.42.4
+- ADB/Java: Android Debug Bridge 1.0.41; OpenJDK 17.0.20
+- Upstream type: explicit cellular; tested both with Wi-Fi disabled and with
+  validated Wi-Fi as Android's default network
+- Provider context: ordinary consumer cellular service; identifying account and
+  subscriber details deliberately omitted
 
 ### Preconditions
 
@@ -122,19 +125,76 @@ upstream?
 
 ### Results
 
-Implementation prepared in source on 2026-08-22. GitHub Actions run `32607599774` passed at commit `0914eb5` (six JVM tests, Android lint, and debug APK assembly), including a one-way active-stream regression test for the connection-wide idle policy. Physical-phone/network results are not yet recorded; do not mark this experiment passed.
+The core physical relay gates passed, but the experiment remains inconclusive
+because the Android UI counter/selected-upstream snapshot and active-session
+stop/cable-removal checks were not captured.
+
+- `make check` passed before installation: JVM tests, Android lint, and debug APK
+  assembly completed successfully (49 tasks).
+- The first physical `all` run exposed a startup race: the helper tested
+  immediately after requesting the foreground service and its first curl failed,
+  while a manual request seconds later passed. The helper now waits up to 30
+  seconds for a successful readiness request and removes the forward/service on
+  readiness or smoke failure. Fresh runs then passed readiness and ten
+  consecutive HTTPS requests.
+- Two early paced-transfer runs appeared to fail after 119--136 seconds. The same
+  curl low-speed failure reproduced without Teather against the public endpoint
+  and twice against a loopback-only HTTP stream. The cause was the helper combining
+  `--speed-limit`/`--speed-time` with intentional `--limit-rate` pacing, not an
+  observed Android, Samsung, carrier, ADB, or Teather failure. The helper now uses
+  a 25 MB Cloudflare speed-test response, checks elapsed time, byte floor, and
+  connection count, and does not enable the conflicting low-speed watchdog.
+- The corrected 180-second diagnostic passed with 1,547,506 bytes at 8,597 B/s,
+  one connection, zero redirects, and the expected curl time-limit exit.
+- The full gate passed with 15,334,016 bytes over 1,800.0 seconds at 8,518 B/s,
+  one connection, zero redirects, and the expected curl time-limit exit.
+- The display was awake for the first five minutes and locked/dozing afterward.
+  Just before minute 19, a normal third-party notification illuminated the locked
+  display. The developer stay-awake-while-USB setting kept it awake, so the display
+  was manually returned to sleep about a minute later. The same SOCKS connection
+  survived the wake/sleep disturbance.
+- Teather memory did not grow monotonically: total PSS was 31,171 KiB at the full
+  run's start, 18,089 KiB at midpoint (with 15,591 KiB swapped), and 26,275 KiB at
+  completion. This is no evidence of unbounded growth in a 30-minute run.
+- A focused system-wide logcat review found no Teather process kill, crash, ANR,
+  thermal-critical event, data stall, or validation failure. One coarse Teather
+  timeout was logged for another/stale session while the measured connection
+  continued to completion. One system kill event did not involve Teather. Raw
+  system logs and device/network identifiers were not retained.
+- With the existing cellular-selected relay running, Wi-Fi was enabled and
+  verified as Android's default; ten more requests passed. Teather was then
+  stopped, freshly installed/started with explicit cellular selection while
+  Wi-Fi remained default, and readiness plus ten requests passed again. A final
+  180-second single-session transfer passed with 1,547,506 bytes at 8,597 B/s,
+  one connection, and zero redirects.
+- Final cleanup reported zero matching ADB forwards and no Android relay service.
+  Privacy-safe before/after hashes of Linux routes, policy rules, and
+  `/etc/resolv.conf` were identical. Firewall comparison was unavailable without
+  host privilege; P0 did not issue any firewall mutation. Wi-Fi was left enabled.
 
 ### Observation vs. inference
 
-- Observed: the host-side protocol/integration suite, lint, and debug APK build pass in CI; no phone/network observation exists yet.
-- Inferred: the implemented path is buildable from public Android
-  APIs, but target-device/provider behavior remains unverified.
+- Observed: the physical phone completed the ten-request and 30-minute
+  cellular-only gates, survived locked/dozing state plus a notification wake, and
+  completed fresh smoke and three-minute gates while Wi-Fi was Android's default.
+  Cleanup removed the service/forward without changing measured Linux network
+  state.
+- Inferred: fresh success with explicit `cellular` while Wi-Fi was default used a
+  cellular Android `Network`, because the implemented connector rejects
+  non-cellular candidates and performs DNS/socket creation on the selected
+  network. The UI label was not captured, so retain that as an inference pending
+  the final UI evidence check.
+- Not established: provider accounting/classification behavior, behavior on other
+  Samsung/Android/carrier combinations, or long-duration Wi-Fi/cellular
+  coexistence.
 
 ### Follow-up
 
-- If successful, proceed to E-002 and P1 TUN integration.
-- If unsuccessful, isolate ADB transport, Android upstream selection, and SOCKS
-  handling before changing architecture.
+- Complete E-001 by capturing the live Android selected-upstream/counter display
+  and exercising active-session service stop and USB removal with cleanup checks.
+- Then stop at the P0/P1 boundary. D-013 requires an owner-reviewed Linux network
+  design, offline recovery procedure, and explicit owner approval before E-002 or
+  any P1 implementation begins.
 
 ## Planned experiment queue
 

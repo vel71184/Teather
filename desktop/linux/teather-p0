@@ -5,11 +5,12 @@ readonly PACKAGE_NAME="io.github.vel71184.teather"
 readonly SERVICE_NAME="${PACKAGE_NAME}/.service.RelayService"
 readonly START_ACTION="io.github.vel71184.teather.action.START"
 readonly APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+readonly STARTUP_WAIT_SECONDS=30
 
 relay_port="${TEATHER_PORT:-1080}"
 relay_upstream="${TEATHER_UPSTREAM:-cellular}"
 test_url="${TEATHER_TEST_URL:-https://example.com/}"
-soak_url="${TEATHER_SOAK_URL:-https://services.gradle.org/distributions/gradle-9.3.1-bin.zip}"
+soak_url="${TEATHER_SOAK_URL:-https://speed.cloudflare.com/__down?bytes=25000000}"
 soak_rate="${TEATHER_SOAK_RATE:-8K}"
 device_serial="${TEATHER_SERIAL:-}"
 adb_command=(adb)
@@ -36,7 +37,7 @@ Optional environment variables:
   TEATHER_PORT=1080
   TEATHER_UPSTREAM=cellular|wifi|ethernet|auto
   TEATHER_TEST_URL=https://example.com/
-  TEATHER_SOAK_URL=https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+  TEATHER_SOAK_URL=https://speed.cloudflare.com/__down?bytes=25000000
   TEATHER_SOAK_RATE=8K       Default consumes about 14 MiB over 30 minutes.
   TEATHER_SOAK_SECONDS=1800
   TEATHER_SERIAL=<adb-serial>   Required only with multiple attached devices.
@@ -106,6 +107,18 @@ validate_configuration() {
   esac
 }
 
+rate_bytes_per_second() {
+  [[ "$soak_rate" =~ ^([0-9]+)([kKmMgG]?)$ ]] ||
+    fail "TEATHER_SOAK_RATE must be an integer byte rate with an optional K, M, or G suffix"
+  local amount="${BASH_REMATCH[1]}"
+  case "${BASH_REMATCH[2]}" in
+    k|K) printf '%s\n' "$((amount * 1024))" ;;
+    m|M) printf '%s\n' "$((amount * 1024 * 1024))" ;;
+    g|G) printf '%s\n' "$((amount * 1024 * 1024 * 1024))" ;;
+    '') printf '%s\n' "$amount" ;;
+  esac
+}
+
 doctor() {
   configure_adb
   printf 'Teather P0 environment (redacted)\n'
@@ -114,7 +127,7 @@ doctor() {
   fi
   printf 'Host kernel: %s\n' "$(uname -srmo)"
   if [[ -r /etc/os-release ]]; then
-    printf 'Linux distribution: %s\n' "$(awk -F= '$1 == "PRETTY_NAME" { gsub(/^\"|\"$/, "", $2); print $2 }' /etc/os-release)"
+    printf 'Linux distribution: %s\n' "$(awk -F= '$1 == "PRETTY_NAME" { gsub(/^"|"$/, "", $2); print $2 }' /etc/os-release)"
   fi
   printf 'Desktop: %s / %s\n' "${XDG_CURRENT_DESKTOP:-unknown}" "${XDG_SESSION_TYPE:-unknown}"
   if command -v nmcli >/dev/null 2>&1; then
@@ -153,13 +166,37 @@ start_relay() {
   validate_configuration
   configure_adb
   "${adb_command[@]}" forward "tcp:${relay_port}" "tcp:${relay_port}"
-  "${adb_command[@]}" shell am start-foreground-service \
-    -n "$SERVICE_NAME" \
-    -a "$START_ACTION" \
-    --ei relay_port "$relay_port" \
-    --es relay_upstream "$relay_upstream" >/dev/null
+  if ! "${adb_command[@]}" shell am start-foreground-service \
+      -n "$SERVICE_NAME" \
+      -a "$START_ACTION" \
+      --ei relay_port "$relay_port" \
+      --es relay_upstream "$relay_upstream" >/dev/null; then
+    "${adb_command[@]}" forward --remove "tcp:${relay_port}" 2>/dev/null || true
+    fail "Android rejected the foreground-service start request"
+  fi
   printf 'Teather requested on phone loopback and forwarded to laptop 127.0.0.1:%s.\n' "$relay_port"
   printf 'If the first request fails, open Teather once and allow notifications, then retry.\n'
+}
+
+wait_for_relay() {
+  require_command curl
+  local deadline=$((SECONDS + STARTUP_WAIT_SECONDS))
+  while (( SECONDS < deadline )); do
+    if curl \
+        --fail \
+        --silent \
+        --connect-timeout 2 \
+        --max-time 5 \
+        --socks5-hostname "127.0.0.1:${relay_port}" \
+        --output /dev/null \
+        "$test_url"; then
+      printf 'Relay readiness probe passed.\n'
+      return 0
+    fi
+    sleep 1
+  done
+  printf 'error: relay did not become ready within %ss\n' "$STARTUP_WAIT_SECONDS" >&2
+  return 1
 }
 
 status() {
@@ -190,10 +227,36 @@ one_request() {
 smoke_test() {
   local index
   for index in $(seq 1 10); do
-    one_request
+    if ! one_request; then
+      printf 'error: TCP request %d/10 failed\n' "$index" >&2
+      return 1
+    fi
     printf 'TCP request %d/10 passed\n' "$index"
   done
   printf 'P0 ten-request smoke gate passed using %s\n' "$test_url"
+}
+
+run_all() {
+  doctor
+  build_apk
+  install_apk
+  start_relay
+
+  trap '(stop_relay) || true; exit 130' INT
+  trap '(stop_relay) || true; exit 143' TERM
+
+  if ! wait_for_relay; then
+    (stop_relay) || true
+    trap - INT TERM
+    return 1
+  fi
+  if ! smoke_test; then
+    (stop_relay) || true
+    trap - INT TERM
+    return 1
+  fi
+
+  trap - INT TERM
 }
 
 soak_test() {
@@ -205,27 +268,49 @@ soak_test() {
   printf 'Default 30-minute data use is approximately 14 MiB.\n'
   local started=$SECONDS
   local curl_status
+  local transfer_metrics
+  local configured_bytes_per_second
+  configured_bytes_per_second="$(rate_bytes_per_second)"
+  local minimum_bytes=$((duration * configured_bytes_per_second * 3 / 4))
   set +e
-  curl \
+  transfer_metrics="$(curl \
     --fail \
     --silent \
     --show-error \
     --connect-timeout 20 \
     --max-time "$duration" \
-    --speed-limit 1 \
-    --speed-time 60 \
     --limit-rate "$soak_rate" \
     --location \
     --socks5-hostname "127.0.0.1:${relay_port}" \
     --output /dev/null \
-    "$soak_url"
+    --write-out '%{size_download} %{speed_download} %{time_total} %{num_connects} %{num_redirects}' \
+    "$soak_url")"
   curl_status=$?
   set -e
 
   local elapsed=$((SECONDS - started))
   local minimum_elapsed=$((duration > 10 ? duration - 5 : duration - 1))
+  local transferred_bytes
+  local average_bytes_per_second
+  local curl_time_seconds
+  local connection_count
+  local redirect_count
+  read -r transferred_bytes average_bytes_per_second curl_time_seconds connection_count redirect_count \
+    <<<"$transfer_metrics"
+  if [[ ! "$transferred_bytes" =~ ^[0-9]+$ ]] || (( transferred_bytes <= 0 )); then
+    fail "continuous transfer reported no downloaded bytes after ${elapsed}s"
+  fi
+  printf 'Continuous transfer metrics: bytes=%s average_Bps=%s curl_seconds=%s connections=%s redirects=%s exit=%s.\n' \
+    "$transferred_bytes" "$average_bytes_per_second" "$curl_time_seconds" \
+    "$connection_count" "$redirect_count" "$curl_status"
   if (( elapsed < minimum_elapsed )); then
     fail "continuous transfer ended after ${elapsed}s (curl status ${curl_status}); expected ${duration}s"
+  fi
+  if (( transferred_bytes < minimum_bytes )); then
+    fail "continuous transfer downloaded ${transferred_bytes} bytes; expected at least ${minimum_bytes} bytes"
+  fi
+  if [[ "$connection_count" != "1" ]]; then
+    fail "continuous transfer used ${connection_count} connections; expected one SOCKS session"
   fi
   if (( curl_status != 0 && curl_status != 28 )); then
     fail "continuous transfer returned unexpected curl status ${curl_status} after ${elapsed}s"
@@ -257,13 +342,7 @@ main() {
     soak) soak_test ;;
     logs) follow_logs ;;
     stop) stop_relay ;;
-    all)
-      doctor
-      build_apk
-      install_apk
-      start_relay
-      smoke_test
-      ;;
+    all) run_all ;;
     help|-h|--help) usage ;;
     *) usage >&2; fail "unknown command: $command" ;;
   esac

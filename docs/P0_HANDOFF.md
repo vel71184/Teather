@@ -57,14 +57,24 @@ From the repository root:
 - selected relay port and upstream policy.
 
 `all` builds, installs, starts ADB forwarding, starts the Android foreground
-service, and makes ten HTTPS requests through the phone. `soak` holds one SOCKS
-session open with a rate-limited download for 1,800 seconds by default. It uses
-the pinned Gradle distribution at 8 KiB/s, consuming roughly 14 MiB over the
-30-minute gate. A different harmless streaming URL, rate, or duration can be
-supplied without editing source:
+service, waits for one successful readiness request, and then makes the ten
+consecutive HTTPS requests counted by the smoke gate. A failed readiness or smoke
+gate stops the app and removes the matching forward. `soak` holds one SOCKS session
+open with a rate-limited 25 MB response from Cloudflare's public speed-test
+endpoint for 1,800 seconds by default. At 8 KiB/s, the 30-minute gate consumes
+roughly 14 MiB. The helper reports downloaded bytes, average rate, elapsed time,
+connection count, redirects, and exit status without retaining the effective URL.
+It requires at least 75 percent of the configured pacing rate and exactly one
+SOCKS connection.
+
+The helper does not combine curl's low-speed watchdog with rate limiting because
+those options can make curl abort its own intentional pacing pauses; the relay's
+five-minute aggregate idle timeout still bounds a genuinely stalled session. A
+different harmless streaming URL, rate, or duration can be supplied without
+editing source:
 
 ```bash
-TEATHER_SOAK_URL=https://services.gradle.org/distributions/gradle-9.3.1-bin.zip \
+TEATHER_SOAK_URL='https://speed.cloudflare.com/__down?bytes=25000000' \
 TEATHER_SOAK_RATE=8K TEATHER_SOAK_SECONDS=1800 \
   ./desktop/linux/teather-p0 soak
 ```
@@ -95,8 +105,14 @@ It never displays or logs destination hosts.
    and no matching ADB forward.
 7. Update `docs/EXPERIMENTS.md` and `docs/PROJECT_STATUS.md` with observations,
    failures, and the next exact action.
+8. Stop the work session at the P0/P1 boundary. Do not implement or exercise TUN,
+   route, policy-rule, DNS, firewall, or network-service changes until the D-013
+   design review is complete and the owner explicitly approves proceeding.
 
-Do not start P1 TUN or route mutation until the P0 exit criteria pass.
+Passing the P0 exit criteria is necessary but is not authorization to start P1.
+The next session should discuss the Linux design, rollback paths, and offline
+recovery commands before implementation so loss of the current Internet/chat
+connection cannot also remove the recovery instructions.
 
 ## Failure isolation
 

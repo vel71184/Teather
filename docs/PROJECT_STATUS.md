@@ -1,9 +1,9 @@
 # Project status
 
-- **Snapshot date:** 2026-08-22
+- **Snapshot date:** 2026-08-24
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P0 — Android relay over USB/ADB
-- **Runnable build:** CI-verified debug APK; physical-phone validation pending
+- **Runnable build:** physical 30-minute relay validated; E-001 closeout pending
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -23,8 +23,10 @@ Linux curl -> laptop loopback -> ADB forwarding -> Android SOCKS5 relay
            -> explicitly selected Android Network -> Internet
 ```
 
-The repository now contains the complete P0 source path. The remaining P0 work is
-runtime evidence, not additional speculative architecture.
+The repository contains the complete P0 source path. The physical ten-request,
+30-minute, locked-screen, and Wi-Fi-default/cellular-selected relay gates passed
+on the owner's phone. The remaining P0 work is the UI counter/selected-upstream
+snapshot plus active-session stop and USB-removal cleanup evidence.
 
 ## Implemented P0 surface
 
@@ -46,18 +48,16 @@ runtime evidence, not additional speculative architecture.
 
 ## Next concrete actions
 
-On a Linux laptop with the phone physically attached:
+On the attached phone, complete only the remaining E-001 evidence:
 
-1. Read `docs/P0_HANDOFF.md`.
-2. Run `make check`.
-3. Run `./desktop/linux/teather-p0 doctor`.
-4. Run `./desktop/linux/teather-p0 all`.
-5. Run `./desktop/linux/teather-p0 soak`.
-6. Stop the relay and verify the matching ADB forward is removed.
-7. Record the redacted environment and observed results in experiment E-001.
+1. Start a controlled explicit-cellular relay and open the Android status screen.
+2. Capture the selected-upstream label and directionally compare its counters with
+   one short host transfer; retain no destination or device identifiers.
+3. Stop the Android service during an active transfer and verify prompt closure,
+   then repeat cleanup verification after USB removal.
+4. Update E-001 to passed or failed and stop at the D-013 P0/P1 approval gate.
 
-No source value needs to be filled in before these commands. `TEATHER_SERIAL` is
-needed only in a shell with multiple ADB devices and must never be committed.
+Do not repeat the 30-minute soak unless a later code change invalidates it.
 
 ## Confirmed decisions
 
@@ -75,9 +75,8 @@ See `docs/DECISIONS.md` for rationale and status.
 
 ## Important unknowns
 
-- The P0 source has not run on the owner's actual phone/provider connection.
-- Screen-off, Doze, upstream changes, 30-minute transfer, and thermal behavior are
-  unmeasured.
+- The Android UI counter/selected-upstream snapshot and active-session stop/USB
+  removal cleanup checks remain unrecorded.
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
 - UDP strategy, system-wide Linux TUN integration, and IPv6 policy remain P1/P2
@@ -97,15 +96,28 @@ See `docs/DECISIONS.md` for rationale and status.
 - App-store packaging
 - Carrier-specific behavior modules
 
+## Hard stop before P1
+
+End P0 after the relay is stopped, cleanup is verified, and E-001/status evidence
+is recorded. Do not implement P1 or run live TUN, route, policy-rule, DNS,
+firewall, or network-service changes until the exact Linux design and an offline
+recovery procedure have been reviewed with the owner and the owner explicitly
+approves proceeding. A successful P0 soak does not waive this gate. See D-013 and
+the P1 entry gate in `docs/ROADMAP.md`.
+
 ## Evidence recorded so far
 
-The source-level P0 implementation exists. GitHub Actions run `32607599774` passed
-at commit `0914eb5`: all six JVM tests, Android lint, and debug APK assembly
-succeeded with the pinned wrapper/JDK/toolchain. That run includes a regression
-test proving one-way active streams survive the connection-wide idle policy. The
-Android ChatGPT workspace also passed shell syntax, XML well-formedness, and
-placeholder scans. No attached phone was available, so device/network claims
-remain unverified until E-001 runs.
+The source-level P0 implementation and prior CI evidence remain valid. On
+2026-08-24, commit `eae4169` plus the working helper hardening built and installed
+on a stock Samsung Android 16 phone. Readiness and ten-request gates passed; one
+continuous cellular-only SOCKS session transferred 15,334,016 bytes over 1,800
+seconds while mostly locked/dozing. A normal notification wake did not interrupt
+the flow. A fresh explicit-cellular relay also passed ten requests and a
+180-second single-session transfer while Wi-Fi was Android's default. Teather PSS
+did not grow monotonically, focused system logs showed no Teather kill/crash or
+thermal/data-stall event, final service/forward cleanup succeeded, and before/
+after Linux route, rule, and resolver hashes matched. See E-001 for failures,
+metrics, inference boundaries, and remaining evidence.
 
 ## Session closeout template
 
@@ -136,3 +148,26 @@ remain unverified until E-001 runs.
   failures, and missing coarse log events. All five defects were repaired and the
   hardened commit passed CI. No physical Android device was available.
 - Next exact action: run the commands in `docs/P0_HANDOFF.md` from the laptop.
+
+### 2026-08-24 — P0 physical relay and soak validation
+
+- Completed: installed the debug APK; hardened helper readiness, failure cleanup,
+  and paced-transfer validation; passed cellular-only smoke, 180-second, and
+  1,800-second gates; passed fresh explicit-cellular smoke and 180-second transfer
+  while Wi-Fi was default; verified final service/ADB-forward cleanup and unchanged
+  Linux route/rule/resolver hashes.
+- Verified with: `make check`, repeated `./desktop/linux/teather-p0 all`,
+  `TEATHER_SOAK_SECONDS=180 ./desktop/linux/teather-p0 soak`, the default
+  1,800-second `soak`, memory samples, focused system logcat review, `stop`, and
+  `status`.
+- Files/areas changed: Linux P0 helper, P0 handoff, E-001 experiment evidence,
+  project status, roadmap, and decision log.
+- Decisions made: D-013 requires a reviewed Linux networking/rollback plan,
+  offline recovery commands, and explicit owner approval before P1 implementation
+  or live host-network mutation.
+- Risks or failures: the original helper had a service-start race and a curl
+  low-speed/rate-limit self-conflict; both were isolated and repaired. UI
+  selected-upstream/counter evidence and active-stop/USB-removal cleanup remain.
+  Provider accounting and other device/provider combinations remain unknown.
+- Next exact action: capture the remaining E-001 UI and active-stop/USB-removal
+  evidence, then stop at the D-013 owner-approval gate.

@@ -33,6 +33,18 @@ Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 **Question:** Can normal Linux TCP applications use Teather without per-application
 proxy configuration?
 
+Mandatory entry gate:
+
+- Stop after P0 cleanup and evidence recording. A successful P0 run does not
+  authorize P1 implementation.
+- Before writing P1 code or running a command that can affect Linux networking,
+  review the exact TUN, route, policy-rule, DNS, firewall, recursion-prevention,
+  saved-state, and rollback design with the owner.
+- Supply an offline recovery procedure for normal stop, errors, signals, Android
+  service loss, and cable removal, then obtain the owner's explicit approval.
+
+This gate is accepted in D-013 and must carry across sessions.
+
 Deliverables:
 
 - TUN creation and teardown.

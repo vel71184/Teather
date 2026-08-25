@@ -237,3 +237,34 @@ exported production relay service would be unnecessary attack surface.
 - This exception cannot be copied into release or Wi-Fi variants.
 - Receiver authentication is required before promotion beyond P0 and before any
   future non-loopback listener.
+
+## D-013 — Require owner approval before Linux network integration
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+### Decision
+
+P0 must end after its relay is stopped, cleanup is verified, and its evidence is
+recorded. Before any P1 implementation or live command that creates a TUN device
+or changes Linux routes, policy rules, DNS, firewall state, or network services,
+the owner and implementer must review the exact design and the owner must approve
+proceeding. Passing P0 does not implicitly authorize P1.
+
+### Rationale
+
+The development conversation itself depends on the laptop's current Internet
+connection. An incomplete route or DNS transition could disconnect the owner at
+the same time that recovery guidance is needed. Design review and an independent
+recovery path therefore precede implementation, not merely deployment.
+
+### Consequences
+
+- The review must identify every intended host-network mutation, tunnel-recursion
+  prevention, saved-state handling, and cleanup behavior for normal stop, error,
+  signal, Android service loss, and cable removal.
+- The review must provide exact, local recovery commands that do not depend on
+  Teather, Internet access, or access to the ongoing chat.
+- P1 implementation remains a hard stop until the owner explicitly approves the
+  reviewed plan. No same-session transition from a successful P0 soak is assumed.
+- Live-network testing must capture before/after route, rule, DNS, and firewall
+  state and treat any cleanup mismatch as a failure.
