@@ -200,7 +200,7 @@ stop/cable-removal checks were not captured.
 
 | ID | Question | Milestone |
 |---|---|---|
-| E-002 | Can Linux TUN/tun2socks provide system-wide TCP and tunneled DNS? | P1 |
+| E-002 | Can a non-persistent Teather backup interface provide TCP/DNS after the owner disables Wi-Fi without mutating the Wi-Fi connection? | P1 |
 | E-003 | Does every failure path restore Linux routes and DNS? | P1 |
 | E-004 | Can UDP relay support representative DNS, QUIC, and voice traffic? | P2 |
 | E-005 | What explicit IPv6 policy is correct for the target environment? | P2 |

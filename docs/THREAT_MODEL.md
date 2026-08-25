@@ -94,6 +94,14 @@ offline or leaking traffic through an unintended path.
 - Network-namespace/VM tests before host-level mutation.
 - Emergency diagnostic and restoration command.
 - Never delete unrelated routes or firewall rules.
+- Keep existing NetworkManager-managed Wi-Fi/Ethernet connections, profiles,
+  routes, and DNS untouched. Read-only inspection is allowed; the first P1 mode
+  performs no NetworkManager writes.
+- Use a non-persistent Teather TUN whose interface-bound routes disappear when its
+  owner exits. Give its default lower preference than every existing physical
+  default so restoring Wi-Fi independently restores Internet access.
+- Do not overwrite `/etc/resolv.conf`. If Teather-owned scoped DNS cannot be
+  installed and removed safely, refuse to start system-wide mode.
 
 ### Privilege escalation on Linux
 

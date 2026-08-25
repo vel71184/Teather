@@ -9,8 +9,9 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** the P0 Android/Linux source path is implemented and awaiting its
-> first physical-phone validation. It is not yet a proven daily-driver build.
+> **Status:** the P0 Android/Linux relay passed its physical smoke and 30-minute
+> transfer gates. Final P0 cleanup evidence and the reviewed P1 Linux receiver
+> remain before this is a daily-driver build.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -53,6 +54,10 @@ Users remain responsible for their service agreements and local law.
    receiver with broken routes, DNS, or firewall state.
 7. **Measure; do not mythologize.** Carrier, device, and performance claims must
    be backed by a reproducible experiment recorded in this repository.
+8. **Existing receiver links are not Teather's property.** The first Linux
+   system-wide mode must leave NetworkManager-managed Wi-Fi and Ethernet
+   connections untouched and preferred. The owner decides when to disable or
+   restore them.
 
 ## Scope
 
@@ -105,9 +110,26 @@ The proof of concept deliberately uses replaceable tools:
 
 - **Android:** Kotlin foreground service exposing a local SOCKS5 relay.
 - **USB:** `adb forward` between a Linux loopback port and the Android service.
-- **Linux:** TUN plus an existing `tun2socks` implementation.
-- **Routing:** a small, reversible launcher before a permanent daemon exists.
+- **Linux:** a non-persistent `teather0` TUN plus an existing `tun2socks`
+  implementation.
+- **Routing:** a Teather-owned backup default with lower preference than every
+  existing physical default; Teather never rewrites or disables those links.
 - **First protocol coverage:** IPv4 TCP and tunneled DNS; UDP follows.
+
+The first P1 operating mode is intentionally manual and conservative. With Wi-Fi
+or Ethernet present, the existing connection stays preferred. After Teather
+passes its own readiness check, the owner may manually disable Wi-Fi; Linux then
+uses the remaining `teather0` route. Re-enabling Wi-Fi restores its preferred
+route without Teather editing the connection profile. Exact route and scoped-DNS
+mechanics remain behind the owner-review gate in D-013.
+
+**Known DNS gap:** a working default route is insufficient if disabling Wi-Fi
+removes the host resolver or leaves only a LAN DNS address that is no longer
+reachable. P0 can resolve proxy destinations remotely with `socks5h`, but it does
+not yet provide transparent system-wide DNS or general UDP. P1 may not claim
+ordinary hostname connectivity until a Teather-owned, automatically removable
+DNS path is selected and tested without NetworkManager writes or direct
+`/etc/resolv.conf` edits.
 
 ADB is acceptable here because Teather is personal-first and USB debugging is a
 reasonable development prerequisite. It lets the project validate the most
@@ -144,7 +166,7 @@ standard WireGuard client cannot.
 | Stage | Link | Receiver setup | Coverage | Purpose |
 |---|---|---|---|---|
 | P0 | USB/ADB | Linux script or CLI | Browser TCP | Prove cellular relay |
-| P1 | USB/ADB | Linux TUN companion | System-wide TCP + DNS | First viable daily path |
+| P1 | USB/ADB | Backup `teather0` interface | System-wide TCP + DNS after manual link choice | First viable daily path |
 | P2 | USB/ADB | Linux TUN companion | TCP + UDP + IPv6 policy | Compatibility and stability |
 | P3 | Local-only Wi-Fi | Manual proxy or Linux companion | Wireless equivalent of P2 | Remove the cable |
 | P4 | Local-only Wi-Fi | Standard WireGuard client | Cross-platform full tunnel | Universal receiver path |

@@ -70,6 +70,9 @@ Do not repeat the 30-minute soak unless a later code change invalidates it.
 - Wi-Fi and WireGuard compatibility remain later evidence gates.
 - P0 compiles with API 37 but targets API 36; Android 17 local-network permission
   work is intentionally deferred to the Wi-Fi milestone.
+- P1's first Linux mode is a non-persistent `teather0` backup interface. Existing
+  Wi-Fi/Ethernet remains untouched and preferred; the owner manually disables or
+  restores it. Teather performs no NetworkManager writes (D-014).
 
 See `docs/DECISIONS.md` for rationale and status.
 
@@ -79,8 +82,10 @@ See `docs/DECISIONS.md` for rationale and status.
   removal cleanup checks remain unrecorded.
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- UDP strategy, system-wide Linux TUN integration, and IPv6 policy remain P1/P2
-  questions.
+- Safe Teather-owned DNS and exact backup-route preference remain unresolved P1
+  design work. Disabling Wi-Fi may remove its resolver or leave an unreachable
+  LAN-only resolver; P0 `socks5h` covers explicit proxy clients, not transparent
+  TUN applications. UDP strategy and IPv6 policy remain P2 questions.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
@@ -103,7 +108,10 @@ is recorded. Do not implement P1 or run live TUN, route, policy-rule, DNS,
 firewall, or network-service changes until the exact Linux design and an offline
 recovery procedure have been reviewed with the owner and the owner explicitly
 approves proceeding. A successful P0 soak does not waive this gate. See D-013 and
-the P1 entry gate in `docs/ROADMAP.md`.
+the P1 entry gate in `docs/ROADMAP.md`. D-014 fixes the desired operating model
+but does not authorize implementation: Teather creates only its own temporary
+backup interface and scoped network state, performs no NetworkManager writes, and
+never alters an existing Wi-Fi/Ethernet connection or profile.
 
 ## Evidence recorded so far
 
@@ -171,3 +179,17 @@ metrics, inference boundaries, and remaining evidence.
   Provider accounting and other device/provider combinations remain unknown.
 - Next exact action: capture the remaining E-001 UI and active-stop/USB-removal
   evidence, then stop at the D-013 owner-approval gate.
+
+### 2026-08-24 — Linux backup-interface requirement
+
+- Completed: aligned README, architecture, roadmap, test plan, threat model,
+  experiment queue, and status around the first P1 Linux operating model.
+- Decisions made: D-014 requires a non-persistent `teather0` with lower preference
+  than existing physical defaults. Teather performs no NetworkManager writes and
+  never changes existing Wi-Fi/Ethernet profiles, routes, or DNS; the owner
+  manually toggles Wi-Fi to select or recover the path.
+- Risks or failures: exact route preference and safe Teather-owned scoped DNS are
+  unresolved. P1 remains blocked by D-013 until those commands and offline
+  recovery steps are reviewed and explicitly approved.
+- Next exact action: finish the remaining E-001 evidence. Before P1, design and
+  review route/DNS behavior in a namespace or VM without touching the live host.

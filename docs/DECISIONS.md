@@ -268,3 +268,48 @@ recovery path therefore precede implementation, not merely deployment.
   reviewed plan. No same-session transition from a successful P0 soak is assumed.
 - Live-network testing must capture before/after route, rule, DNS, and firewall
   state and treat any cleanup mismatch as a failure.
+
+## D-014 — Present Teather as a secondary virtual Linux interface
+
+**Status:** Accepted · **Date:** 2026-08-24
+
+### Decision
+
+P1's first Linux mode presents Teather as a non-persistent virtual interface,
+tentatively named `teather0`, over the USB/ADB relay. Its default route has lower
+preference than every existing physical default. Wi-Fi and Ethernet remain
+configured and preferred while available; the owner manually disables or restores
+those links when choosing Teather.
+
+The receiver may create, update, and remove only Teather-owned TUN, route, and
+scoped-DNS state. It must not issue NetworkManager write operations, create a
+persistent NetworkManager profile, disable an existing connection, delete or
+replace an existing default route, overwrite `/etc/resolv.conf`, rewrite another
+link's DNS, or flush firewall state.
+
+### Rationale
+
+The initial daily need is predictable manual selection, not automatic takeover or
+load balancing. If Teather fails while Wi-Fi is enabled, Wi-Fi should remain
+untouched. If Teather fails after the owner disables Wi-Fi, re-enabling Wi-Fi
+should restore the pre-existing path without depending on Teather cleanup.
+
+### Consequences
+
+- This mode is a virtual Linux network interface, not Android RNDIS/NCM or stock
+  USB tethering. Stock, unrooted Android applications cannot reliably own USB
+  Ethernet gadget mode.
+- Connection bonding, load balancing, and multipath remain out of scope.
+- TUN lifecycle must be non-persistent so process death removes the interface and
+  attached routes. Any separate Teather-owned state remains journaled and
+  idempotently removable.
+- Read-only NetworkManager inspection is allowed for preflight and verification;
+  mutation is not.
+- The exact route preference and DNS mechanism remain subject to D-013 review.
+  If safe scoped DNS cannot be proven on the host, P1 implementation remains
+  blocked.
+- A live Teather route does not prove DNS works: disabling Wi-Fi may remove its
+  resolver or leave an unreachable LAN-only resolver. P0's `socks5h` behavior
+  covers explicit proxy clients, not transparent system-wide resolution.
+- P1 initially covers TCP plus DNS. UDP-dependent applications remain a later
+  milestone and must not be described as fully supported Internet traffic.

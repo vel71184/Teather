@@ -45,18 +45,41 @@ Mandatory entry gate:
 
 This gate is accepted in D-013 and must carry across sessions.
 
+Accepted operating model (D-014):
+
+- Create a non-persistent `teather0` virtual backup interface over ADB.
+- Keep every existing Wi-Fi/Ethernet connection and default route untouched and
+  preferred while it is present.
+- Let the owner manually disable Wi-Fi to make Teather the remaining default and
+  manually restore Wi-Fi to recover or switch back.
+- Do not perform NetworkManager writes, create persistent connection profiles,
+  overwrite `/etc/resolv.conf`, or flush firewall state.
+
 Deliverables:
 
-- TUN creation and teardown.
+- Non-persistent `teather0` creation and teardown.
 - Pinned `tun2socks` integration.
-- Route planning that avoids tunnel recursion.
-- DNS through the relay.
+- A lower-preference Teather default route that never deletes or replaces an
+  existing physical default and avoids tunnel recursion.
+- Teather-owned scoped DNS through the relay, with no mutation of existing-link
+  DNS configuration.
+- A documented resolution of the P1 DNS gap: Wi-Fi removal must not leave the
+  host with no resolver or an unreachable LAN-only resolver, and P0's
+  proxy-specific `socks5h` behavior must not be mistaken for system-wide DNS.
 - Preflight diagnostics and postflight cleanup verification.
 - CLI commands for start, status, diagnose, and stop.
 
 Exit criteria:
 
 - Browser, Git, SSH, and package metadata lookup succeed.
+- With Wi-Fi enabled, its existing default remains preferred; after the owner
+  disables Wi-Fi, Teather becomes the selected Internet path; restoring Wi-Fi
+  makes it preferred again without restarting Teather.
+- NetworkManager connection/profile state is byte-for-byte or semantically
+  unchanged across start, manual Wi-Fi toggles, stop, crash, and cable removal.
+- Hostname-based workloads succeed after Wi-Fi is disabled, and every tested
+  failure restores the exact pre-test resolver state without writing
+  `/etc/resolv.conf` directly.
 - Two-hour session completes without unbounded resource growth.
 - SIGINT, SIGTERM, Android service stop, and cable removal restore prior routes and
   DNS.

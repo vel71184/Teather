@@ -89,9 +89,30 @@ Capture relevant Linux state before and after each test.
 | Cable removal | Relay route is withdrawn without deleting unrelated state |
 | Linux suspend/resume | Reconnects or fails closed with recoverable state |
 | Existing VPN active | Refuses unsafe route plan or follows documented coexistence |
+| Teather starts while Wi-Fi is active | Existing Wi-Fi route remains preferred and its NetworkManager state is unchanged |
+| Owner manually disables Wi-Fi | Teather becomes the remaining default without a Teather-initiated Wi-Fi mutation |
+| Owner manually restores Wi-Fi | Existing Wi-Fi route becomes preferred again without restarting Teather |
+| Receiver process is killed | Non-persistent `teather0` and its attached routes disappear automatically |
+| Scoped DNS cannot be installed safely | Startup refuses mutation and leaves existing DNS unchanged |
+| Wi-Fi removal withdraws its resolver | Teather-owned DNS continues hostname resolution or startup had already refused safely |
+| Wi-Fi leaves a LAN-only resolver behind | Queries do not stall or leak to the unreachable Wi-Fi resolver |
 
 Do not automate a destructive route test on the developer's main session until it
 passes in a network namespace or disposable VM where the scenario permits.
+
+For P1, snapshot NetworkManager connection profiles and runtime state as well as
+routes, rules, DNS, and firewall state. Teather must not issue a NetworkManager
+write operation. Read-only inspection is allowed. Test the exact manual sequence:
+Teather ready, owner disables Wi-Fi, Teather traffic succeeds, owner restores
+Wi-Fi, and the original path becomes preferred. Recovery must not depend on the
+ongoing Internet connection or chat session.
+
+P1 DNS testing must distinguish IP reachability from hostname resolution. P0
+`socks5h` proves remote resolution only for explicit proxy clients; it is not
+evidence that applications captured transparently by a TUN can resolve names.
+Record resolver state with Wi-Fi present, manually disabled, restored, after
+receiver crash, and after cable removal. A passed IP-literal request with failed
+hostname lookup is a DNS failure, not a successful Teather connection.
 
 ## Compatibility workloads
 

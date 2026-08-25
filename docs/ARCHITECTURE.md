@@ -87,13 +87,62 @@ belong in configuration once the implementation exists.
 
 P0 begins with application-level proxy configuration. P1 adds:
 
-- a TUN device;
+- a non-persistent `teather0` TUN device that behaves as a virtual backup network
+  interface;
 - an existing, pinned `tun2socks` implementation;
-- route installation that excludes the ADB/relay path from recursion;
-- tunneled DNS;
+- a Teather-owned default route with lower preference than every existing
+  physical default and no mutation of those existing routes;
+- route installation that excludes the loopback ADB/relay path from recursion;
+- Teather-owned, link-scoped DNS that does not overwrite `/etc/resolv.conf` or
+  mutate another interface's DNS configuration;
 - signal-safe and crash-recoverable cleanup;
 - preflight and postflight state snapshots;
 - a diagnostic command that never mutates state.
+
+The first P1 mode is not connection bonding and does not automatically disable a
+receiver link. Wi-Fi and Ethernet remain configured, connected, and preferred
+while present. After Teather reports ready, the owner may manually disable Wi-Fi;
+the kernel can then select the remaining `teather0` default. Re-enabling Wi-Fi
+must make the pre-existing physical default preferred again without a Teather
+restart.
+
+The P1 receiver may read NetworkManager state for diagnostics, but it must not
+issue NetworkManager write operations or create a persistent NetworkManager
+profile. It must never delete or replace an existing default route, rewrite an
+existing link's DNS, flush firewall state, or persist the TUN. Closing or crashing
+the owner process must remove `teather0` and its attached routes automatically;
+explicit cleanup handles any additional Teather-owned state.
+
+The exact Linux DNS mechanism is still unresolved. If system-wide DNS cannot be
+provided with Teather-owned state that disappears safely, implementation stops
+rather than modifying the Wi-Fi configuration. D-013 still requires review of
+the exact commands and offline recovery procedure before P1 code or live network
+changes begin.
+
+#### P1 DNS gap
+
+P0 application clients use SOCKS hostname resolution (`socks5h`), so their DNS
+queries are resolved on the selected Android network. A transparent TUN changes
+that ordering: ordinary Linux applications commonly call the host resolver before
+opening a TCP connection. When the owner disables Wi-Fi, NetworkManager may remove
+that link's resolver or leave a private LAN resolver that cannot be reached over
+Teather. The TUN route could therefore be healthy while hostname-based Internet
+access still fails.
+
+P0 also implements SOCKS5 TCP `CONNECT`, not a general UDP relay, so it cannot be
+assumed to carry arbitrary UDP DNS packets. Candidate P1 solutions are **proposed,
+not selected**:
+
+- per-link DNS attached only to `teather0` through an available resolver API;
+- a Teather-owned loopback DNS proxy that forwards through the Android relay;
+- DNS interception inside the receiver packet path once the required protocol
+  behavior exists.
+
+Every candidate must survive manual Wi-Fi disable/restore, receiver crash, cable
+removal, and repeated stop. It must disappear with Teather-owned state, preserve
+existing-link DNS, avoid direct `/etc/resolv.conf` edits, and require no
+NetworkManager write. If the host provides no safe mechanism, transparent P1
+startup must refuse rather than risk leaving the receiver without DNS.
 
 The initial route manager may be a narrowly scoped script. It must be replaced by
 a small daemon or helper before a graphical application is treated as stable.
