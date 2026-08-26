@@ -9,9 +9,9 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** the P0 Android/Linux relay passed its physical smoke and 30-minute
-> transfer gates. Final P0 cleanup evidence and the reviewed P1 Linux receiver
-> remain before this is a daily-driver build.
+> **Status:** the P0 Android/Linux relay passed its physical smoke, 30-minute
+> transfer, UI-counter, active-stop, and USB-removal cleanup gates. Work is
+> stopped at the reviewed P1 Linux receiver design and owner-approval gate.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -252,8 +252,8 @@ host checks:
 make check
 ```
 
-With an unlocked phone attached to a Linux laptop through authorized ADB, the
-continuation is:
+To reproduce P0 from scratch with an unlocked phone attached to a Linux laptop
+through authorized ADB, run:
 
 ```bash
 ./desktop/linux/teather-p0 doctor

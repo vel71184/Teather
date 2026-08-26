@@ -5,6 +5,8 @@ the project advances when the previous milestone works and is documented.
 
 ## P0 — Prove Android application relay
 
+**Status:** Passed on 2026-08-25. See E-001.
+
 **Question:** Can one TCP connection enter an unrooted Android application through
 ADB and exit through the selected upstream reliably?
 

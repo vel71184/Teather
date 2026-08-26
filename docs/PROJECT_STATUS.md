@@ -1,9 +1,9 @@
 # Project status
 
-- **Snapshot date:** 2026-08-24
+- **Snapshot date:** 2026-08-25
 - **Lifecycle:** implementation / pre-alpha
-- **Active milestone:** P0 — Android relay over USB/ADB
-- **Runnable build:** physical 30-minute relay validated; E-001 closeout pending
+- **Active milestone:** P0 complete — stopped at the P1 entry gate
+- **Runnable build:** P0 Android relay over USB/ADB validated; E-001 passed
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -16,17 +16,19 @@ upstream selection, pairing, status, and session metrics.
 
 ## Current objective
 
-Run the implemented vertical path on the owner's actual phone and Linux laptop:
+P0 proved the implemented vertical path on the owner's actual phone and Linux
+laptop:
 
 ```text
 Linux curl -> laptop loopback -> ADB forwarding -> Android SOCKS5 relay
            -> explicitly selected Android Network -> Internet
 ```
 
-The repository contains the complete P0 source path. The physical ten-request,
-30-minute, locked-screen, and Wi-Fi-default/cellular-selected relay gates passed
-on the owner's phone. The remaining P0 work is the UI counter/selected-upstream
-snapshot plus active-session stop and USB-removal cleanup evidence.
+The physical ten-request, 30-minute, locked-screen,
+Wi-Fi-default/cellular-selected, UI-counter, active-stop, and USB-removal cleanup
+gates passed on the owner's phone. The current objective is discussion only:
+review the exact P1 route, DNS, privilege, failure-cleanup, and offline recovery
+design. Do not implement P1 or mutate live host networking before owner approval.
 
 ## Implemented P0 surface
 
@@ -48,16 +50,13 @@ snapshot plus active-session stop and USB-removal cleanup evidence.
 
 ## Next concrete actions
 
-On the attached phone, complete only the remaining E-001 evidence:
-
-1. Start a controlled explicit-cellular relay and open the Android status screen.
-2. Capture the selected-upstream label and directionally compare its counters with
-   one short host transfer; retain no destination or device identifiers.
-3. Stop the Android service during an active transfer and verify prompt closure,
-   then repeat cleanup verification after USB removal.
-4. Update E-001 to passed or failed and stop at the D-013 P0/P1 approval gate.
-
-Do not repeat the 30-minute soak unless a later code change invalidates it.
+1. Discuss the proposed P1 `teather0`, route-preference, scoped-DNS, privilege,
+   recursion-prevention, saved-state, and cleanup design without touching live
+   networking.
+2. Produce exact offline recovery commands and validate the design in a network
+   namespace or disposable VM where possible.
+3. Present the complete plan for owner review. Do not implement or run live P1
+   networking commands unless the owner explicitly approves it.
 
 ## Confirmed decisions
 
@@ -78,8 +77,6 @@ See `docs/DECISIONS.md` for rationale and status.
 
 ## Important unknowns
 
-- The Android UI counter/selected-upstream snapshot and active-session stop/USB
-  removal cleanup checks remain unrecorded.
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
 - Safe Teather-owned DNS and exact backup-route preference remain unresolved P1
@@ -103,8 +100,8 @@ See `docs/DECISIONS.md` for rationale and status.
 
 ## Hard stop before P1
 
-End P0 after the relay is stopped, cleanup is verified, and E-001/status evidence
-is recorded. Do not implement P1 or run live TUN, route, policy-rule, DNS,
+P0 ended with the relay stopped, cleanup verified, and E-001/status evidence
+recorded. Do not implement P1 or run live TUN, route, policy-rule, DNS,
 firewall, or network-service changes until the exact Linux design and an offline
 recovery procedure have been reviewed with the owner and the owner explicitly
 approves proceeding. A successful P0 soak does not waive this gate. See D-013 and
@@ -125,7 +122,11 @@ the flow. A fresh explicit-cellular relay also passed ten requests and a
 did not grow monotonically, focused system logs showed no Teather kill/crash or
 thermal/data-stall event, final service/forward cleanup succeeded, and before/
 after Linux route, rule, and resolver hashes matched. See E-001 for failures,
-metrics, inference boundaries, and remaining evidence.
+metrics, inference boundaries, and closeout evidence. On 2026-08-25, a fresh
+explicit-cellular smoke passed, the UI reported `cellular (validated)` and
+directionally advancing counters, an unbuffered active session closed when the
+Android service stopped, and USB removal left measured Linux network state
+unchanged. Final cleanup left no service or ADB forward.
 
 ## Session closeout template
 
@@ -193,3 +194,24 @@ metrics, inference boundaries, and remaining evidence.
   recovery steps are reviewed and explicitly approved.
 - Next exact action: finish the remaining E-001 evidence. Before P1, design and
   review route/DNS behavior in a namespace or VM without touching the live host.
+
+### 2026-08-25 — P0 evidence closeout
+
+- Completed: passed a fresh ten-request explicit-cellular smoke; captured the
+  Android `cellular (validated)` label and directionally advancing counters;
+  verified that stopping the service closes an unbuffered active SOCKS session;
+  exercised physical USB removal and final cleanup; marked E-001 passed.
+- Verified with: `./desktop/linux/teather-p0 doctor`, `start`, `test`, `status`,
+  and `stop`; the Android visible status; an isolated idle SOCKS connection;
+  physical USB removal/reconnection; and before/after SHA-256 hashes of all Linux
+  routes, policy rules, and `/etc/resolv.conf`.
+- Files/areas changed: README, roadmap, E-001 experiment evidence, and project
+  status.
+- Decisions made: none. D-013 and D-014 remain authoritative.
+- Risks or failures: today's `make check` rerun could not locate an API 37 SDK;
+  the unchanged APK retains the successful 2026-08-24 build evidence. A paced
+  curl retained host-buffered bytes after USB removal, so cable removal does not
+  establish immediate application-level EOF. Provider accounting remains
+  unmeasured.
+- Next exact action: remain at the hard stop and review the complete P1 Linux
+  route/DNS/privilege/rollback plan with the owner before implementation.

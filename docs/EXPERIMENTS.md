@@ -72,7 +72,7 @@ captures containing personal traffic.
 
 ## E-001 — TCP relay through Android over ADB
 
-**Date:** 2026-08-24 · **Status:** inconclusive
+**Date:** 2026-08-24--2026-08-25 · **Status:** passed
 **Question:** Can a Linux TCP client reach the Internet through an unrooted Android
 application relay reached over USB/ADB, using an explicitly selected Android
 upstream?
@@ -125,9 +125,9 @@ upstream?
 
 ### Results
 
-The core physical relay gates passed, but the experiment remains inconclusive
-because the Android UI counter/selected-upstream snapshot and active-session
-stop/cable-removal checks were not captured.
+The physical relay and closeout gates passed. The Android UI selected-upstream
+and counter evidence, active-session service stop, and USB-removal cleanup were
+completed on 2026-08-25.
 
 - `make check` passed before installation: JVM tests, Android lint, and debug APK
   assembly completed successfully (49 tasks).
@@ -171,30 +171,50 @@ stop/cable-removal checks were not captured.
   Privacy-safe before/after hashes of Linux routes, policy rules, and
   `/etc/resolv.conf` were identical. Firewall comparison was unavailable without
   host privilege; P0 did not issue any firewall mutation. Wi-Fi was left enabled.
+- A fresh closeout session at repository commit `f420466` started an explicit
+  cellular relay and passed ten more requests. The Android status screen reported
+  `cellular (validated)`. One additional short request increased established
+  sessions from 10 to 11, client-to-Internet bytes from 7.5 KiB to 8.3 KiB, and
+  Internet-to-client bytes from 52.0 KiB to 57.2 KiB. This directionally confirms
+  that the live UI counters follow host traffic without retaining a destination.
+- An idle SOCKS connection with no buffered payload was confirmed as one active
+  Android session. `adb shell am stopservice` moved the UI to stopped, removed the
+  service, and the host client observed EOF by the first poll after the stop
+  command returned.
+- During a separate paced transfer, physical USB removal was detected as ADB
+  disconnection. The paced curl could temporarily drain bytes already queued on
+  the host, so this run is not evidence of immediate application-level EOF on
+  cable removal; the client was canceled locally. Privacy-safe route, policy-rule,
+  and resolver hashes were identical before removal and after it. After USB
+  reconnection, final cleanup reported no Android relay service, zero matching
+  Teather forwards, and zero nonblank ADB forwarding rules.
+- `make check` had passed before the unchanged Android APK was originally
+  installed on 2026-08-24. A 2026-08-25 rerun reached Gradle but could not start
+  Android tasks because this shell had no API 37 SDK location; no Android source
+  or APK change was made, so the prior successful source-level evidence remains
+  the applicable build result.
 
 ### Observation vs. inference
 
 - Observed: the physical phone completed the ten-request and 30-minute
   cellular-only gates, survived locked/dozing state plus a notification wake, and
   completed fresh smoke and three-minute gates while Wi-Fi was Android's default.
-  Cleanup removed the service/forward without changing measured Linux network
-  state.
-- Inferred: fresh success with explicit `cellular` while Wi-Fi was default used a
-  cellular Android `Network`, because the implemented connector rejects
-  non-cellular candidates and performs DNS/socket creation on the selected
-  network. The UI label was not captured, so retain that as an inference pending
-  the final UI evidence check.
+  The closeout UI identified the selected upstream as validated cellular, its
+  counters advanced with a host request, stopping the service closed an unbuffered
+  active session, and cleanup removed Teather service/forward state without
+  changing measured Linux network state.
+- Inferred: the successful requests used the displayed validated cellular Android
+  `Network`, consistent with the connector rejecting non-cellular candidates and
+  performing DNS/socket creation on the selected network.
 - Not established: provider accounting/classification behavior, behavior on other
   Samsung/Android/carrier combinations, or long-duration Wi-Fi/cellular
   coexistence.
 
 ### Follow-up
 
-- Complete E-001 by capturing the live Android selected-upstream/counter display
-  and exercising active-session service stop and USB removal with cleanup checks.
-- Then stop at the P0/P1 boundary. D-013 requires an owner-reviewed Linux network
-  design, offline recovery procedure, and explicit owner approval before E-002 or
-  any P1 implementation begins.
+- P0 is complete. Stop at the P0/P1 boundary. D-013 requires an owner-reviewed
+  Linux network design, offline recovery procedure, and explicit owner approval
+  before E-002 or any P1 implementation or live host-network mutation begins.
 
 ## Planned experiment queue
 

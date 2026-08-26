@@ -1,8 +1,8 @@
 # Development guide
 
-Teather now has a runnable P0 source implementation. This guide defines the pinned
-build, host workflow, and evidence boundary; physical Android validation remains
-outstanding.
+Teather has a physically validated P0 implementation. This guide defines the
+pinned build, host workflow, and evidence boundary; P1 remains behind the D-013
+design-review and owner-approval gate.
 
 ## Pinned P0 toolchain
 
