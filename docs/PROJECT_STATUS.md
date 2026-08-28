@@ -4,8 +4,8 @@
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
 - **Runnable build:** P1 Android and corrected amd64 artifacts pass host checks
-  plus disposable-VM package/GUI/helper/TUN gates; signed-release and physical
-  acceptance remain pending
+  plus disposable-VM package/GUI/helper/TUN gates and debug-APK verification;
+  physical acceptance remains pending
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -33,8 +33,10 @@ bounded desktop, Android control, privileged helper, recovery, and package
 surfaces are implemented and pass host-only checks. The disposable-VM Phase 1
 package, D-Bus, real GNOME GUI/tray/fallback, watcher, lifecycle, and no-mutation
 gate passed on 2026-08-26. The corrected privileged-helper/TUN matrix also passed
-in the disposable VM that day. The current objective is to prepare a separately
-signed release APK, then run the explicit operator-gated physical P1 acceptance.
+in the disposable VM that day. D-019 accepts Gradle's debug signing for private
+P1 testing and defers a permanent release identity until distribution is being
+considered. The debug APK is verified. The current objective is to run the
+explicit operator-gated physical P1 acceptance.
 
 ## Implemented P0 surface
 
@@ -56,15 +58,12 @@ signed release APK, then run the explicit operator-gated physical P1 acceptance.
 
 ## Next concrete actions
 
-1. Keep the phone disconnected. The Phase 2 VM is powered off cleanly; do not
-   reboot it unless a regression needs isolated reproduction.
-2. Prepare a separately signed P1 release APK without committing or displaying
-   signing secrets. Verify versionCode 2 / `0.1.0-p1` and record only the public
-   artifact hash/certificate identity needed for acceptance.
-3. Stop and explain that the phone is needed for physical P1 acceptance. Only
-   after the owner explicitly confirms connection may the exact Phase 3 sequence
-   in `docs/P1_HANDOFF.md` begin.
-4. Complete E-002/E-003, reconcile the P1 milestone transition documents, and
+1. The Phase 2 VM is powered off cleanly; do not reboot it unless a regression
+   needs isolated reproduction.
+2. Stop and explain that the phone is now needed for physical P1 acceptance. Do
+   not query ADB or infer availability. Only after the owner explicitly confirms
+   connection may the exact Phase 3 sequence in `docs/P1_HANDOFF.md` begin.
+3. Complete E-002/E-003, reconcile the P1 milestone transition documents, and
    stop for explicit P2 design approval.
 
 Preserve the P1 implementation and isolated-validation fixes. Generated
@@ -159,6 +158,40 @@ next handoff/recovery documents, and affected technical guidance agree.
 
 ## Work log
 
+### 2026-08-27 — debug signing accepted for private P1 testing
+
+- Completed: published the P1 implementation and disposable-VM validation
+  checkpoint to `origin/main` at commit `5a6f6b2`. Confirmed the local and remote
+  main refs match and the VM remains stopped. Audited the next release-signing
+  gate without connecting or querying the phone.
+- Verified with: the build configuration reports versionCode 2 /
+  `0.1.0-p1`; `app/build/outputs/apk/release/app-release-unsigned.apk` exists and
+  `apksigner verify --verbose --print-certs` reports `DOES NOT VERIFY`, as expected
+  for the unsigned output. No `jks`, `keystore`, `p12`, or `pfx` file exists in
+  the repository, and no signing-related environment variable is configured.
+  After D-019, `env ANDROID_HOME=/tmp/android-sdk
+  GRADLE_USER_HOME=/tmp/teather-gradle2 make android-build` passed outside the
+  network sandbox. `apksigner verify --verbose --print-certs` validates one v2
+  Android Debug signer; `aapt dump badging` confirms package
+  `io.github.vel71184.teather`, versionCode 2, and versionName `0.1.0-p1`. The APK
+  signer certificate SHA-256 is
+  `873c84175e4447884ab80929e6a40952ef1d31ee807624041abd7796c61d5ccb`;
+  the APK SHA-256 is
+  `8dbf92b8137533127e1a7e20e199586ccb276e995cb58ad354e8ed968a9ed586`.
+- Files/areas changed: `.gitignore` now excludes `*.jks` and `*.keystore`; the
+  resume, roadmap, handoff, experiment log, README, and agent starting point now
+  distinguish private debug testing from future release signing.
+- Decisions made: D-019 accepts Gradle's automatically signed debug APK for the
+  private P1 experiment and defers a permanent release identity until distribution
+  is being considered.
+- Milestone transition: not applicable; P1 remains active.
+- Risks or failures: a future release certificate cannot update the debug-signed
+  installation. Moving to a release identity will require uninstall/reinstall and
+  may discard local application state. The owner accepts that development-stage
+  tradeoff.
+- Next exact action: request explicit phone connection for Phase 3. Do not query
+  ADB until the owner confirms the phone is connected.
+
 ### 2026-08-26 — disposable VM Phase 2 passed and powered off
 
 - Completed: ran the real privileged helper and patched tun2proxy in the
@@ -189,10 +222,10 @@ next handoff/recovery documents, and affected technical guidance agree.
   split-default comparison, which started only the disposable-VM tunnel; the
   exact owned process was terminated and the harness restored its test state.
   Regression tests and the final matrix now pass. Physical DNS retention,
-  signed-release authorization, two-hour behavior, and cable/service recovery
-  remain unproven.
-- Next exact action: keep the phone disconnected and prepare a separately signed
-  P1 release APK. Then request explicit phone connection and run Phase 3.
+  physical APK/ADB behavior, two-hour behavior, and cable/service recovery remain
+  unproven. Permanent release signing is deferred by D-019.
+- Next exact action: **superseded by D-019 on 2026-08-27**. Verify the debug APK,
+  then request explicit phone connection and run Phase 3.
 
 ### 2026-08-26 — Phase 2 guest ready; paused at guest sudo authorization
 
@@ -261,7 +294,7 @@ next handoff/recovery documents, and affected technical guidance agree.
 - Milestone transition: not applicable; P1 remains active.
 - Risks or failures: the guest bootstrap corrections are validation-environment
   setup, not product passes. `/tmp` remains volatile. The privileged helper/TUN
-  matrix and all signed-release physical evidence remain open. The owner
+  matrix and all physical device evidence remain open. The owner
   connected the phone early; Codex did not query it or pass USB through and asked
   for it to be disconnected. Confirmation of disconnection is pending.
 - Next exact action: after the owner confirms the phone is disconnected, boot
@@ -357,8 +390,9 @@ next handoff/recovery documents, and affected technical guidance agree.
   changed during this audit.
 - Decisions made: none. D-015 through D-018 remain authoritative.
 - Risks or failures: the P1 implementation remains uncommitted. The disposable-VM
-  TUN/helper/GUI/package gate, separately signed release APK run, and full
-  physical TCP/DNS/cleanup/two-hour acceptance remain open. Generated Python
+  TUN/helper/GUI/package gate, APK/device run, and full physical
+  TCP/DNS/cleanup/two-hour acceptance remain open. D-019 later selected debug
+  signing for that private device run. Generated Python
   bytecode is present in the worktree and must not be staged.
 - Next exact action: follow Phase 1 of `docs/P1_HANDOFF.md` in a disposable Debian
   12 GNOME amd64 VM. Do not rerun P0 or mutate the active host network.
@@ -402,8 +436,9 @@ next handoff/recovery documents, and affected technical guidance agree.
   checksum-pinned before the locked build. Rust 1.90 is needed by that graph.
 - Risks or failures: this sandbox cannot create `/dev/net/tun` or display GTK.
   The root/helper interface lifetime and privilege-drop gate, dependency-configured
-  Debian 12 install, GUI/tray and optional watcher tests, signed-release APK device
-  run, and full physical TCP/DNS/cleanup/two-hour P1 acceptance remain open. The
+  Debian 12 install, GUI/tray and optional watcher tests, physical APK/device run,
+  and full TCP/DNS/cleanup/two-hour P1 acceptance remain open. D-019 later selected
+  debug signing for the private device run. The
   ordinary probe established that the service was not created, but its start API
   did not synchronously throw `SecurityException`; retain that platform nuance in
   final acceptance evidence.

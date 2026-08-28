@@ -6,6 +6,8 @@
 *.secret
 *.key
 *.pem
+*.jks
+*.keystore
 *.p12
 *.pfx
 secrets/

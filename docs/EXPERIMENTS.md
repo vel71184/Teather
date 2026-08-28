@@ -230,10 +230,11 @@ produced a SOCKS5 domain request for the original synthetic name and received th
 controlled HTTP response. Final routes, resolver, NetworkManager inventory,
 policy rules, and firewall matched the baseline exactly.
 
-This is not yet a passed E-002 result. The separately signed release, actual
-Android/ADB transport, owner-controlled Wi-Fi disable/restore sequence, retained
-usable nameserver, browser/Git/SSH/package workloads, and two-hour session remain
-physical gates.
+This is not yet a passed E-002 result. Debug-APK verification passed on
+2026-08-27. Actual Android/ADB transport, owner-controlled Wi-Fi disable/restore
+sequence, retained usable nameserver, browser/Git/SSH/package workloads, and the
+two-hour session remain physical gates. D-019 defers permanent release signing
+until distribution is being considered.
 
 ## E-003 — P1 failure-path restoration
 

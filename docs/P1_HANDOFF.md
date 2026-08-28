@@ -23,6 +23,13 @@ or rebuild the P1 scaffold.
   start/status/stop, compatible attach, incompatible-setting refusal, coarse
   counter preservation, and effective ordinary-app denial passed. The temporary
   probe was uninstalled, the relay was stopped, and no ADB forward remained.
+- On 2026-08-27, `assembleDebug` completed successfully and `app-debug.apk` was
+  verified with `apksigner`: one Android Debug signer using APK Signature Scheme
+  v2, certificate SHA-256
+  `873c84175e4447884ab80929e6a40952ef1d31ee807624041abd7796c61d5ccb`.
+  `aapt` confirmed package `io.github.vel71184.teather`, versionCode 2, and
+  versionName `0.1.0-p1`. The APK SHA-256 is
+  `8dbf92b8137533127e1a7e20e199586ccb276e995cb58ad354e8ed968a9ed586`.
 
 ## Phase 1 evidence complete — 2026-08-26
 
@@ -42,7 +49,7 @@ or rebuild the P1 scaffold.
   rules were byte-for-byte unchanged from the private baseline; `teather0` never
   existed. The clean Phase 1 disk is the backing file for a fresh Phase 2 overlay.
 
-Phase 1 alone did not prove the privileged TUN lifetime, signed-release APK
+Phase 1 alone did not prove the privileged TUN lifetime, Android APK/device
 boundary, system-wide TCP/DNS, or P1 cleanup matrix.
 
 ## Phase 2 evidence complete — 2026-08-26
@@ -76,9 +83,9 @@ boundary, system-wide TCP/DNS, or P1 cleanup matrix.
   and tun2proxy were absent. Private evidence remains only in the disposable
   guest; it is not committed. The guest powered off cleanly.
 
-These VM results do not prove the separately signed release boundary, actual
-Android/ADB transport, retained physical-host DNS after Wi-Fi is disabled, the
-two-hour session, or physical cable/service failure recovery.
+These VM results do not prove the actual Android/ADB transport, retained
+physical-host DNS after Wi-Fi is disabled, the two-hour session, or physical
+cable/service failure recovery.
 
 ## Safety boundary
 
@@ -212,13 +219,16 @@ snapshot after the matrix passes.
 Start this phase only after Phases 1 and 2 pass and the explicit operator phone
 gate above is satisfied.
 
-1. Use a separately signed release APK; do not commit or paste its signing key.
-   Connect one authorized phone through ADB. Do not record its raw serial.
+1. Build and cryptographically verify versionCode 2 / `0.1.0-p1` as a debug APK.
+   Gradle's local debug certificate is accepted for this private P1 experiment
+   under D-019; do not treat it as a distributable release identity. Connect one
+   authorized phone through ADB. Do not record its raw serial.
 2. Capture the complete Linux baseline from Phase 1 plus interface state. Confirm
    no existing VPN, split default, nonstandard IPv4 rule, or `teather0` exists.
-3. Verify the signed release APK reports versionCode 2 / `0.1.0-p1`. Prove ADB
-   shell start/query/stop and effective ordinary-app denial. Repeat compatible
-   attach, incompatible-setting refusal, and Linux-start ownership behavior.
+3. Verify the installed debug-signed APK reports versionCode 2 / `0.1.0-p1`.
+   Prove ADB shell start/query/stop and effective ordinary-app denial. Repeat
+   compatible attach, incompatible-setting refusal, and Linux-start ownership
+   behavior.
 4. Approve the detected hashed device locally, connect through the GUI or CLI,
    and confirm the existing Wi-Fi/Ethernet default remains preferred. Confirm the
    Android relay and dynamic ADB forward are ready before changing Wi-Fi.
@@ -248,3 +258,4 @@ destination disclosure, resolver mutation, or NetworkManager mutation fails P1.
 
 After P1 acceptance, stop. D-018 requires explicit P2 design discussion and owner
 approval before general UDP, IPv6, broader DNS, suspend/resume, or protocol work.
+Permanent release signing remains a separate pre-distribution gate under D-019.

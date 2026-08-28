@@ -10,8 +10,8 @@ serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
 > **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
-> host-only checks plus both disposable-VM phases are complete; separately
-> signed release and physical P1 acceptance remain pending.
+> host-only checks, both disposable-VM phases, and debug-APK verification are
+> complete; physical P1 acceptance remains pending.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -250,11 +250,11 @@ directory when its first real file is ready.
 ## Getting started today
 
 P1 source work, host-only verification, and the disposable Debian 12 GNOME VM
-package/GUI/helper/TUN gates are complete. The current execution sequence starts
-with a separately signed release APK and the explicit phone-connection gate in
-[the P1 handoff](docs/P1_HANDOFF.md). Do not connect a phone or begin physical
-acceptance until the release artifact is ready and the owner confirms the phone
-is connected.
+package/GUI/helper/TUN gates are complete. VersionCode 2 / `0.1.0-p1` has a
+verified debug signature. D-019 defers a permanent release identity while Teather
+is privately tested. The current execution sequence is the explicit
+phone-connection gate in [the P1 handoff](docs/P1_HANDOFF.md): do not query the
+phone or begin physical acceptance until the owner confirms it is connected.
 
 The deterministic source-level gate remains:
 

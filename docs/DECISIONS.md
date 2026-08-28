@@ -439,3 +439,26 @@ After P1 physical acceptance and evidence recording, work stops for an explicit
 P2 design discussion and approval. No research-heavy investigation or
 implementation of general UDP, IPv6, broader DNS behavior, suspend/resume, or
 protocol changes begins automatically.
+
+## D-019 — Defer permanent release signing during private P1 testing
+
+**Status:** Accepted · **Date:** 2026-08-27
+
+### Decision
+
+Use Gradle's automatically signed debug APK for the private P1 physical
+experiment. Do not create or configure a permanent Teather release identity
+until the owner is considering distribution. Before phone work, verify the debug
+APK signature, versionCode 2, and versionName `0.1.0-p1`.
+
+### Consequences
+
+- Android still receives a signed APK; this decision defers only the permanent
+  production identity.
+- A later release-signed build cannot update an installation signed by the debug
+  certificate. The owner accepts a clean uninstall/reinstall and possible loss of
+  local application state at that transition.
+- The debug certificate is insecure by design and must never be represented as a
+  public-release credential.
+- Release-key creation, protected storage, backup, and release-build verification
+  become an explicit pre-distribution gate rather than a P1 exit criterion.

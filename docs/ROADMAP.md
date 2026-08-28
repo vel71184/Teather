@@ -33,8 +33,9 @@ Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 ## P1 — Linux USB Desktop
 
 **Status:** Host-only checks passed on 2026-08-25 and both disposable-VM phases
-passed on 2026-08-26; separately signed release and physical acceptance remain
-pending. The exact resume sequence is in `docs/P1_HANDOFF.md`.
+passed on 2026-08-26. Debug-APK verification passed on 2026-08-27; physical
+acceptance remains pending. Permanent release signing is deferred by D-019 while
+the app is private. The exact resume sequence is in `docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
 recoverable system-wide TCP and DNS through the existing Android relay?

@@ -29,13 +29,15 @@ implemented. Host checks and both disposable Debian 12 GNOME VM phases passed;
 the VM is powered off. Do not rebuild the scaffold, rerun P0, or repeat the VM
 matrix unless a regression requires isolated reproduction.
 
-The next job is to prepare a separately signed P1 release APK without committing
-or exposing signing secrets. Keep the phone disconnected until that artifact is
-ready. Then stop, explain why the phone is needed, and continue only after the
-owner explicitly confirms connection. Run Phase 3 of `docs/P1_HANDOFF.md` and
-record E-002/E-003. Stop for explicit P2 planning and owner approval after P1; do
-not start general UDP, IPv6, broader DNS, WireGuard, wireless transports,
-multi-client support, cross-platform receivers, or P5 polish early.
+The owner accepted the local debug certificate for private P1 testing and deferred
+a permanent release identity until distribution is being considered (D-019).
+VersionCode 2 / `0.1.0-p1` is built and its debug signature is verified. The next
+job is the explicit operator phone gate: do not query ADB or otherwise infer phone
+availability. Explain why the phone is needed and continue only after the owner
+confirms connection. Run Phase 3 of `docs/P1_HANDOFF.md` and record E-002/E-003.
+Stop for explicit P2 planning and owner approval after P1; do not start general
+UDP, IPv6, broader DNS, WireGuard, wireless transports, multi-client support,
+cross-platform receivers, or P5 polish early.
 
 ## Hard constraints
 
