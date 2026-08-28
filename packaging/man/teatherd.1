@@ -1,0 +1,17 @@
+.TH TEATHERD 1 "August 2026" "Teather 0.1.0" "User Commands"
+.SH NAME
+teatherd \- Teather per-user connection manager
+.SH SYNOPSIS
+.B teatherd
+.SH DESCRIPTION
+.B teatherd
+owns phone detection and Teather connection state. It is normally activated on
+the session bus and can optionally be enabled as a systemd user service for
+login-time device watching. Only one phone can be active at a time.
+.PP
+On exit the daemon attempts to clean the exact ADB forward and tunnel resources
+recorded in its mode-0600 ownership journal. Ambiguous resources are left in
+place for explicit recovery rather than removed.
+.SH SEE ALSO
+.BR teather (1),
+.BR teather-gtk (1)

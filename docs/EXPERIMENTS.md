@@ -215,6 +215,43 @@ completed on 2026-08-25.
 - P0 is complete. Stop at the P0/P1 boundary. D-013 requires an owner-reviewed
   Linux network design, offline recovery procedure, and explicit owner approval
   before E-002 or any P1 implementation or live host-network mutation begins.
+- Resolution on 2026-08-25: D-015 records that approval and the P1 source is now
+  implemented. Continue with `docs/P1_HANDOFF.md`; E-002/E-003 remain pending.
+
+## E-002 — System-wide TCP/DNS through the P1 backup interface
+
+**Date:** 2026-08-26 · **Status:** running
+
+The disposable-VM portion passed without a phone. In a Debian 12.15 GNOME guest,
+the real helper created only the approved `teather0` address and routes. QEMU's
+metric-100 physical default remained preferred over Teather's metric-32000
+default. A controlled DNS query returned `198.18.0.0`; connecting to that address
+produced a SOCKS5 domain request for the original synthetic name and received the
+controlled HTTP response. Final routes, resolver, NetworkManager inventory,
+policy rules, and firewall matched the baseline exactly.
+
+This is not yet a passed E-002 result. The separately signed release, actual
+Android/ADB transport, owner-controlled Wi-Fi disable/restore sequence, retained
+usable nameserver, browser/Git/SSH/package workloads, and two-hour session remain
+physical gates.
+
+## E-003 — P1 failure-path restoration
+
+**Date:** 2026-08-26 · **Status:** running
+
+The disposable-VM cleanup portion passed. SIGTERM, SIGINT, forced tunnel death,
+and invoking-parent death removed `teather0` and its attached routes. Invalid
+input, unavailable proxy, unsafe tunnel mode, interface/address/route collision,
+nonstandard policy rules, split default, and VPN-like default refused before
+mutation. Repeated disconnect/recover calls were idempotent, while an ambiguous
+manually created `teather0` was deliberately preserved.
+
+The matrix exposed normal-route and policy-rule parsing defects, an incorrect
+split-default literal comparison, and a tun2proxy `IFF_NO_PI` framing mismatch.
+The failures and fixes are retained in the Phase 2 work log and D-015. The final
+matrix passed and its baseline/final network snapshots matched. E-003 remains
+running until Android service stop, USB removal, daemon/helper/tunnel death, and
+manual Wi-Fi restoration pass on the physical host with before/after evidence.
 
 ## Planned experiment queue
 

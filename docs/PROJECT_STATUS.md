@@ -1,9 +1,11 @@
 # Project status
 
-- **Snapshot date:** 2026-08-25
+- **Snapshot date:** 2026-08-27
 - **Lifecycle:** implementation / pre-alpha
-- **Active milestone:** P0 complete — stopped at the P1 entry gate
-- **Runnable build:** P0 Android relay over USB/ADB validated; E-001 passed
+- **Active milestone:** P1 — Linux USB Desktop validation
+- **Runnable build:** P1 Android and corrected amd64 artifacts pass host checks
+  plus disposable-VM package/GUI/helper/TUN gates; signed-release and physical
+  acceptance remain pending
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -24,11 +26,15 @@ Linux curl -> laptop loopback -> ADB forwarding -> Android SOCKS5 relay
            -> explicitly selected Android Network -> Internet
 ```
 
-The physical ten-request, 30-minute, locked-screen,
-Wi-Fi-default/cellular-selected, UI-counter, active-stop, and USB-removal cleanup
-gates passed on the owner's phone. The current objective is discussion only:
-review the exact P1 route, DNS, privilege, failure-cleanup, and offline recovery
-design. Do not implement P1 or mutate live host networking before owner approval.
+The physical P0 gates passed on the owner's phone. On 2026-08-25 the owner
+provided the complete P1 implementation plan and explicitly requested its
+implementation. This satisfies D-013's source-implementation approval gate. The
+bounded desktop, Android control, privileged helper, recovery, and package
+surfaces are implemented and pass host-only checks. The disposable-VM Phase 1
+package, D-Bus, real GNOME GUI/tray/fallback, watcher, lifecycle, and no-mutation
+gate passed on 2026-08-26. The corrected privileged-helper/TUN matrix also passed
+in the disposable VM that day. The current objective is to prepare a separately
+signed release APK, then run the explicit operator-gated physical P1 acceptance.
 
 ## Implemented P0 surface
 
@@ -41,8 +47,8 @@ design. Do not implement P1 or mutate live host networking before owner approval
 - Connection limits, handshake/connect/idle timeouts, cancellation, counters, and
   coarse error categories.
 - Minimal Android control/status interface.
-- Debug-only exported service lifecycle for ADB automation; release service is
-  private.
+- P0 originally used a debug-only exported service lifecycle. P1 supersedes it
+  with a release service protected by `android.permission.DUMP`.
 - Linux helper for redacted discovery, build, install, start, test, soak, logs,
   status, and cleanup.
 - Unit/integration tests and GitHub Actions build/lint workflow.
@@ -50,13 +56,20 @@ design. Do not implement P1 or mutate live host networking before owner approval
 
 ## Next concrete actions
 
-1. Discuss the proposed P1 `teather0`, route-preference, scoped-DNS, privilege,
-   recursion-prevention, saved-state, and cleanup design without touching live
-   networking.
-2. Produce exact offline recovery commands and validate the design in a network
-   namespace or disposable VM where possible.
-3. Present the complete plan for owner review. Do not implement or run live P1
-   networking commands unless the owner explicitly approves it.
+1. Keep the phone disconnected. The Phase 2 VM is powered off cleanly; do not
+   reboot it unless a regression needs isolated reproduction.
+2. Prepare a separately signed P1 release APK without committing or displaying
+   signing secrets. Verify versionCode 2 / `0.1.0-p1` and record only the public
+   artifact hash/certificate identity needed for acceptance.
+3. Stop and explain that the phone is needed for physical P1 acceptance. Only
+   after the owner explicitly confirms connection may the exact Phase 3 sequence
+   in `docs/P1_HANDOFF.md` begin.
+4. Complete E-002/E-003, reconcile the P1 milestone transition documents, and
+   stop for explicit P2 design approval.
+
+Preserve the P1 implementation and isolated-validation fixes. Generated
+`__pycache__` files, private VM evidence, signing keys, and build credentials are
+not implementation artifacts and must not be staged.
 
 ## Confirmed decisions
 
@@ -72,6 +85,9 @@ design. Do not implement P1 or mutate live host networking before owner approval
 - P1's first Linux mode is a non-persistent `teather0` backup interface. Existing
   Wi-Fi/Ethernet remains untouched and preferred; the owner manually disables or
   restores it. Teather performs no NetworkManager writes (D-014).
+- The exact P1 helper, route, virtual-DNS, trust, D-Bus, packaging, and recovery
+  architecture is approved (D-015 through D-017).
+- Work must stop for explicit planning and approval after P1, before P2 (D-018).
 
 See `docs/DECISIONS.md` for rationale and status.
 
@@ -79,18 +95,15 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- Safe Teather-owned DNS and exact backup-route preference remain unresolved P1
-  design work. Disabling Wi-Fi may remove its resolver or leave an unreachable
-  LAN-only resolver; P0 `socks5h` covers explicit proxy clients, not transparent
-  TUN applications. UDP strategy and IPv6 policy remain P2 questions.
+- Whether Debian retains a usable non-loopback IPv4 nameserver after Wi-Fi is
+  disabled is a pending physical P1 gate. Teather will not configure DNS if it
+  does not. UDP strategy and IPv6 policy remain P2 questions.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
 ## Explicitly not in progress
 
-- Linux TUN or global route mutation
 - UDP relay
-- Graphical desktop UI
 - Polished Android onboarding
 - Local-only Wi-Fi, Wi-Fi Direct, AOA, or Bluetooth
 - Windows, macOS, Android, or iOS receivers
@@ -98,17 +111,14 @@ See `docs/DECISIONS.md` for rationale and status.
 - App-store packaging
 - Carrier-specific behavior modules
 
-## Hard stop before P1
+## P1 authorization and live-test boundary
 
-P0 ended with the relay stopped, cleanup verified, and E-001/status evidence
-recorded. Do not implement P1 or run live TUN, route, policy-rule, DNS,
-firewall, or network-service changes until the exact Linux design and an offline
-recovery procedure have been reviewed with the owner and the owner explicitly
-approves proceeding. A successful P0 soak does not waive this gate. See D-013 and
-the P1 entry gate in `docs/ROADMAP.md`. D-014 fixes the desired operating model
-but does not authorize implementation: Teather creates only its own temporary
-backup interface and scoped network state, performs no NetworkManager writes, and
-never alters an existing Wi-Fi/Ethernet connection or profile.
+The owner-approved implementation plan on 2026-08-25 resolves D-013 and authorizes
+P1 source work. It does not authorize unbounded experimentation on the active
+host: helper/network behavior must pass isolated tests first, and the physical
+gate must capture before/after routes, rules, resolver, NetworkManager, and
+firewall state. No P1 code may alter NetworkManager, resolver configuration,
+firewall, policy rules, or physical interfaces.
 
 ## Evidence recorded so far
 
@@ -130,6 +140,11 @@ unchanged. Final cleanup left no service or ADB forward.
 
 ## Session closeout template
 
+When a P# milestone completes, also perform the repository-wide transition in
+the `Milestone transition protocol` section of `AGENTS.md`. A milestone is not
+closed until the roadmap, experiments, this resume point, agent priority, README,
+next handoff/recovery documents, and affected technical guidance agree.
+
 ```markdown
 ### YYYY-MM-DD — short description
 
@@ -137,11 +152,266 @@ unchanged. Final cleanup left no service or ADB forward.
 - Verified with:
 - Files/areas changed:
 - Decisions made:
+- Milestone transition: not applicable | pending | completed
 - Risks or failures:
 - Next exact action:
 ```
 
 ## Work log
+
+### 2026-08-26 — disposable VM Phase 2 passed and powered off
+
+- Completed: ran the real privileged helper and patched tun2proxy in the
+  phone-free Debian 12.15 QEMU guest against a controlled loopback SOCKS/HTTP
+  service. Virtual DNS returned a synthetic pool address, then the controlled TCP
+  request arrived at SOCKS as the original domain and passed. Exercised interface
+  lifetime, physical-route preference, privilege drop, preflight refusals,
+  signal/death cleanup, repeated control calls, and ambiguous-state preservation.
+- Verified with: `env ANDROID_HOME=/tmp/android-sdk
+  GRADLE_USER_HOME=/tmp/teather-gradle2 make check` passed 92 Android tasks,
+  24 Python tests, the strict C build, the new helper-route regression
+  executable, argument rejection, and private D-Bus smoke. The current tun2proxy is
+  `ffdd4373cb41401e3f4e8b4d65f84688ed4288966d621580de303b1ca47d15bf`;
+  the installed package is
+  `f723c2ebfe92d68cb18959bdfe414e997dded22c20150d1793d07d9bc8cedc52`.
+  The final matrix printed `PHASE2_MATRIX_PASS`. Baseline/final routes, rules,
+  resolver, NetworkManager inventory, and nftables were identical; `teather0`
+  and tun2proxy were absent before clean poweroff.
+- Files/areas changed: helper route/rule parsing and regression test; a second
+  audited tun2proxy patch; build integration; architecture/decision/evidence/
+  status documentation.
+- Decisions made: preserve D-015's `IFF_NO_PI` boundary and patch tun2proxy 0.8.3
+  to honor its existing packet-information argument.
+- Milestone transition: not applicable; P1 remains active until physical
+  acceptance passes.
+- Risks or failures: the matrix found three helper parsing defects and one
+  tun2proxy packet-framing mismatch. All failed closed except the incorrect
+  split-default comparison, which started only the disposable-VM tunnel; the
+  exact owned process was terminated and the harness restored its test state.
+  Regression tests and the final matrix now pass. Physical DNS retention,
+  signed-release authorization, two-hour behavior, and cable/service recovery
+  remain unproven.
+- Next exact action: keep the phone disconnected and prepare a separately signed
+  P1 release APK. Then request explicit phone connection and run Phase 3.
+
+### 2026-08-26 — Phase 2 guest ready; paused at guest sudo authorization
+
+- Completed: the owner explicitly confirmed the phone was disconnected. Verified
+  that no QEMU guest was running, checked the fresh Phase 2 overlay and complete
+  backing chain with `qemu-img check`/`qemu-img info`, and booted a dedicated
+  Phase 2 launcher that references `phase2.qcow2` rather than the accepted Phase
+  1 disk. The VM has no USB passthrough. Staged and syntax-checked a private
+  controlled loopback SOCKS/HTTP service, virtual-DNS/TCP probe, and reversible
+  privileged matrix in the guest.
+- Verified with: the guest reports `systemctl is-system-running` as `running`,
+  `eth0` is up on QEMU user networking, the physical default has metric 100,
+  IPv4 policy rules are the three standard rules, `teather0` is absent, and the
+  installed helper/tunnel are root-owned mode 0755.
+- Files/areas changed: this resume point only; private harness and evidence paths
+  remain under `/tmp` and the guest home, outside the repository.
+- Decisions made: continue phone-free with a controlled loopback SOCKS endpoint.
+  Do not weaken sudo or add a passwordless rule.
+- Milestone transition: not applicable; P1 remains active.
+- Risks or failures: the first guest privilege probe, `sudo -n true`, correctly
+  stopped with `sudo: a password is required`. Repository rules prohibit the
+  agent from retrying sudo after that failure.
+- Next exact action: from the host, the owner runs the exact SSH command supplied
+  in chat, enters the disposable guest password at the sudo prompt, and returns
+  the complete matrix output. Keep the phone disconnected. **Resolved later the
+  same day:** the owner explicitly authorized Codex to enter the disposable guest
+  password; the corrected matrix passed and the VM powered off.
+
+### 2026-08-26 — disposable VM Phase 1 passed
+
+- Completed: booted the Debian 12.15 amd64 GNOME guest under QEMU TCG with
+  loopback-only SSH forwarding. Corrected two guest-bootstrap omissions before
+  accepting evidence: NetworkManager took ownership of the QEMU NIC after the
+  no-recommends build omitted a DHCP client, and the standard Xorg stack was
+  installed after GDM accurately reported that it could not start an X server.
+  Restored Debian's normal APT recommendation behavior. Installed and verified
+  the Teather package, no-phone D-Bus/CLI behavior, optional watcher, real GNOME
+  GTK window, AppIndicator-positive and typelib-unavailable fallback cases, and
+  same-version reinstall/remove/purge/final-reinstall lifecycle.
+- Verified with: the package matched SHA-256
+  `621b8732459e4ab3108e12eed567c6ea00a81f81866a8611b810ac67b086c6e3`.
+  `teather status --json`, `devices --json`, and `diagnose --json` reported a
+  ready disconnected state, no devices, no mutations, and one usable resolver;
+  D-Bus activation started the user daemon without privilege or `teather0`.
+  Watcher enable/active/disable/inactive passed. Privileged files were root-owned
+  at modes 0755, 0755, and 0644. The GTK window remained usable and disconnected
+  with zero counters; the tray icon appeared with AppIndicator enabled and was
+  absent when the exact typelib was temporarily mode 000. The typelib was
+  restored to 0644 and neither GUI case started `pkexec`.
+- Package lifecycle: the mode-0600 preference file retained SHA-256
+  `ee03aa4e566e50876c666e8343b64ea56d234a0650d4ecb678b087c678cf0a19`
+  across same-version reinstall and remove. Remove deleted installed program
+  files; purge deleted only the Teather preference directory and package record;
+  private evidence remained. The verified artifact was reinstalled afterward.
+- No-mutation evidence: routes, IPv4 rules, resolver content, NetworkManager
+  connection inventory, and nftables ruleset were byte-for-byte unchanged from
+  the private pre-install baseline. `teather0` never existed. No host network,
+  ADB, USB passthrough, or phone command was used.
+- Artifacts: private screenshots remain outside the repository at
+  `/tmp/teather-p1-vm/gui-tray.png` and `gui-fallback.png`, with SHA-256
+  `8c2067855bc3b9e40a11b67a7f4e6761bb0f98c332104b509ad24b992f382116`
+  and `270acc39d849e6bba6081d270300aed457d518cdfbf6b0ede09fbe7a87b48123`.
+  Guest state was powered off cleanly; `qemu-img check` found no errors. The
+  completed Phase 1 overlay is now the immutable backing file for a fresh
+  mode-0600 `/tmp/teather-p1-vm/phase2.qcow2` overlay.
+- Milestone transition: not applicable; P1 remains active.
+- Risks or failures: the guest bootstrap corrections are validation-environment
+  setup, not product passes. `/tmp` remains volatile. The privileged helper/TUN
+  matrix and all signed-release physical evidence remain open. The owner
+  connected the phone early; Codex did not query it or pass USB through and asked
+  for it to be disconnected. Confirmation of disconnection is pending.
+- Next exact action: after the owner confirms the phone is disconnected, boot
+  `phase2.qcow2` with no USB passthrough and run the controlled loopback SOCKS
+  Phase 2 matrix in `docs/P1_HANDOFF.md`.
+
+### 2026-08-26 — paused after disposable VM image construction
+
+- Completed: the owner installed QEMU 7.2 and its required utilities. Direct
+  downloads from Debian's cloud-image backing mirrors repeatedly reset, so the
+  guest was assembled instead with `mmdebstrap` in an unprivileged user namespace
+  from Debian's signed Bookworm, Bookworm updates, and Bookworm security package
+  repositories. The guest contains Debian 12, GNOME, systemd, NetworkManager,
+  SSH, sudo without a passwordless rule, a normal test user, the P1 documents,
+  and the verified Teather package. A 16 GiB ext4 filesystem was converted to a
+  private QCOW2 base plus a disposable Phase 1 overlay.
+- Verified with: `e2fsck -fn` passed all five filesystem passes with 83,000 files
+  and no reported errors. The package copied into the guest matches SHA-256
+  `621b8732459e4ab3108e12eed567c6ea00a81f81866a8611b810ac67b086c6e3`.
+  `qemu-img info --backing-chain` reports a non-corrupt 16 GiB overlay backed by
+  the non-corrupt 16 GiB base; the base occupies about 2.19 GiB and the new
+  overlay about 196 KiB.
+- Files/areas changed: private transient VM assets are under
+  `/tmp/teather-p1-vm`; non-secret rootfs staging is under
+  `/tmp/teather-p1-build`. The repository change in this sub-session is limited
+  to the explicit phone gate in `docs/P1_HANDOFF.md` and this status checkpoint.
+- Decisions made: build the same Debian 12 GNOME validation environment from
+  signed Debian packages rather than weaken verification or trust an arbitrary
+  cloud-image mirror. QEMU will use TCG software CPU emulation, user-mode
+  networking, and an SSH forward bound only to `127.0.0.1:2222`; `/dev/kvm` and
+  host TUN are unavailable.
+- Operator gate: the phone remains disconnected. Before any phone connection or
+  USB passthrough, stop, explain why it is needed and the required VM state, and
+  wait for the owner to confirm connection. This gate is also durable in
+  `docs/P1_HANDOFF.md`.
+- Pause state: the headless launch tool call was canceled before completion. No
+  QEMU PID file, monitor socket, serial log, or running VM remained afterward.
+  No package was installed in the VM and no P1 test command was run yet. No host
+  TUN, route, resolver, NetworkManager, firewall, policy-rule, interface, ADB, or
+  phone state changed.
+- Next exact action: if `/tmp/teather-p1-vm/phase1.qcow2` still exists, run
+  `/tmp/teather-p1-vm/start-headless.sh`, wait for SSH on host loopback port 2222,
+  verify the guest baseline, and begin Phase 1 of `docs/P1_HANDOFF.md`. If `/tmp`
+  was cleared, reconstruct the disposable image from this recorded design. Do
+  not connect the phone.
+
+### 2026-08-26 — milestone transition protocol and VM prerequisite check
+
+- Completed: added a mandatory repository-wide milestone transition protocol to
+  `AGENTS.md` and linked it from this session-closeout workflow. Every completed
+  P# must now advance the roadmap, experiments, canonical status, agent priority,
+  README, next handoff/recovery documents, and affected technical guidance before
+  the following milestone begins.
+- Verified with: local tool discovery and host inspection. The host is Debian 12
+  with KVM modules loaded, but `/dev/kvm` is unavailable; no QEMU/Boxes/libvirt
+  launcher or existing VM image is installed. LXC is present but was not used
+  because the accepted gate calls for a disposable GNOME VM and host networking
+  must remain untouched.
+- Files/areas changed: `AGENTS.md` and this canonical status. No application,
+  package, phone, TUN, route, resolver, NetworkManager, policy-rule, firewall, or
+  interface state changed.
+- Decisions made: use QEMU user-mode networking for the disposable VM so setup
+  does not add a host bridge or change host routes. This is a validation-environment
+  choice, not a product architecture decision. The owner added an explicit
+  operator gate: stop and request confirmation before any phone connection or USB
+  passthrough; do not silently advance from VM-only validation to phone work.
+- Risks or failures: QEMU and cloud-image tools are not installed. The first sudo
+  attempt stopped at the password prompt and ended with `sudo: a password is
+  required`; repository instructions prohibit retrying sudo from this session.
+  The phone is not needed for VM Phase 1.
+- Next exact action: the owner runs `sudo apt-get update && sudo apt-get install -y
+  qemu-system-x86 qemu-utils cloud-image-utils` locally and provides the complete
+  output. Then resume Phase 1 of `docs/P1_HANDOFF.md` without connecting the phone.
+
+### 2026-08-26 — interrupted-session audit and P1 handoff reconciliation
+
+- Completed: reviewed the complete repository documentation, shipped man pages,
+  package metadata, and the prior Codex session log. The log confirms the P1 run
+  completed its final phone cleanup and successfully wrote the durable status
+  checkpoint immediately before the usage limit prevented a user-facing handoff.
+  Reconciled stale P0 priority, release-service, resolver, development, and test
+  guidance; added `docs/P1_HANDOFF.md` as the current disposable-VM and physical
+  acceptance contract.
+- Verified with: `git diff --check`; local Markdown link inventory; and
+  `make p1-check` outside the sandbox, which passed 24 Linux tests, strict helper
+  compilation/argument rejection, and the private D-Bus daemon/CLI smoke test.
+  The same D-Bus smoke failed inside the sandbox because it could not reach the
+  user-session bus; the permitted host-only rerun passed.
+- Files/areas changed: agent resume instructions, README documentation map,
+  project/development/architecture/threat/test/roadmap/P0 handoff guidance, and
+  the new P1 validation handoff. No application, helper, package, phone, TUN,
+  route, resolver, NetworkManager, policy-rule, firewall, or interface state was
+  changed during this audit.
+- Decisions made: none. D-015 through D-018 remain authoritative.
+- Risks or failures: the P1 implementation remains uncommitted. The disposable-VM
+  TUN/helper/GUI/package gate, separately signed release APK run, and full
+  physical TCP/DNS/cleanup/two-hour acceptance remain open. Generated Python
+  bytecode is present in the worktree and must not be staged.
+- Next exact action: follow Phase 1 of `docs/P1_HANDOFF.md` in a disposable Debian
+  12 GNOME amd64 VM. Do not rerun P0 or mutate the active host network.
+
+### 2026-08-25 — P1 implementation checkpoint
+
+- Completed: approved P1 documentation and milestone names; Android version bump,
+  DUMP-protected release control, idempotent attach policy, and schema-v1 status;
+  Linux secure device trust/journal, manager state machine, D-Bus API, CLI,
+  GTK/tray fallback, fixed polkit helper, recovery guide, Debian packaging, and
+  pinned tun2proxy source/lock/patch build inputs. Host safety hardening covers
+  full relay-setting compatibility, standard-only IPv4 policy routing, overlapping
+  virtual-DNS routes, IPv4 resolver validation, uncertain Android-start ownership,
+  and journal retention whenever cleanup cannot be proved.
+- Verified with: `env ANDROID_HOME=/tmp/android-sdk
+  GRADLE_USER_HOME=/tmp/teather-gradle2 make check`, which passed Android JVM
+  tests, lint, debug/release assembly, 24 Linux unit tests, strict C compilation,
+  helper argument rejection, and an isolated private D-Bus daemon/CLI smoke test.
+  Two clean patched tun2proxy builds were byte-identical at SHA-256
+  `19003e9c9bc61086ed30b3d4ac39c6432b61766a2ae407d8dfcfcfd71618b05d`.
+  Two final `.deb` builds were byte-identical at SHA-256
+  `621b8732459e4ab3108e12eed567c6ea00a81f81866a8611b810ac67b086c6e3`;
+  lintian reports only its conventional initial-upload warning and a Rust
+  fortification informational tag. Root-mapped namespace `dpkg` tests passed
+  unpack, synthetic upgrade, remove, and purge while proving preferences survive
+  remove/upgrade and disappear on purge.
+- Physical Android control evidence: the connected phone was upgraded in place
+  from P0 to the P1 debug-signed build and reported versionCode 2 / 0.1.0-p1.
+  ADB shell started and dumped the DUMP-protected schema-v1 relay; cellular was
+  available and validated. A coarse accepted-client counter survived a compatible
+  attach, and an incompatible Wi-Fi request left the cellular relay/counter intact
+  while reporting `incompatible-configuration`. A separately signed temporary
+  ordinary-app probe lacked effective access: its start API returned on this
+  Samsung build, but Android did not create the protected service. The probe was
+  uninstalled. Final phone state is P1 debug installed, relay stopped, and zero
+  ADB forwards. No Linux route, rule, resolver, firewall, or interface was changed.
+- Files/areas changed: Android manifest/runtime/status/tests and version metadata;
+  `desktop/linux`; `packaging`; `third_party/tun2proxy`; README and P1 documents.
+- Decisions made: D-015 through D-018 record the approved P1 architecture and P2
+  stop. The upstream 0.8.3 archive omits `Cargo.lock`, so the generated graph is
+  checksum-pinned before the locked build. Rust 1.90 is needed by that graph.
+- Risks or failures: this sandbox cannot create `/dev/net/tun` or display GTK.
+  The root/helper interface lifetime and privilege-drop gate, dependency-configured
+  Debian 12 install, GUI/tray and optional watcher tests, signed-release APK device
+  run, and full physical TCP/DNS/cleanup/two-hour P1 acceptance remain open. The
+  ordinary probe established that the service was not created, but its start API
+  did not synchronously throw `SecurityException`; retain that platform nuance in
+  final acceptance evidence.
+- Next exact action: take `build/p1/teather_0.1.0-1_amd64.deb` into a disposable
+  Debian 12 GNOME VM and run the namespace/helper, package-lifecycle, GUI/tray,
+  and watcher gates in `docs/TEST_PLAN.md`. Only after those host-isolated gates
+  pass should the physical Android acceptance sequence begin. Stop for explicit
+  P2 design approval after P1 acceptance.
 
 ### 2026-08-22 — P0 source implementation
 

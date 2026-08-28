@@ -1,0 +1,20 @@
+From: Teather maintainers
+Subject: [PATCH] accept --tun-fd when setup is disabled
+
+tun2proxy 0.8.3 exposes --tun-fd but the Linux post-parse validation checks
+only --tun. Accept either mutually exclusive TUN input. Remove this patch when
+an upstream release contains the equivalent fix.
+
+--- a/src/args.rs
++++ b/src/args.rs
+@@ -221,8 +221,8 @@ impl Args {
+     pub fn parse_args() -> Self {
+         let args = <Self as ::clap::Parser>::parse();
+         #[cfg(target_os = "linux")]
+-        if !args.setup && args.tun.is_none() {
+-            eprintln!("Missing required argument, '--tun' must present when '--setup' is not used.");
++        if !args.setup && args.tun.is_none() && args.tun_fd.is_none() {
++            eprintln!("Missing required argument, either '--tun' or '--tun-fd' must be present when '--setup' is not used.");
+             std::process::exit(-1);
+         }
+         args

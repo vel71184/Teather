@@ -1,0 +1,59 @@
+.TH TEATHER 1 "August 2026" "Teather 0.1.0" "User Commands"
+.SH NAME
+teather \- control the Teather Linux USB desktop client
+.SH SYNOPSIS
+.B teather
+.I command
+.RI [ arguments ]
+.SH DESCRIPTION
+.B teather
+uses the per-user Teather D-Bus service to inspect phones, connect or disconnect
+the temporary TCP tunnel, manage remembered phones, and run diagnostics.
+Raw ADB serial numbers are not displayed or stored.
+.SH COMMANDS
+.TP
+.B status [--json]
+Show connection state, counters, and coarse errors.
+.TP
+.B devices [--json]
+List detected and remembered phones using locally salted identifiers.
+.TP
+.B connect [DEVICE_ID]
+Connect an approved phone. An interactive choice is required when several are eligible.
+.TP
+.B disconnect
+Stop the tunnel and clean resources proven to be owned by Teather.
+.TP
+.B device approve DEVICE_ID [--yes]
+Approve a locally connected phone. Without
+.BR --yes ,
+confirmation is requested on the terminal.
+.TP
+.B device rename DEVICE_ID NAME
+Set the local display name for a remembered phone.
+.TP
+.B device forget DEVICE_ID
+Remove a remembered phone and its preferences.
+.TP
+.B autoconnect on|off DEVICE_ID
+Set safe auto-connect for an approved phone. Auto-connect never starts a stopped Android relay.
+.TP
+.B diagnose [--json]
+Run read-only diagnostics.
+.TP
+.B recover [--json]
+Clean only journaled resources, then report diagnostics.
+.SH LIMITATIONS
+P1 supports TCP and virtual DNS over IPv4. General UDP and IPv6 are unsupported.
+Teather does not change Wi-Fi, NetworkManager profiles, system DNS, firewall rules,
+or physical-interface state.
+.SH FILES
+.TP
+.I ~/.config/teather/config.json
+Mode-0600 preferences and locally salted device identifiers.
+.TP
+.I /usr/share/doc/teather/RECOVERY.md.gz
+Offline recovery instructions.
+.SH SEE ALSO
+.BR teatherd (1),
+.BR teather-gtk (1)

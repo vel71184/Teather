@@ -1,0 +1,15 @@
+APP_ID = "io.github.vel71184.teather"
+SERVICE_COMPONENT = f"{APP_ID}/.service.RelayService"
+ACTION_START = f"{APP_ID}.action.START"
+ACTION_STOP = f"{APP_ID}.action.STOP"
+STATUS_SCHEMA = 1
+RELAY_PORT = 1080
+
+BUS_NAME = "io.github.vel71184.Teather1"
+OBJECT_PATH = "/io/github/vel71184/Teather1"
+INTERFACE = "io.github.vel71184.Teather1.Manager"
+
+INTERFACE_NAME = "teather0"
+INTERFACE_ADDRESS = "192.0.2.1/32"
+VIRTUAL_DNS_POOL = "198.18.0.0/15"
+ROUTE_METRIC = 32000

@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+package_root=${DPKG_ROOT:-}
+case "$package_root" in
+  ""|/*) ;;
+  *) echo "teather postrm: invalid DPKG_ROOT" >&2; exit 1 ;;
+esac
+
+passwd_entries() {
+  if [ -n "$package_root" ] && [ -r "$package_root/etc/passwd" ]; then
+    cat "$package_root/etc/passwd"
+  else
+    getent passwd
+  fi
+}
+
+if [ "${1:-}" = purge ]; then
+  passwd_entries | while IFS=: read -r _name _password uid _gid _gecos home _shell; do
+    [ "$uid" -ge 1000 ] 2>/dev/null || continue
+    [ "${home#/}" != "$home" ] || continue
+    preferences="$package_root$home/.config/teather"
+    [ -d "$preferences" ] || continue
+    find "$preferences" -xdev -maxdepth 1 -type f -name config.json -delete
+    rmdir "$preferences" 2>/dev/null || true
+  done
+fi
+
+exit 0

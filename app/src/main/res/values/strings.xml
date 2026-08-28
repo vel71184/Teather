@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Teather</string>
-    <string name="screen_title">Teather P0 relay</string>
+    <string name="screen_title">Teather relay</string>
     <string name="screen_description">Loopback-only SOCKS5 relay for an explicitly authorized ADB connection. TCP CONNECT only; no stock tethering is enabled.</string>
     <string name="upstream_label">Android upstream</string>
     <string name="port_label">SOCKS5 port</string>

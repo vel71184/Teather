@@ -1,9 +1,10 @@
 # P0 laptop and phone handoff
 
-This is the execution contract for the first Codex session that has both the
-repository and an Android phone attached through ADB. It contains no values that
-must be guessed or manually substituted. The checked-in helper discovers the
-host and phone environment at runtime and keeps device serials out of its output.
+This is the historical execution contract for reproducing completed experiment
+E-001. It is not the current resume point; current P1 validation starts in
+`docs/P1_HANDOFF.md`. This guide contains no values that must be guessed or
+manually substituted. The checked-in helper discovers the host and phone
+environment at runtime and keeps device serials out of its output.
 
 ## What is already implemented
 
@@ -21,13 +22,14 @@ host and phone environment at runtime and keeps device serials out of its output
   Android `Network`
 - Host automation: `desktop/linux/teather-p0`
 
-The debug manifest exports the service lifecycle so the ADB helper can start it
-without UI automation. The release manifest keeps the service unexported. In
-both builds the SOCKS listener binds only to Android loopback. Android loopback is
-still reachable by other local apps, so the no-auth SOCKS service is a controlled
-P0 experiment, not a releasable authentication design. Stop it after testing and
-do not use the debug APK on an untrusted app environment. It is never exposed to
-Wi-Fi or another shared link.
+At the P0 checkpoint, the debug manifest exported the service lifecycle so the
+ADB helper could start it without UI automation while release kept it unexported.
+D-016 later superseded that boundary for P1 with a DUMP-protected exported
+service in both variants. The SOCKS listener remains bound only to Android
+loopback. Android loopback is still reachable by other local apps, so the no-auth
+SOCKS service is a controlled experiment, not a shared-link authentication
+design. Stop it after testing; it is never exposed to Wi-Fi or another shared
+link.
 
 ## Physical actions that cannot be committed to Git
 
@@ -109,10 +111,10 @@ It never displays or logs destination hosts.
    route, policy-rule, DNS, firewall, or network-service changes until the D-013
    design review is complete and the owner explicitly approves proceeding.
 
-Passing the P0 exit criteria is necessary but is not authorization to start P1.
-The next session should discuss the Linux design, rollback paths, and offline
-recovery commands before implementation so loss of the current Internet/chat
-connection cannot also remove the recovery instructions.
+This was the original P0 gate. It was satisfied on 2026-08-25 by D-015 and the
+approved P1 implementation plan. A fresh P0 reproduction still stops and cleans
+up here; continue later from `docs/P1_HANDOFF.md` rather than transitioning into
+live host mutation in the same session.
 
 ## Failure isolation
 

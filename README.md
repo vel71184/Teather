@@ -9,9 +9,9 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** the P0 Android/Linux relay passed its physical smoke, 30-minute
-> transfer, UI-counter, active-stop, and USB-removal cleanup gates. Work is
-> stopped at the reviewed P1 Linux receiver design and owner-approval gate.
+> **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
+> host-only checks plus both disposable-VM phases are complete; separately
+> signed release and physical P1 acceptance remain pending.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -120,16 +120,14 @@ The first P1 operating mode is intentionally manual and conservative. With Wi-Fi
 or Ethernet present, the existing connection stays preferred. After Teather
 passes its own readiness check, the owner may manually disable Wi-Fi; Linux then
 uses the remaining `teather0` route. Re-enabling Wi-Fi restores its preferred
-route without Teather editing the connection profile. Exact route and scoped-DNS
-mechanics remain behind the owner-review gate in D-013.
+route without Teather editing the connection profile. The exact route,
+virtual-DNS, privilege, and recovery design is accepted in D-015; live testing
+remains gated on isolated verification.
 
-**Known DNS gap:** a working default route is insufficient if disabling Wi-Fi
-removes the host resolver or leaves only a LAN DNS address that is no longer
-reachable. P0 can resolve proxy destinations remotely with `socks5h`, but it does
-not yet provide transparent system-wide DNS or general UDP. P1 may not claim
-ordinary hostname connectivity until a Teather-owned, automatically removable
-DNS path is selected and tested without NetworkManager writes or direct
-`/etc/resolv.conf` edits.
+**P1 resolver gate:** tun2proxy virtual DNS uses the host's existing nameserver;
+Teather does not configure one. If disabling Wi-Fi leaves no usable non-loopback
+IPv4 nameserver, P1 disconnects safely and returns to design review. General UDP and
+IPv6 remain unsupported.
 
 ADB is acceptable here because Teather is personal-first and USB debugging is a
 reasonable development prerequisite. It lets the project validate the most
@@ -165,12 +163,14 @@ standard WireGuard client cannot.
 
 | Stage | Link | Receiver setup | Coverage | Purpose |
 |---|---|---|---|---|
-| P0 | USB/ADB | Linux script or CLI | Browser TCP | Prove cellular relay |
-| P1 | USB/ADB | Backup `teather0` interface | System-wide TCP + DNS after manual link choice | First viable daily path |
-| P2 | USB/ADB | Linux TUN companion | TCP + UDP + IPv6 policy | Compatibility and stability |
-| P3 | Local-only Wi-Fi | Manual proxy or Linux companion | Wireless equivalent of P2 | Remove the cable |
-| P4 | Local-only Wi-Fi | Standard WireGuard client | Cross-platform full tunnel | Universal receiver path |
-| P5 | AOA / Bluetooth / LAN | Thin connector where needed | Transport-dependent | Expand resilience |
+| P0 — Relay Proof | USB/ADB | Linux script or CLI | Browser TCP | Prove cellular relay |
+| P1 — Linux USB Desktop | USB/ADB | Debian GUI, tray, CLI, backup `teather0` | System-wide TCP + DNS after manual link choice | First installable path |
+| P2 — Protocol Completeness | USB/ADB | Same Android/Linux applications | TCP + UDP + IPv6 policy | Compatibility and stability |
+| P3 — Wireless Relay | Local-only Wi-Fi | Linux companion | Wireless equivalent of P2 | Remove the cable |
+| P4 — WireGuard Compatibility | Local-only Wi-Fi | Standard WireGuard client | Cross-platform full tunnel | Universal receiver path |
+| P5 — Daily-Driver Experience | Existing transports | Polished Android/desktop control | Proven protocol coverage | Onboarding, history, and recovery polish |
+| P6 — Transport Expansion | AOA / Bluetooth / LAN | Thin connector where needed | Transport-dependent | Expand resilience |
+| P7 — Platform Expansion | Platform-dependent | Windows/macOS/mobile receivers | Platform-dependent | Expand receiver support |
 
 The table is a sequence, not a release promise. Each stage advances only after
 its exit criteria in [the roadmap](docs/ROADMAP.md) are met.
@@ -190,8 +190,8 @@ The first viable Linux milestone is complete when all of the following are true:
 - No secret keys, device identifiers, browsing history, or packet captures are
   committed to the repository.
 
-UDP, IPv6, Wi-Fi, and a graphical interface are explicitly outside this first
-acceptance gate.
+UDP, IPv6, and Wi-Fi are outside this first acceptance gate. P1 includes a
+focused operational GUI; rich history and daily-driver polish are P5.
 
 ## Proposed repository shape
 
@@ -228,7 +228,11 @@ directory when its first real file is ready.
 - [Project status](docs/PROJECT_STATUS.md) — the current milestone, next actions,
   unknowns, and resume point. Read this first when returning after a break.
 - [P0 laptop/phone handoff](docs/P0_HANDOFF.md) — exact, placeholder-free commands
-  for the first Codex session with the phone connected through ADB.
+  for reproducing the completed P0 experiment with a phone connected through ADB.
+- [P1 validation handoff](docs/P1_HANDOFF.md) — the current resume sequence for
+  disposable-VM, package/GUI/helper, and physical P1 acceptance gates.
+- [P1 offline recovery](docs/P1_RECOVERY.md) — local recovery commands that do
+  not depend on Internet or chat access.
 - [Architecture](docs/ARCHITECTURE.md) — component boundaries, data flow, and
   technical risks.
 - [Roadmap](docs/ROADMAP.md) — ordered milestones and exit criteria.
@@ -245,15 +249,21 @@ directory when its first real file is ready.
 
 ## Getting started today
 
-P0 now has runnable source and automation. Without a phone, run the deterministic
-host checks:
+P1 source work, host-only verification, and the disposable Debian 12 GNOME VM
+package/GUI/helper/TUN gates are complete. The current execution sequence starts
+with a separately signed release APK and the explicit phone-connection gate in
+[the P1 handoff](docs/P1_HANDOFF.md). Do not connect a phone or begin physical
+acceptance until the release artifact is ready and the owner confirms the phone
+is connected.
+
+The deterministic source-level gate remains:
 
 ```bash
 make check
 ```
 
-To reproduce P0 from scratch with an unlocked phone attached to a Linux laptop
-through authorized ADB, run:
+To reproduce the historical P0 experiment from scratch with an unlocked phone
+attached through authorized ADB, run:
 
 ```bash
 ./desktop/linux/teather-p0 doctor
@@ -263,8 +273,8 @@ through authorized ADB, run:
 
 The helper discovers the non-sensitive phone and host environment; there are no
 device-specific constants to fill into source. See [the P0 handoff](docs/P0_HANDOFF.md)
-for the physical boundary, exact checks, failure isolation, and experiment
-closeout requirements.
+for its historical physical boundary and evidence procedure. It is not the
+current resume point.
 
 ## Reference material
 

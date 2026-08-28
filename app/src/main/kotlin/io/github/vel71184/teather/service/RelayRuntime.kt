@@ -34,6 +34,7 @@ data class RelayStatus(
     val boundPort: Int?,
     val stats: RelayStatsSnapshot?,
     val failureCategory: String?,
+    val controlError: String? = null,
 )
 
 object RelayRuntime {
@@ -50,14 +51,29 @@ object RelayRuntime {
     private var failureCategory: String? = null
 
     @Volatile
+    private var controlError: String? = null
+
+    @Volatile
     private var server: Socks5Server? = null
 
     @Synchronized
     fun start(context: Context, requested: RelayConfiguration): RelayStatus {
+        when (RelayStartPolicy.decide(lifecycle, configuration, requested)) {
+            RelayStartDecision.ATTACH -> {
+                controlError = null
+                return snapshot()
+            }
+            RelayStartDecision.REFUSE_MISMATCH -> {
+                controlError = "incompatible-configuration"
+                return snapshot()
+            }
+            RelayStartDecision.START -> Unit
+        }
         stopLocked()
         lifecycle = RelayLifecycle.STARTING
         configuration = requested
         failureCategory = null
+        controlError = null
 
         return try {
             val stats = RelayStats()
@@ -99,6 +115,7 @@ object RelayRuntime {
         boundPort = boundPort,
         stats = server?.stats?.snapshot(),
         failureCategory = failureCategory,
+        controlError = controlError,
     )
 
     private fun stopLocked() {
@@ -107,8 +124,27 @@ object RelayRuntime {
         boundPort = null
         configuration = null
         failureCategory = null
+        controlError = null
         lifecycle = RelayLifecycle.STOPPED
     }
 
     private const val LOG_TAG = "Teather"
+}
+
+enum class RelayStartDecision {
+    START,
+    ATTACH,
+    REFUSE_MISMATCH,
+}
+
+object RelayStartPolicy {
+    fun decide(
+        lifecycle: RelayLifecycle,
+        current: RelayConfiguration?,
+        requested: RelayConfiguration,
+    ): RelayStartDecision = when {
+        lifecycle != RelayLifecycle.RUNNING -> RelayStartDecision.START
+        current == requested -> RelayStartDecision.ATTACH
+        else -> RelayStartDecision.REFUSE_MISMATCH
+    }
 }

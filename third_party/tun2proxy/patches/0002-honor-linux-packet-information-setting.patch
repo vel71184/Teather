@@ -1,0 +1,19 @@
+From: Teather maintainers
+Subject: [PATCH] honor packet-information setting on Linux
+
+tun2proxy 0.8.3 passes `false` for packet information from its CLI but ignores
+that value on Linux and tells the tun crate to expect the four-byte PI header.
+That corrupts packets when an inherited descriptor was created with IFF_NO_PI.
+Honor the existing API argument as the other Unix platforms already do. Remove
+this patch when an upstream release contains the equivalent fix.
+
+--- a/src/general_api.rs
++++ b/src/general_api.rs
+@@ -122,6 +122,6 @@ pub async fn general_run_async(
+     #[cfg(target_os = "linux")]
+     tun_config.platform_config(|cfg| {
+         #[allow(deprecated)]
+-        cfg.packet_information(true);
++        cfg.packet_information(_packet_information);
+         cfg.ensure_root_privileges(args.setup);
+     });

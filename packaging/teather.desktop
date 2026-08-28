@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Teather
+Comment=Connect through an Android phone over USB
+Exec=teather-gtk
+Icon=teather
+Terminal=false
+Categories=Network;
+Keywords=Android;USB;Tether;Network;
+StartupNotify=true

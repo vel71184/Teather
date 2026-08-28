@@ -214,7 +214,7 @@ P3 opens a Wi-Fi listener.
 
 ## D-012 — Permit ADB lifecycle control only in debug builds
 
-**Status:** Accepted · **Date:** 2026-08-22
+**Status:** Superseded by D-016 · **Date:** 2026-08-22
 
 ### Decision
 
@@ -313,3 +313,129 @@ should restore the pre-existing path without depending on Teather cleanup.
   covers explicit proxy clients, not transparent system-wide resolution.
 - P1 initially covers TCP plus DNS. UDP-dependent applications remain a later
   milestone and must not be described as fully supported Internet traffic.
+
+**Resolution note (2026-08-25):** D-015 fixed the route, virtual-DNS, helper, and
+resolver design and satisfied D-013 for source implementation and isolated tests.
+The conditional blocker language above records the pre-approval state; it is not
+the current resume status.
+
+## D-015 — Approve the bounded P1 Linux USB desktop architecture
+
+**Status:** Accepted · **Date:** 2026-08-25
+
+### Decision
+
+The owner approved P1 implementation from the reviewed plan. P1 is one Debian
+12/GNOME desktop client with a per-user D-Bus daemon, GTK 3 window, optional
+Ayatana tray indicator, CLI, a fixed polkit-mediated helper, and pinned
+`tun2proxy` 0.8.3. The helper alone opens a non-persistent TUN and installs the
+two interface-bound routes described in D-014. It then permanently drops all
+privilege before executing the packet engine.
+
+The receiver uses `adb -s DEVICE forward tcp:0 tcp:1080`, journals the exact
+allocated forward and Android-service ownership in a mode-0600 runtime file, and
+cleans only resources proved to be its own. It never logs a raw ADB serial; saved
+devices use a locally salted hash.
+
+P1 uses tun2proxy virtual DNS and IPv4 only. It does not configure a nameserver.
+Connection requires at least one usable non-loopback IPv4 resolver after the owner has
+disabled Wi-Fi. If none remains, Teather disconnects without editing resolver
+state and the DNS design returns to review. General UDP and IPv6 are unsupported.
+
+### Fixed Linux mutations
+
+- Open `/dev/net/tun` with `IFF_TUN | IFF_NO_PI`; never enable persistence.
+- Create only `teather0`, address it `192.0.2.1/32`, set MTU 1500, and bring it up.
+- Add `198.18.0.0/15 dev teather0` for virtual-DNS addresses.
+- Add `default dev teather0 metric 32000` so existing physical defaults remain
+  preferred.
+- Make no NetworkManager, resolver, firewall, policy-rule, physical-interface,
+  or persistent-profile changes.
+
+**Validation correction (2026-08-26):** disposable-VM packet testing found that
+tun2proxy 0.8.3 ignores its CLI's `false` packet-information setting on Linux and
+unconditionally strips a four-byte PI header. That is incompatible with the
+approved `IFF_NO_PI` descriptor and caused virtual DNS to time out without
+leaving network residue. A second minimal pinned patch now makes the engine honor
+its existing packet-information argument. The fixed mutation and privilege model
+above is unchanged.
+
+### Refusal conditions
+
+The helper refuses an existing `teather0`, address or overlapping virtual-DNS
+route collisions, any nonstandard IPv4 policy rule, another VPN or split-default
+policy that makes route preference ambiguous, an existing
+default whose metric cannot remain preferred, invalid `PKEXEC_UID`, invalid
+proxy ports, unexpected arguments, or an untrusted executable path. Ambiguous
+pre-existing state is reported and never deleted automatically.
+
+### Consequences
+
+- D-013's approval gate is satisfied for source implementation and isolated
+  tests. Live host-network testing still follows the physical acceptance steps
+  and captures before/after state.
+- Wi-Fi selection remains a manual owner action.
+- Closing the inherited TUN descriptor is the primary cleanup mechanism; an
+  offline recovery guide covers inspection and explicit repair.
+- A single active phone is supported even though several approved phones may be
+  remembered.
+
+## D-016 — Protect release ADB control with Android's DUMP permission
+
+**Status:** Accepted · **Date:** 2026-08-25
+
+### Decision
+
+The one application `io.github.vel71184.teather` exports its relay service in
+release builds with `android.permission.DUMP`. Authorized ADB shell can send the
+application-namespaced start and stop actions and query a versioned, machine-
+readable `dumpsys` status. Ordinary applications cannot invoke the component.
+The loopback SOCKS listener remains unreachable from physical interfaces.
+
+Linux attaches to an already-running compatible relay without restarting it,
+refuses incompatible manual settings, and stops Android only when its journal
+records that Linux started the relay.
+
+### Consequences
+
+- This supersedes D-012's debug-only lifecycle exception.
+- Status contains lifecycle, port, upstream choice and availability, aggregate
+  counters, and coarse errors, but no destinations or device/subscriber data.
+- Device tests must prove ADB shell access and ordinary-application denial for a
+  release build.
+
+## D-017 — Publish one stable Linux manager API
+
+**Status:** Accepted · **Date:** 2026-08-25
+
+### Decision
+
+`teatherd` owns detection and connection state and publishes a single versioned
+D-Bus manager used by both GTK and CLI clients. It is D-Bus activated by default;
+an optional systemd user unit provides login watching. Methods return typed
+dictionaries and include `GetStatus`, `ListDevices`, `Connect`, `Disconnect`,
+`ApproveDevice`, `RenameDevice`, `ForgetDevice`, `SetAutoConnect`, and `Diagnose`.
+Status, device, and metric changes are signals.
+
+Plugging in a phone detects it only. Auto-connect is limited to an approved
+device whose compatible Android relay is already running. Local confirmation is
+required for first approval and ambiguous multi-device selection.
+
+### Consequences
+
+- Python 3.11, PyGObject, GTK 3, and Ayatana AppIndicator are the P1 desktop
+  stack. The window remains usable without tray support.
+- The first package targets Debian 12 amd64 and preserves per-user preferences on
+  uninstall, removing them only on purge.
+- Rich GUI history, broad polish, and daily-driver onboarding remain P5 work.
+
+## D-018 — Stop for explicit planning before P2
+
+**Status:** Accepted · **Date:** 2026-08-25
+
+### Decision
+
+After P1 physical acceptance and evidence recording, work stops for an explicit
+P2 design discussion and approval. No research-heavy investigation or
+implementation of general UDP, IPv6, broader DNS behavior, suspend/resume, or
+protocol changes begins automatically.

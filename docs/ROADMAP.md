@@ -3,7 +3,7 @@
 The roadmap is organized around evidence gates. Dates are intentionally omitted;
 the project advances when the previous milestone works and is documented.
 
-## P0 — Prove Android application relay
+## P0 — Relay Proof
 
 **Status:** Passed on 2026-08-25. See E-001.
 
@@ -30,10 +30,14 @@ Exit criteria:
 
 Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 
-## P1 — Viable system-wide Linux TCP
+## P1 — Linux USB Desktop
 
-**Question:** Can normal Linux TCP applications use Teather without per-application
-proxy configuration?
+**Status:** Host-only checks passed on 2026-08-25 and both disposable-VM phases
+passed on 2026-08-26; separately signed release and physical acceptance remain
+pending. The exact resume sequence is in `docs/P1_HANDOFF.md`.
+
+**Question:** Can an installable Debian desktop client provide understandable,
+recoverable system-wide TCP and DNS through the existing Android relay?
 
 Mandatory entry gate:
 
@@ -44,6 +48,10 @@ Mandatory entry gate:
   saved-state, and rollback design with the owner.
 - Supply an offline recovery procedure for normal stop, errors, signals, Android
   service loss, and cable removal, then obtain the owner's explicit approval.
+
+The reviewed plan and explicit implementation instruction on 2026-08-25 satisfy
+this source-implementation gate. Live host mutation remains limited to the
+physical acceptance sequence after isolated tests pass.
 
 This gate is accepted in D-013 and must carry across sessions.
 
@@ -59,17 +67,24 @@ Accepted operating model (D-014):
 
 Deliverables:
 
-- Non-persistent `teather0` creation and teardown.
-- Pinned `tun2socks` integration.
-- A lower-preference Teather default route that never deletes or replaces an
-  existing physical default and avoids tunnel recursion.
-- Teather-owned scoped DNS through the relay, with no mutation of existing-link
-  DNS configuration.
-- A documented resolution of the P1 DNS gap: Wi-Fi removal must not leave the
-  host with no resolver or an unreachable LAN-only resolver, and P0's
-  proxy-specific `socks5h` behavior must not be mistaken for system-wide DNS.
-- Preflight diagnostics and postflight cleanup verification.
-- CLI commands for start, status, diagnose, and stop.
+- Android `0.1.0-p1` (`versionCode = 2`) with DUMP-protected ADB start/stop
+  actions and versioned machine-readable `dumpsys` status.
+- Per-user `teatherd` with one typed D-Bus manager API, device trust, one-active-
+  device selection, state/metric signals, redacted diagnostics, and a mode-0600
+  ownership journal.
+- Focused GTK 3 window, optional Ayatana tray, and CLI parity for status, devices,
+  connect/disconnect, device approval/rename/forget, auto-connect, diagnose, and
+  recover. Status-oriented commands support JSON.
+- A small root-owned polkit helper that creates non-persistent `teather0`, assigns
+  `192.0.2.1/32`, MTU 1500, `198.18.0.0/15`, and a metric-32000 backup default,
+  then drops all privilege before tunnel execution.
+- Reproducibly pinned tun2proxy 0.8.3 with virtual DNS, IPv4-only behavior, 64
+  sessions, 300-second TCP timeout, destination logging disabled, and the audited
+  `--tun-fd` validation patch.
+- Resolver gate: use the host's retained usable non-loopback IPv4 nameserver after
+  Wi-Fi is manually disabled or disconnect safely and return to design review.
+- Debian 12 amd64 package with desktop/icon, D-Bus activation, optional systemd
+  user watcher, polkit action, helper, tunnel binary, recovery guide, and licenses.
 
 Exit criteria:
 
@@ -87,8 +102,20 @@ Exit criteria:
   DNS.
 - Re-running stop is safe.
 - Startup detects and repairs an intentionally simulated stale state.
+- Release ADB shell can start/query/stop Android; an ordinary application cannot.
+- Attaching to a compatible manual relay does not restart it, and disconnect
+  stops only a Linux-started relay.
+- GUI remains functional without tray integration; package install, upgrade,
+  uninstall, and purge semantics pass.
+- No raw ADB serial or browsing destination appears in files, D-Bus, or logs.
 
-## P2 — Protocol completeness and resilience
+Mandatory exit gate:
+
+- Record the P1 physical experiment and update project status.
+- Stop for explicit P2 planning and owner approval before research-heavy work or
+  implementation.
+
+## P2 — Protocol Completeness
 
 **Question:** Is the relay compatible enough for daily Linux use?
 
@@ -108,7 +135,7 @@ Exit criteria:
 - No route or DNS residue remains after every tested failure mode.
 - Battery and thermal observations are recorded.
 
-## P3 — Local-only Wi-Fi transport
+## P3 — Wireless Relay
 
 **Question:** Can the same relay operate wirelessly without using Android's stock
 Internet hotspot path?
@@ -129,7 +156,7 @@ Exit criteria:
 - Reconnection after Wi-Fi interruption is predictable.
 - Performance and battery results are compared with USB.
 
-## P4 — WireGuard compatibility experiment
+## P4 — WireGuard Compatibility
 
 **Question:** Can Teather provide a standard full-IP receiver interface while
 remaining unrooted?
@@ -153,7 +180,7 @@ Exit criteria:
 If rejected, proceed with thin Teather receivers rather than repeatedly rebuilding
 the same WireGuard experiment.
 
-## P5 — Daily-driver interface
+## P5 — Daily-Driver Experience
 
 **Question:** Can the owner use Teather without consulting development notes?
 
@@ -166,6 +193,8 @@ Deliverables:
 - Actionable error messages.
 - Emergency receiver-network restoration control.
 - Minimal Linux desktop integration if still useful.
+- Rich desktop history, visual polish, onboarding, and broader remembered-device
+  management beyond P1's focused operational interface.
 
 Exit criteria:
 
@@ -174,7 +203,7 @@ Exit criteria:
 - Diagnostic export excludes secrets and browsing history by default.
 - The owner can recover from common failures without a shell.
 
-## P6 — Additional transports
+## P6 — Transport Expansion
 
 Add one transport at a time, in this order unless evidence changes it:
 
@@ -187,7 +216,7 @@ Add one transport at a time, in this order unless evidence changes it:
 Each transport requires authentication, recovery tests, performance results, and
 an updated threat-model entry before it is considered supported.
 
-## P7 — Additional receiver platforms
+## P7 — Platform Expansion
 
 Suggested order:
 

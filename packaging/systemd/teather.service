@@ -1,0 +1,18 @@
+[Unit]
+Description=Teather per-user USB relay manager
+Documentation=file:///usr/share/doc/teather/RECOVERY.md.gz
+
+[Service]
+Type=dbus
+BusName=io.github.vel71184.Teather1
+ExecStart=/usr/bin/teatherd
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=-%h/.config/teather -%t/teather
+
+[Install]
+WantedBy=default.target

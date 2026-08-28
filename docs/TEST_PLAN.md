@@ -93,8 +93,8 @@ Capture relevant Linux state before and after each test.
 | Owner manually disables Wi-Fi | Teather becomes the remaining default without a Teather-initiated Wi-Fi mutation |
 | Owner manually restores Wi-Fi | Existing Wi-Fi route becomes preferred again without restarting Teather |
 | Receiver process is killed | Non-persistent `teather0` and its attached routes disappear automatically |
-| Scoped DNS cannot be installed safely | Startup refuses mutation and leaves existing DNS unchanged |
-| Wi-Fi removal withdraws its resolver | Teather-owned DNS continues hostname resolution or startup had already refused safely |
+| No usable non-loopback IPv4 resolver exists | Startup/disconnect refuses mutation and leaves existing DNS unchanged |
+| Wi-Fi removal withdraws its resolver | Teather disconnects safely; P1 DNS returns to design review |
 | Wi-Fi leaves a LAN-only resolver behind | Queries do not stall or leak to the unreachable Wi-Fi resolver |
 
 Do not automate a destructive route test on the developer's main session until it
@@ -113,6 +113,45 @@ evidence that applications captured transparently by a TUN can resolve names.
 Record resolver state with Wi-Fi present, manually disabled, restored, after
 receiver crash, and after cable removal. A passed IP-literal request with failed
 hostname lookup is a DNS failure, not a successful Teather connection.
+
+## Executable P1 checks
+
+Host-only checks cover configuration permissions, salted device trust, ambiguous
+multi-device selection, manager/CLI state transitions, typed D-Bus responses,
+route preflight, ownership journaling, redaction, helper request validation, and
+idempotent cleanup. Android JVM tests cover relay state and schema-versioned
+status serialization.
+
+In a network namespace or disposable Debian 12 VM, prove:
+
+- `teather0` and both routes exist only while the non-persistent TUN fd is open;
+- the physical default remains preferred over metric 32000;
+- virtual DNS converts host queries into SOCKS domain requests;
+- pre-existing interface, overlapping route/address collision, nonstandard IPv4
+  policy rules, VPN/split-default ambiguity, and invalid helper input all fail
+  before mutation;
+- the helper drops capabilities, groups, GID, and UID before tunnel execution;
+- SIGINT, SIGTERM, daemon death, helper death, and tunnel death remove all owned
+  state;
+- the patched tun2proxy 0.8.3 `--tun-fd` path works without `--tun`.
+
+Package tests install, upgrade, uninstall, and purge the amd64 Debian artifact.
+They verify desktop/icon/D-Bus/systemd/polkit/helper/recovery-guide placement,
+mode and ownership, GUI operation without AppIndicator, tray operation when
+available, optional login watching, preference preservation on uninstall, and
+preference removal on purge.
+
+Release Android device tests must show that ADB shell can start, query, and stop
+the protected service while an ordinary test application receives a permission
+denial. They also cover attach-without-restart, incompatible manual settings, and
+the rule that disconnect stops only a Linux-started relay.
+
+The physical P1 exit captures routes, rules, resolver, NetworkManager, and
+firewall before and after every failure scenario. After Wi-Fi is manually
+disabled, validate that a usable non-loopback IPv4 nameserver remains before browsing. Exercise
+browser TCP fallback, Git, SSH, package retrieval, and DNS, then run a two-hour
+session while observing errors and resource use. Any cleanup mismatch or
+destination disclosure fails the milestone.
 
 ## Compatibility workloads
 

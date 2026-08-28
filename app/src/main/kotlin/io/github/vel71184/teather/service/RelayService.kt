@@ -13,6 +13,8 @@ import android.util.Log
 import io.github.vel71184.teather.MainActivity
 import io.github.vel71184.teather.R
 import io.github.vel71184.teather.network.UpstreamPreference
+import java.io.FileDescriptor
+import java.io.PrintWriter
 
 class RelayService : Service() {
     private var preserveFailureOnDestroy = false
@@ -25,6 +27,11 @@ class RelayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopRelayAndSelf()
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action != ACTION_START) {
+            Log.w(LOG_TAG, "relay.lifecycle.unsupported-action")
             return START_NOT_STICKY
         }
 
@@ -42,6 +49,9 @@ class RelayService : Service() {
         }
 
         val status = RelayRuntime.start(applicationContext, configuration)
+        if (status.controlError != null) {
+            Log.w(LOG_TAG, "relay.lifecycle.${status.controlError}")
+        }
         if (status.lifecycle == RelayLifecycle.RUNNING) {
             notificationManager.notify(NOTIFICATION_ID, runningNotification(status))
         } else {
@@ -56,6 +66,12 @@ class RelayService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<out String>) {
+        val status = RelayRuntime.snapshot()
+        val cellular = AndroidRelayStatus.cellularStatus(applicationContext)
+        writer.print(RelayStatusWire.serialize(status, cellular))
+    }
 
     private fun startInForeground(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

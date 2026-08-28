@@ -1,15 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <application>
-        <!--
-          Debug builds expose only the service lifecycle so the checked-in ADB helper can
-          start P0 without tapping through the UI. Release builds keep the service private.
-          The relay itself always binds to 127.0.0.1.
-        -->
-        <service
-            android:name=".service.RelayService"
-            android:exported="true"
-            tools:replace="android:exported" />
-    </application>
-</manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

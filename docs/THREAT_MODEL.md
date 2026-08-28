@@ -42,8 +42,9 @@ flowchart TD
 - Bind P0 only to Android loopback and reach it through ADB forwarding.
 - Treat P0 no-auth SOCKS as a controlled debug experiment, not a releasable
   authentication design. Android loopback is also reachable by other local apps.
-- Keep the lifecycle service unexported in release builds. The debug-only exported
-  override exists for ADB automation and must not ship.
+- Protect the exported release lifecycle service with the signature-level
+  `android.permission.DUMP` permission. Authorized ADB shell can control it;
+  ordinary applications cannot.
 - Limit P0 to 64 sessions with handshake, connect, and idle timeouts.
 - Require explicit pairing before any shared-link or post-P0 daily-driver use.
 - Give every receiver a distinct revocable identity.
@@ -100,8 +101,10 @@ offline or leaking traffic through an unintended path.
 - Use a non-persistent Teather TUN whose interface-bound routes disappear when its
   owner exits. Give its default lower preference than every existing physical
   default so restoring Wi-Fi independently restores Internet access.
-- Do not overwrite `/etc/resolv.conf`. If Teather-owned scoped DNS cannot be
-  installed and removed safely, refuse to start system-wide mode.
+- Do not overwrite `/etc/resolv.conf` or install Teather-owned resolver state in
+  P1. Require a retained usable non-loopback IPv4 nameserver; if none remains
+  after the owner disables Wi-Fi, close the tunnel without resolver mutation and
+  return the DNS design to review.
 
 ### Privilege escalation on Linux
 
@@ -116,6 +119,39 @@ or network-management operation.
   allowlists.
 - Never interpolate untrusted values into shell commands.
 - No wildcard passwordless sudo policy.
+- Invoke the root-owned helper only through a fixed polkit action.
+- Validate `PKEXEC_UID`, clear the environment, accept only the fixed operation
+  and a numeric loopback proxy port, and refuse conflicting host network state.
+- Open only a non-persistent `teather0`, then drop capabilities, supplementary
+  groups, GID, and UID before execing the tunnel engine with an inherited TUN fd.
+- Use parent-death handling so loss of daemon/helper ownership closes the fd and
+  removes interface-bound routes.
+
+### Device identity disclosure
+
+**Threat:** ADB serials in configuration, logs, D-Bus, or support output identify
+the owner's phone.
+
+**Mitigations:**
+
+- Keep raw serials only in short-lived process memory and direct ADB arguments.
+- Persist and display a locally salted identifier hash, never the serial.
+- Store trust and runtime journals with mode 0600 and reject unsafe ownership or
+  permissions.
+- Redact subprocess output before it reaches logs or diagnostics.
+
+### Ambiguous cleanup ownership
+
+**Threat:** Recovery deletes a pre-existing interface or another process's ADB
+forward.
+
+**Mitigations:**
+
+- Refuse any pre-existing `teather0` or route/address collision.
+- Journal the exact dynamically allocated ADB forward and Android-start ownership.
+- On restart, remove only state that matches a valid owned journal.
+- Never automatically delete an ambiguous interface; provide offline inspection
+  and explicit recovery commands instead.
 
 ### Sensitive logging
 

@@ -13,6 +13,8 @@ Read, in order:
 4. `docs/ARCHITECTURE.md`
 5. The milestone-specific section of `docs/ROADMAP.md`
 6. For P0 device work, `docs/P0_HANDOFF.md`
+7. For current P1 validation, `docs/P1_HANDOFF.md` and
+   `docs/P1_RECOVERY.md`
 
 If those files disagree, stop and reconcile them. `docs/PROJECT_STATUS.md` is the
 resume point, while accepted entries in `docs/DECISIONS.md` are authoritative for
@@ -20,14 +22,20 @@ technical choices.
 
 ## Current priority
 
-The current milestone is P0. The source path is implemented; the next job is to
-run `make check` and the exact device sequence in `docs/P0_HANDOFF.md`, then record
-E-001 evidence. Do not rebuild the scaffold or ask the user for values the helper
-can discover.
+P0 and experiment E-001 are complete. The current milestone is P1 — Linux USB
+Desktop validation. The Android control changes, focused Linux GUI/CLI/daemon,
+privileged helper, recovery guide, Debian package, and pinned tunnel build are
+implemented. Host checks and both disposable Debian 12 GNOME VM phases passed;
+the VM is powered off. Do not rebuild the scaffold, rerun P0, or repeat the VM
+matrix unless a regression requires isolated reproduction.
 
-Do not start the full GUI, WireGuard endpoint, Wi-Fi Direct, AOA, Bluetooth,
-multi-client support, packaging, or cross-platform receivers until the relevant
-roadmap entry becomes active.
+The next job is to prepare a separately signed P1 release APK without committing
+or exposing signing secrets. Keep the phone disconnected until that artifact is
+ready. Then stop, explain why the phone is needed, and continue only after the
+owner explicitly confirms connection. Run Phase 3 of `docs/P1_HANDOFF.md` and
+record E-002/E-003. Stop for explicit P2 planning and owner approval after P1; do
+not start general UDP, IPv6, broader DNS, WireGuard, wireless transports,
+multi-client support, cross-platform receivers, or P5 polish early.
 
 ## Hard constraints
 
@@ -90,3 +98,35 @@ Before declaring work complete:
 - Update documentation affected by the change.
 - Update `docs/PROJECT_STATUS.md` with what changed and the next concrete action.
 - Summarize unresolved risks rather than silently choosing around them.
+
+## Milestone transition protocol
+
+Completing any P# milestone requires a repository-wide resume-point transition,
+not only an experiment entry. Before declaring a milestone complete or beginning
+the next one:
+
+1. Confirm every exit criterion in `docs/ROADMAP.md` and `docs/TEST_PLAN.md` has
+   recorded evidence. A partial pass does not advance the active milestone.
+2. Record the completed experiment(s) in `docs/EXPERIMENTS.md` with the exact date,
+   commands, observations, failures, cleanup result, and inference limits.
+3. Update `docs/ROADMAP.md` with the completed status/date and activate only the
+   next approved milestone.
+4. Update the header, objective, evidence, risks, and next exact action in
+   `docs/PROJECT_STATUS.md`, then add a session closeout entry.
+5. Update this file's read order and Current priority so a fresh thread cannot
+   resume the completed milestone. Update README status and documentation links.
+6. Create or refresh the next milestone's handoff and offline recovery document
+   before it becomes the resume point. The handoff must separate completed
+   evidence from pending gates and state whether a phone, VM, privilege, network
+   mutation, or owner action is required.
+7. Reconcile affected architecture, decisions, threat model, development, and test
+   guidance. Preserve historical decisions and experiments, but label superseded
+   instructions or add dated resolution notes.
+8. Search the full documentation set for stale milestone names, blockers, service
+   boundaries, and next-action language; run local-link validation and
+   `git diff --check`.
+9. Respect explicit approval stops. If the next milestone requires owner approval,
+   leave it as the next discussion—not as authorized implementation work.
+
+If these resume points disagree, the milestone is not complete even when its code
+or device test passed.

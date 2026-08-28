@@ -47,19 +47,26 @@ flowchart LR
 
 ### Android host
 
-Planned responsibilities:
+Implemented P0 responsibilities and accepted P1 extensions:
 
 - Request the user-visible foreground-service lifecycle required for a sustained
   relay.
 - Discover eligible upstream `Network` instances.
 - Bind each outbound socket to the chosen upstream rather than relying blindly on
   the process default.
-- Accept only local development traffic in P0.
+- Accept only Android-loopback traffic. P1 keeps the listener on port 1080 and
+  reaches it only through an authorized ADB forward.
 - Implement SOCKS5 CONNECT for IPv4/domain-name TCP destinations.
 - Add authenticated sessions before listening on Wi-Fi or another shared link.
 - Track connection counts and byte counters without retaining destination history
   by default.
 - Expose structured failure reasons to the UI and development log.
+- Protect the exported release control service with `android.permission.DUMP`.
+  Application-namespaced start/stop actions are available to authorized ADB
+  shell, while ordinary applications are denied.
+- Emit `dumpsys` status schema version 1 with lifecycle, bound port, configured
+  and selected upstream, cellular availability/validation, aggregate counters,
+  and coarse errors. Status contains no destinations or device/subscriber data.
 
 P0 should not require Android `VpnService`. Teather is acting as a relay server,
 not capturing the phone's own application traffic.
@@ -85,16 +92,18 @@ belong in configuration once the implementation exists.
 
 ### Linux receiver
 
-P0 begins with application-level proxy configuration. P1 adds:
+P0 begins with application-level proxy configuration. The accepted P1 desktop
+adds:
 
 - a non-persistent `teather0` TUN device that behaves as a virtual backup network
   interface;
-- an existing, pinned `tun2socks` implementation;
+- pinned `tun2proxy` 0.8.3 with two audited patches for `--tun-fd` validation and
+  inherited Linux `IFF_NO_PI` packet framing;
 - a Teather-owned default route with lower preference than every existing
   physical default and no mutation of those existing routes;
 - route installation that excludes the loopback ADB/relay path from recursion;
-- Teather-owned, link-scoped DNS that does not overwrite `/etc/resolv.conf` or
-  mutate another interface's DNS configuration;
+- tun2proxy virtual DNS using `198.18.0.0/15`, while retaining and validating the
+  host's existing nameserver instead of configuring DNS;
 - signal-safe and crash-recoverable cleanup;
 - preflight and postflight state snapshots;
 - a diagnostic command that never mutates state.
@@ -113,13 +122,32 @@ existing link's DNS, flush firewall state, or persist the TUN. Closing or crashi
 the owner process must remove `teather0` and its attached routes automatically;
 explicit cleanup handles any additional Teather-owned state.
 
-The exact Linux DNS mechanism is still unresolved. If system-wide DNS cannot be
-provided with Teather-owned state that disappears safely, implementation stops
-rather than modifying the Wi-Fi configuration. D-013 still requires review of
-the exact commands and offline recovery procedure before P1 code or live network
-changes begin.
+P1 is split across three privilege levels:
 
-#### P1 DNS gap
+1. The unprivileged per-user `teatherd` daemon owns ADB discovery, trust,
+   selection, state, D-Bus, journaling, and process supervision.
+2. Unprivileged GTK/tray and CLI clients use the same manager API and never
+   manipulate networking directly.
+3. A root-owned helper invoked by `pkexec` validates a fixed request, opens TUN,
+   creates the allowed interface state, drops capabilities/groups/GID/UID, sets
+   parent-death handling, and execs the pinned tunnel with the inherited file
+   descriptor.
+
+The helper creates exactly `teather0`, `192.0.2.1/32`, MTU 1500,
+`198.18.0.0/15 dev teather0`, and `default dev teather0 metric 32000`. It refuses
+collisions (including routes overlapping the virtual-DNS pool), unexpected
+arguments, invalid `PKEXEC_UID`, an invalid loopback proxy port, any nonstandard
+IPv4 policy rule, ambiguous VPN/split-default policy, and route preference that
+cannot remain secondary. It clears its environment and permanently drops
+privilege before the packet engine parses traffic.
+
+The tunnel settings are IPv4-only, virtual DNS enabled, 64 sessions, 300-second
+TCP timeout, MTU 1500, and destination logging disabled. Built-in setup,
+daemonization, UDP gateway, and evasion features are disabled. The non-persistent
+TUN descriptor owns interface lifetime; daemon/helper death closes it and removes
+interface-bound routes.
+
+#### P1 resolver gate
 
 P0 application clients use SOCKS hostname resolution (`socks5h`), so their DNS
 queries are resolved on the selected Android network. A transparent TUN changes
@@ -129,23 +157,20 @@ that link's resolver or leave a private LAN resolver that cannot be reached over
 Teather. The TUN route could therefore be healthy while hostname-based Internet
 access still fails.
 
-P0 also implements SOCKS5 TCP `CONNECT`, not a general UDP relay, so it cannot be
-assumed to carry arbitrary UDP DNS packets. Candidate P1 solutions are **proposed,
-not selected**:
+P1 selects tun2proxy virtual DNS: DNS packets addressed to an existing usable
+non-loopback IPv4 nameserver enter `teather0`; tun2proxy maps responses into
+`198.18.0.0/15` and later opens SOCKS domain requests so Android performs upstream
+resolution. P1 does not carry arbitrary UDP.
 
-- per-link DNS attached only to `teather0` through an available resolver API;
-- a Teather-owned loopback DNS proxy that forwards through the Android relay;
-- DNS interception inside the receiver packet path once the required protocol
-  behavior exists.
+The daemon inspects resolver state immediately after the owner disables Wi-Fi.
+If no usable non-loopback IPv4 nameserver remains, it closes the tunnel safely and
+reports that P1 DNS is unsupported on that host. It does not call `resolvectl`,
+write `/etc/resolv.conf`, or alter NetworkManager. A retained but unreachable
+nameserver is a physical acceptance failure and returns the design to review.
 
-Every candidate must survive manual Wi-Fi disable/restore, receiver crash, cable
-removal, and repeated stop. It must disappear with Teather-owned state, preserve
-existing-link DNS, avoid direct `/etc/resolv.conf` edits, and require no
-NetworkManager write. If the host provides no safe mechanism, transparent P1
-startup must refuse rather than risk leaving the receiver without DNS.
-
-The initial route manager may be a narrowly scoped script. It must be replaced by
-a small daemon or helper before a graphical application is treated as stable.
+P1 implements the route boundary through the fixed helper and per-user daemon
+described above. The graphical application does not manipulate networking
+directly.
 
 ## Long-term architecture: standard tunnel endpoint
 
@@ -263,10 +288,19 @@ sockets. It does not use root, hidden APIs, or device-owner privileges.
 
 ### Linux
 
-TUN creation and route changes require elevated capability. During the prototype,
-a reviewed script may run with `sudo`. The durable design should prefer a small
-system helper with a fixed API and policy authorization rather than elevating the
-UI or networking parser.
+TUN creation and route changes are confined to the installed root-owned helper
+and a narrowly scoped polkit action. The GUI, CLI, daemon, ADB parser, and packet
+engine run as the desktop user. No wildcard or passwordless sudo policy is used.
+
+### Linux control and persistence
+
+The session manager is `io.github.vel71184.Teather1` on the user bus. Stable
+methods return `a{sv}` or arrays of `a{sv}` so fields can be added compatibly.
+The daemon stores only a random local salt, salted device hashes, display names,
+and preferences in a mode-0600 file. A separate mode-0600 runtime journal records
+the exact ADB forward and whether Linux started Android; restart recovery removes
+only matching owned resources. Raw serials exist only in process memory and ADB
+arguments and never enter logs, D-Bus responses, or disk.
 
 ## Language direction
 
@@ -292,10 +326,11 @@ The first concrete implementation preserves the planned boundaries:
 | Metrics | `RelayStats` | Aggregate counts and coarse errors only |
 | Transport helper | `desktop/linux/teather-p0` | ADB forward, lifecycle, smoke/soak, cleanup |
 
-The debug build exports the lifecycle service solely for ADB automation. It does
-not alter the data-plane boundary: the server binds to `127.0.0.1`, and release
-builds keep the service unexported. No Linux routes, resolver settings, or
-firewall state are touched in P0.
+P0 originally exported the lifecycle service only in debug builds. D-016
+supersedes that arrangement: debug and release now export the service behind
+`android.permission.DUMP`, allowing authorized ADB shell control while denying
+ordinary applications. The data plane remains bound to `127.0.0.1`. P0 itself
+did not touch Linux routes, resolver settings, or firewall state.
 
-The permanent core language is deliberately open until P0 clarifies how much of
-the system is relay logic versus platform integration.
+The permanent cross-platform networking-core language remains open under D-008.
+P1's pinned Rust packet engine does not settle that later architectural choice.

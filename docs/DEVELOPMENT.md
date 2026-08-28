@@ -1,10 +1,12 @@
 # Development guide
 
-Teather has a physically validated P0 implementation. This guide defines the
-pinned build, host workflow, and evidence boundary; P1 remains behind the D-013
-design-review and owner-approval gate.
+Teather has a physically validated P0 implementation and an implemented P1 Linux
+USB Desktop working tree. D-013's source-implementation approval gate is complete.
+P1 host-only checks passed on 2026-08-25; disposable-VM privileged/package/GUI
+validation and full physical P1 acceptance remain pending. Follow
+`docs/P1_HANDOFF.md` rather than restarting the P0 sequence.
 
-## Pinned P0 toolchain
+## Pinned Android and P1 toolchain
 
 | Item | Pinned value |
 |---|---|
@@ -14,6 +16,11 @@ design-review and owner-approval gate.
 | Gradle wrapper | 9.3.1 |
 | JDK | 17 |
 | Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
+| P1 Android version | `versionCode 2` / `0.1.0-p1` |
+| P1 Linux target | Debian 12 GNOME amd64 |
+| P1 desktop stack | Python 3.11, PyGObject, GTK 3, Ayatana AppIndicator |
+| Packet engine | tun2proxy 0.8.3 plus the audited `--tun-fd` patch |
+| Rust toolchain | 1.90.0 |
 
 The wrapper distribution checksum and wrapper JAR checksum are both enforced.
 Android Studio is optional; the checked-in wrapper is the build interface.
@@ -31,7 +38,7 @@ It reports the current commit, non-sensitive host/network-manager details, ADB a
 Java versions, and phone model/Android version while deliberately omitting the ADB
 serial. If multiple devices exist, set `TEATHER_SERIAL` in the shell only.
 
-## P0 prerequisites
+## P0 reproduction prerequisites
 
 - Linux with Git, Bash, curl, JDK 17, and Android platform tools (`adb`).
 - Physical stock/unrooted Android device with USB debugging enabled.
@@ -39,9 +46,10 @@ serial. If multiple devices exist, set `TEATHER_SERIAL` in the shell only.
 - Android API 37 installed locally, or network access for Gradle/SDK setup.
 - No stock hotspot or stock USB tethering during E-001.
 
-The exact continuation is maintained in `docs/P0_HANDOFF.md`.
+The historical P0 reproduction sequence is maintained in `docs/P0_HANDOFF.md`.
+The current P1 continuation is `docs/P1_HANDOFF.md`.
 
-## Development sequence
+## Completed P0 development sequence
 
 Use narrow vertical slices:
 
@@ -56,23 +64,26 @@ Use narrow vertical slices:
 Avoid building the full configuration model, theme, tray icon, or generic plugin
 system before step 6 passes.
 
-## Planned local workflow
+## Current local workflow
 
 The repository exposes these commands through the checked-in `Makefile` and
 `desktop/linux/teather-p0` helper:
 
 ```text
-check          format, lint, and unit tests
-android-build  build the debug APK
-android-run    install/start the development relay
-linux-build    build the receiver
-e2e-p0         run the non-destructive P0 test
-diagnose       print redacted environment and link state
+make check             Android tests/lint/APKs plus all host-only P1 checks
+make android-build     build the debug APK
+make p1-check          Linux unit, helper, and private D-Bus checks
+make p1-dbus-smoke     isolated D-Bus daemon/CLI smoke test
+make p1-helper-check   strict helper compilation and argument rejection
+make p1-package        build the amd64 Debian package
+make p0-doctor         historical redacted P0 discovery
+make p0-run/test/stop  historical P0 device workflow
 ```
 
-Implemented equivalents are `make check`, `make android-build`, `make p0-doctor`,
-`make p0-run`, `make p0-test`, and `make p0-stop`. The helper additionally provides
-`status`, `logs`, and the 30-minute `soak` gate.
+`make check` is the source-level gate and does not create a live TUN or change
+host routes. P1 privileged, GUI, package-lifecycle, and physical validation is
+separate and must follow `docs/P1_HANDOFF.md`. The P0 helper additionally provides
+`status`, `logs`, and the historical 30-minute `soak` gate.
 
 ## Branches and commits
 
