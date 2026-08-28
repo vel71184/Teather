@@ -11,7 +11,8 @@ as little receiver-side software as each platform permits.
 
 > **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
 > host-only checks, both disposable-VM phases, and debug-APK verification are
-> complete; physical P1 acceptance remains pending.
+> complete. The first physical P1 run failed safely at the host DNS-retention
+> gate; DNS design review is required before another run.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -252,9 +253,12 @@ directory when its first real file is ready.
 P1 source work, host-only verification, and the disposable Debian 12 GNOME VM
 package/GUI/helper/TUN gates are complete. VersionCode 2 / `0.1.0-p1` has a
 verified debug signature. D-019 defers a permanent release identity while Teather
-is privately tested. The current execution sequence is the explicit
-phone-connection gate in [the P1 handoff](docs/P1_HANDOFF.md): do not query the
-phone or begin physical acceptance until the owner confirms it is connected.
+is privately tested. During physical validation, package `0.1.0-2` corrected the
+user-service PolicyKit launch boundary and connected the bounded tunnel, but
+disabling Wi-Fi removed the host's only usable nameserver. Teather disconnected
+and restored its state as designed. The next step is the explicit DNS design
+review in [the P1 handoff](docs/P1_HANDOFF.md); do not reconnect the phone or
+repeat physical acceptance before that review is approved.
 
 The deterministic source-level gate remains:
 

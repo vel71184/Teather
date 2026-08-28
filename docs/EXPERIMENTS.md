@@ -220,7 +220,7 @@ completed on 2026-08-25.
 
 ## E-002 — System-wide TCP/DNS through the P1 backup interface
 
-**Date:** 2026-08-26 · **Status:** running
+**Date:** 2026-08-27 · **Status:** failed — DNS design review required
 
 The disposable-VM portion passed without a phone. In a Debian 12.15 GNOME guest,
 the real helper created only the approved `teather0` address and routes. QEMU's
@@ -230,11 +230,20 @@ produced a SOCKS5 domain request for the original synthetic name and received th
 controlled HTTP response. Final routes, resolver, NetworkManager inventory,
 policy rules, and firewall matched the baseline exactly.
 
-This is not yet a passed E-002 result. Debug-APK verification passed on
-2026-08-27. Actual Android/ADB transport, owner-controlled Wi-Fi disable/restore
-sequence, retained usable nameserver, browser/Git/SSH/package workloads, and the
-two-hour session remain physical gates. D-019 defers permanent release signing
-until distribution is being considered.
+The 2026-08-27 physical run verified the debug APK, Android/ADB control,
+compatible attach, exact temporary interface/routes, physical-default preference,
+and unprivileged packet engine. The first PolicyKit launch exposed package
+`0.1.0-1` setting `NoNewPrivileges=yes`; it failed before mutation. Package
+`0.1.0-2` corrected that conflict under D-020 and connected successfully.
+
+After the owner manually disabled Wi-Fi, the host had no usable non-loopback IPv4
+nameserver. Teather reported `resolver-unavailable` and disconnected without
+changing DNS. The owner's OpenAI session also lost connectivity until Wi-Fi was
+restored. Because the mandatory resolver gate failed, browser/Git/SSH/package
+workloads and the two-hour session were not attempted. Do not infer that the TUN
+data path failed; this run stopped before those tests. The current DNS design is
+unsupported on this host and returns to owner review. D-019 continues to defer
+permanent release signing until distribution is considered.
 
 ## E-003 — P1 failure-path restoration
 
@@ -250,9 +259,20 @@ manually created `teather0` was deliberately preserved.
 The matrix exposed normal-route and policy-rule parsing defects, an incorrect
 split-default literal comparison, and a tun2proxy `IFF_NO_PI` framing mismatch.
 The failures and fixes are retained in the Phase 2 work log and D-015. The final
-matrix passed and its baseline/final network snapshots matched. E-003 remains
-running until Android service stop, USB removal, daemon/helper/tunnel death, and
-manual Wi-Fi restoration pass on the physical host with before/after evidence.
+matrix passed and its baseline/final network snapshots matched.
+
+The 2026-08-27 physical run added two safe-cleanup results. The blocked `pkexec`
+launch left no interface, route, forward, or journal. The missing-resolver gate
+removed the TUN, routes, forward, helper/tunnel processes, journal, and
+NetworkManager's temporary externally observed entry. After Wi-Fi restoration,
+routes, rules, resolver, and NetworkManager inventory exactly matched baseline;
+nftables rule structure matched after normalizing live packet/byte counters.
+Android was stopped explicitly because this case intentionally attached to a
+manually started compatible relay.
+
+E-003 remains running because the DNS design stop prevented physical USB removal,
+daemon/helper/tunnel death, and the rest of the cable/service matrix. Do not run
+those cases until the E-002 design review is resolved.
 
 ## Planned experiment queue
 

@@ -164,6 +164,19 @@ class StorageTests(unittest.TestCase):
 
 
 class StatusAndPreflightTests(unittest.TestCase):
+    def test_user_service_allows_the_intended_pkexec_boundary(self):
+        service = (
+            Path(__file__).resolve().parents[3] / "packaging" / "systemd" / "teather.service"
+        ).read_text(encoding="utf-8")
+        directives = {
+            line.strip() for line in service.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertIn("NoNewPrivileges=no", directives)
+        self.assertNotIn("NoNewPrivileges=yes", directives)
+        self.assertIn("ProtectSystem=strict", service)
+        self.assertIn("ProtectHome=read-only", service)
+
     def test_adb_errors_redact_the_raw_serial(self):
         result = subprocess.CompletedProcess(
             ["adb"], 1, stdout="", stderr=f"device {SERIAL_ONE} unavailable",

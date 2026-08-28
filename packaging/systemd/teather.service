@@ -8,7 +8,9 @@ BusName=io.github.vel71184.Teather1
 ExecStart=/usr/bin/teatherd
 Restart=on-failure
 RestartSec=2
-NoNewPrivileges=yes
+# The manager invokes the fixed polkit helper through setuid-root pkexec.
+# NoNewPrivileges=yes would make that approved elevation path impossible.
+NoNewPrivileges=no
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only

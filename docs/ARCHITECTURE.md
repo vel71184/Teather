@@ -168,9 +168,35 @@ reports that P1 DNS is unsupported on that host. It does not call `resolvectl`,
 write `/etc/resolv.conf`, or alter NetworkManager. A retained but unreachable
 nameserver is a physical acceptance failure and returns the design to review.
 
+**Physical result (2026-08-27):** disabling Wi-Fi on the target Linux host removed
+its only usable non-loopback IPv4 nameserver. The daemon reported
+`resolver-unavailable`, closed the tunnel, and restored owned state. This design
+therefore cannot satisfy P1 on that host. Resolver integration remains
+**proposed** and must be reviewed before implementation or another physical run.
+The host uses NetworkManager's default DNS mode to write a regular
+`/etc/resolv.conf`; neither `systemd-resolved` nor `resolvconf` is installed.
+
+**Proposed next design (not approved):** use NetworkManager's temporary active-
+device modification API to advertise a dedicated Teather DNS sentinel only on
+the externally observed `teather0` connection, with a negative DNS priority to
+exclude other connections. Extend the pinned tunnel engine's virtual DNS handler
+to answer both UDP and TCP port 53 for that sentinel. Do not create a persistent
+NetworkManager profile, enable a global DNS plugin, or edit `/etc/resolv.conf`
+directly. Connection must fail closed unless the temporary resolver state is
+verified before Wi-Fi removal; interface teardown must remove the runtime profile
+and restore the prior resolver state. This proposal requires a revised decision,
+threat-model/test updates, isolated NetworkManager testing, and explicit owner
+approval before implementation.
+
 P1 implements the route boundary through the fixed helper and per-user daemon
 described above. The graphical application does not manipulate networking
 directly.
+
+The user daemon retains `ProtectSystem=strict`, `ProtectHome=read-only`, and
+`PrivateTmp=yes`, but D-020 requires `NoNewPrivileges=no`: setuid-root `pkexec`
+cannot reach the fixed PolicyKit helper when its parent has `NoNewPrivs: 1`. The
+root-owned helper remains the only privileged implementation surface and applies
+`NoNewPrivs: 1` after permanently dropping privilege for the packet engine.
 
 ## Long-term architecture: standard tunnel endpoint
 

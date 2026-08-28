@@ -31,13 +31,18 @@ matrix unless a regression requires isolated reproduction.
 
 The owner accepted the local debug certificate for private P1 testing and deferred
 a permanent release identity until distribution is being considered (D-019).
-VersionCode 2 / `0.1.0-p1` is built and its debug signature is verified. The next
-job is the explicit operator phone gate: do not query ADB or otherwise infer phone
-availability. Explain why the phone is needed and continue only after the owner
-confirms connection. Run Phase 3 of `docs/P1_HANDOFF.md` and record E-002/E-003.
-Stop for explicit P2 planning and owner approval after P1; do not start general
-UDP, IPv6, broader DNS, WireGuard, wireless transports, multi-client support,
-cross-platform receivers, or P5 polish early.
+VersionCode 2 / `0.1.0-p1` and its debug signature are verified. The first
+physical Phase 3 attempt on 2026-08-27 found and fixed the user-service
+`NoNewPrivileges`/`pkexec` packaging conflict in Debian package `0.1.0-2`, then
+failed safely at the required DNS gate: disabling Wi-Fi removed the only usable
+non-loopback IPv4 nameserver. Cleanup restored routes, rules, resolver,
+NetworkManager inventory, and firewall structure to baseline.
+
+The phone is no longer needed and may remain disconnected. Do not repeat Phase 3,
+change resolver state, or improvise around the failure. The next job is an
+owner-reviewed P1 DNS design discussion and explicit approval. P1 remains active;
+do not start P2 general UDP, IPv6, broader DNS, WireGuard, wireless transports,
+multi-client support, cross-platform receivers, or P5 polish early.
 
 ## Hard constraints
 

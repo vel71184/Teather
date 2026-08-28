@@ -3,9 +3,9 @@
 - **Snapshot date:** 2026-08-27
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
-- **Runnable build:** P1 Android and corrected amd64 artifacts pass host checks
-  plus disposable-VM package/GUI/helper/TUN gates and debug-APK verification;
-  physical acceptance remains pending
+- **Runnable build:** Android `0.1.0-p1` and Debian package `0.1.0-2` pass source,
+  isolated-VM, install, control, bounded-interface, privilege-drop, and cleanup
+  gates; physical P1 is stopped at a failed DNS-retention gate
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -35,8 +35,11 @@ package, D-Bus, real GNOME GUI/tray/fallback, watcher, lifecycle, and no-mutatio
 gate passed on 2026-08-26. The corrected privileged-helper/TUN matrix also passed
 in the disposable VM that day. D-019 accepts Gradle's debug signing for private
 P1 testing and defers a permanent release identity until distribution is being
-considered. The debug APK is verified. The current objective is to run the
-explicit operator-gated physical P1 acceptance.
+considered. The debug APK is verified. On 2026-08-27 the physical run connected
+the corrected bounded tunnel but disabling Wi-Fi removed the only usable
+non-loopback IPv4 nameserver. Teather failed safely and restored owned state. The
+current objective is an owner-reviewed DNS design; do not repeat the physical run
+or change resolver state before approval.
 
 ## Implemented P0 surface
 
@@ -58,13 +61,18 @@ explicit operator-gated physical P1 acceptance.
 
 ## Next concrete actions
 
-1. The Phase 2 VM is powered off cleanly; do not reboot it unless a regression
-   needs isolated reproduction.
-2. Stop and explain that the phone is now needed for physical P1 acceptance. Do
-   not query ADB or infer availability. Only after the owner explicitly confirms
-   connection may the exact Phase 3 sequence in `docs/P1_HANDOFF.md` begin.
-3. Complete E-002/E-003, reconcile the P1 milestone transition documents, and
-   stop for explicit P2 design approval.
+1. Keep P1 active. E-002 failed at DNS retention; E-003 gained two physical safe-
+   cleanup cases but remains incomplete. Do not advance to P2.
+2. The phone is not needed and may remain disconnected. Do not repeat Phase 3,
+   disable Wi-Fi again, or edit resolver/NetworkManager state.
+3. Review DNS design choices with the owner, including security, persistence,
+   cleanup, and failure behavior. Begin with the unapproved proposal in
+   `docs/ARCHITECTURE.md`: temporary per-device NetworkManager DNS plus virtual
+   DNS over UDP and TCP, with no persistent profile or direct `resolv.conf` edit.
+   Record a new or amended decision and obtain explicit approval before
+   implementation or another physical run.
+4. Preserve Debian package `0.1.0-2` and its D-020 PolicyKit correction. The
+   Phase 2 VM remains powered off unless a regression requires isolated testing.
 
 Preserve the P1 implementation and isolated-validation fixes. Generated
 `__pycache__` files, private VM evidence, signing keys, and build credentials are
@@ -87,6 +95,10 @@ not implementation artifacts and must not be staged.
 - The exact P1 helper, route, virtual-DNS, trust, D-Bus, packaging, and recovery
   architecture is approved (D-015 through D-017).
 - Work must stop for explicit planning and approval after P1, before P2 (D-018).
+- Private P1 device testing uses debug signing; permanent signing is deferred
+  until distribution is considered (D-019).
+- The user manager permits its intended fixed PolicyKit transition while the
+  helper/tunnel privilege drop remains strict (D-020).
 
 See `docs/DECISIONS.md` for rationale and status.
 
@@ -94,9 +106,11 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- Whether Debian retains a usable non-loopback IPv4 nameserver after Wi-Fi is
-  disabled is a pending physical P1 gate. Teather will not configure DNS if it
-  does not. UDP strategy and IPv6 policy remain P2 questions.
+- The target Debian host does not retain a usable non-loopback IPv4 nameserver
+  after Wi-Fi is disabled. The approved no-resolver-mutation design therefore
+  cannot pass P1 on this host. A replacement DNS design is unresolved. UDP
+  strategy and IPv6 policy remain P2 questions and are not authorized as a P1
+  workaround.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
@@ -158,6 +172,53 @@ next handoff/recovery documents, and affected technical guidance agree.
 
 ## Work log
 
+### 2026-08-27 — physical P1 stopped at DNS gate; cleanup passed
+
+- Completed: validated the phone's installed Teather APK byte-for-byte against
+  the verified debug build; confirmed the old Android package and temporary
+  permission probe are absent; installed Debian package `0.1.0-1`; captured a
+  private host baseline; exercised Android ADB shell control and local hashed-
+  device approval; corrected the discovered PolicyKit launch conflict as package
+  `0.1.0-2`; connected the bounded tunnel; and ran the owner-controlled Wi-Fi/DNS
+  gate. The phone may now be disconnected.
+- Verified with: `env ANDROID_HOME=/tmp/android-sdk
+  GRADLE_USER_HOME=/tmp/teather-gradle2 make check` passed 92 Android tasks, 25
+  Python tests, strict helper/route checks, and D-Bus smoke. The installed APK
+  and build both hash to
+  `8dbf92b8137533127e1a7e20e199586ccb276e995cb58ad354e8ed968a9ed586`
+  and share the recorded debug certificate. Two clean `0.1.0-2` package builds
+  were byte-identical at SHA-256
+  `77b70295a838daf5a85e0ba4a7e33a1f7109b0f049bee4775cb323a00f880804`.
+  The installed unit reports `NoNewPrivileges=no`, `ProtectSystem=strict`, and
+  `ProtectHome=read-only`. While active, `teather0` had only `192.0.2.1/32`,
+  `198.18.0.0/15`, and the metric-32000 default; the metric-600 physical default
+  remained selected. `tun2proxy` ran as the desktop UID/GID with no supplementary
+  groups or capabilities and `NoNewPrivs: 1`.
+- Physical result: disabling Wi-Fi removed the only usable non-loopback IPv4
+  nameserver. Teather reported `resolver-unavailable` and disconnected. The
+  owner's OpenAI session lost connectivity until Wi-Fi was restored, so the
+  required browser/Git/SSH/package/two-hour gates were not attempted.
+- Cleanup: the blocked first `pkexec` attempt and the later resolver failure both
+  left no unexpected state. Final Android relay, ADB forward, `teather0`, helper/
+  tunnel processes, ownership journal, and NetworkManager runtime entry were
+  absent. Routes, IPv4 rules, resolver, and NetworkManager inventory exactly
+  matched baseline. nftables structure matched after normalizing ordinary live
+  packet/byte counters; no rule changed. Private evidence remains under `/tmp`
+  and must not be committed.
+- Files/areas changed: systemd user unit, Debian revision/changelog/build metadata,
+  Linux regression test, agent/README/resume/handoff/roadmap, architecture,
+  decisions, threat model, and E-002/E-003 evidence.
+- Decisions made: D-020 records why the user daemon cannot set
+  `NoNewPrivileges=yes` while invoking setuid-root `pkexec`; remaining service
+  hardening and the helper/tunnel privilege drop remain required.
+- Milestone transition: not applicable. P1 remains active; E-002 failed and E-003
+  is incomplete.
+- Risks or failures: the current P1 DNS design is unsupported on this host.
+  General UDP, IPv6, or an unreviewed persistent resolver change is not an
+  authorized workaround.
+- Next exact action: owner-reviewed DNS design discussion and explicit approval.
+  Do not reconnect the phone or rerun Phase 3 first.
+
 ### 2026-08-27 — debug signing accepted for private P1 testing
 
 - Completed: published the P1 implementation and disposable-VM validation
@@ -189,8 +250,8 @@ next handoff/recovery documents, and affected technical guidance agree.
   installation. Moving to a release identity will require uninstall/reinstall and
   may discard local application state. The owner accepts that development-stage
   tradeoff.
-- Next exact action: request explicit phone connection for Phase 3. Do not query
-  ADB until the owner confirms the phone is connected.
+- Next exact action: **superseded by the physical-run entry above later on
+  2026-08-27**. The current action is DNS design review, not phone reconnection.
 
 ### 2026-08-26 — disposable VM Phase 2 passed and powered off
 

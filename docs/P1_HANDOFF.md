@@ -9,14 +9,15 @@ or rebuild the P1 scaffold.
 ## Evidence already complete
 
 - `env ANDROID_HOME=/tmp/android-sdk GRADLE_USER_HOME=/tmp/teather-gradle2 make
-  check` passed Android unit tests, lint, debug/release assembly, 24 Linux tests,
-  strict helper compilation, helper argument rejection, and the private D-Bus
-  smoke test.
+  check` passed after the 2026-08-27 correction: 92 Android tasks, 25 Linux
+  tests, strict helper compilation, helper argument rejection, the helper route
+  regression, and the private D-Bus smoke test.
 - After isolated validation corrections, two clean patched tun2proxy builds were
   identical at SHA-256
   `ffdd4373cb41401e3f4e8b4d65f84688ed4288966d621580de303b1ca47d15bf`.
 - The current corrected Debian package is SHA-256
-  `f723c2ebfe92d68cb18959bdfe414e997dded22c20150d1793d07d9bc8cedc52`.
+  `77b70295a838daf5a85e0ba4a7e33a1f7109b0f049bee4775cb323a00f880804`
+  (`teather_0.1.0-2_amd64.deb`). Two clean builds were byte-identical.
 - Root-mapped namespace package tests passed unpack, synthetic upgrade, remove,
   and purge semantics.
 - The connected phone was upgraded to versionCode 2 / `0.1.0-p1`. ADB shell
@@ -83,9 +84,41 @@ boundary, system-wide TCP/DNS, or P1 cleanup matrix.
   and tun2proxy were absent. Private evidence remains only in the disposable
   guest; it is not committed. The guest powered off cleanly.
 
-These VM results do not prove the actual Android/ADB transport, retained
-physical-host DNS after Wi-Fi is disabled, the two-hour session, or physical
-cable/service failure recovery.
+Before Phase 3, these VM results did not prove the actual Android/ADB transport,
+retained physical-host DNS after Wi-Fi is disabled, the two-hour session, or
+physical cable/service failure recovery.
+
+## Phase 3 attempt stopped at DNS design gate — 2026-08-27
+
+- The phone's installed APK was byte-for-byte identical to the verified debug
+  artifact. Version/signature matched; the temporary permission probe and old
+  Android package were absent. ADB shell start/query/stop and local hashed-device
+  approval passed without leaving a forward or relay.
+- Installing package `0.1.0-1` did not mutate host networking, but the first
+  connection failed closed because its user unit set `NoNewPrivileges=yes` and
+  therefore prevented setuid-root `pkexec` from reaching PolicyKit. Package
+  `0.1.0-2` sets the required active directive to `NoNewPrivileges=no`, preserves
+  the remaining service sandbox, and adds regression coverage (D-020).
+- With `0.1.0-2`, compatible attach passed. Active `teather0` contained only the
+  approved address and routes; the physical metric-600 Wi-Fi default remained
+  selected over metric 32000. `tun2proxy` ran as the desktop UID/GID with no
+  supplementary groups or capabilities and `NoNewPrivs: 1`.
+- NetworkManager observed the externally created TUN through an autoconnect-off
+  runtime file under `/run`; Teather made no NetworkManager call or persistent
+  profile. The runtime entry disappeared with the interface.
+- Manually disabling Wi-Fi removed the host's only usable non-loopback IPv4
+  nameserver. Teather reported `resolver-unavailable` and disconnected, as the
+  safety gate requires. The owner restored Wi-Fi. The Android relay, ADB forward,
+  TUN, routes, tunnel/helper processes, journal, and NetworkManager runtime entry
+  were absent afterward.
+- Final routes, IPv4 rules, resolver, and NetworkManager inventory exactly matched
+  baseline. The nftables rule structure matched after normalizing live packet and
+  byte counters; no rule changed. Raw private evidence remains under `/tmp`, not
+  in the repository.
+
+**Stop:** do not repeat Phase 3 or alter resolver state. The current P1 DNS design
+is unsupported on this host. The next action is an owner-reviewed DNS design and
+explicit approval. The phone is not needed for that discussion.
 
 ## Safety boundary
 
@@ -114,18 +147,18 @@ state. The owner alone disables or restores Wi-Fi.
 
 ## Phase 1 — package, D-Bus, GUI, and watcher in the VM
 
-1. Copy `build/p1/teather_0.1.0-1_amd64.deb`, this handoff,
+1. Copy `build/p1/teather_0.1.0-2_amd64.deb`, this handoff,
    `docs/P1_RECOVERY.md`, and `docs/TEST_PLAN.md` into the VM. Verify the artifact
    before installing it:
 
    ```bash
-   sha256sum teather_0.1.0-1_amd64.deb
-   dpkg-deb --info teather_0.1.0-1_amd64.deb
-   dpkg-deb --contents teather_0.1.0-1_amd64.deb
+   sha256sum teather_0.1.0-2_amd64.deb
+   dpkg-deb --info teather_0.1.0-2_amd64.deb
+   dpkg-deb --contents teather_0.1.0-2_amd64.deb
    ```
 
    The SHA-256 must be
-   `f723c2ebfe92d68cb18959bdfe414e997dded22c20150d1793d07d9bc8cedc52`.
+   `77b70295a838daf5a85e0ba4a7e33a1f7109b0f049bee4775cb323a00f880804`.
 
 2. Capture a private baseline outside the repository. Do not commit raw host or
    device identifiers:
@@ -143,7 +176,7 @@ state. The owner alone disables or restores Wi-Fi.
 
    ```bash
    sudo apt-get update
-   sudo apt-get install ./teather_0.1.0-1_amd64.deb
+   sudo apt-get install ./teather_0.1.0-2_amd64.deb
    ```
 
    If `sudo` fails, stop and preserve its exact output. Do not improvise a broad
@@ -215,6 +248,9 @@ disappeared. Use `docs/P1_RECOVERY.md` if cleanup is uncertain. Restore the VM
 snapshot after the matrix passes.
 
 ## Phase 3 — physical P1 acceptance
+
+**Blocked after the 2026-08-27 step-5 failure. Do not rerun this sequence until
+the DNS design review is recorded and explicitly approved.**
 
 Start this phase only after Phases 1 and 2 pass and the explicit operator phone
 gate above is satisfied.

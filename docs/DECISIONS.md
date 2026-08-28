@@ -462,3 +462,32 @@ APK signature, versionCode 2, and versionName `0.1.0-p1`.
   public-release credential.
 - Release-key creation, protected storage, backup, and release-build verification
   become an explicit pre-distribution gate rather than a P1 exit criterion.
+
+## D-020 — Permit the user manager's fixed PolicyKit launch boundary
+
+**Status:** Accepted · **Date:** 2026-08-27
+
+### Decision
+
+The `teatherd` user unit must set `NoNewPrivileges=no` so its intended child
+`pkexec /usr/libexec/teather-helper run PORT` can cross the PolicyKit boundary.
+Package `0.1.0-1` incorrectly set `NoNewPrivileges=yes`; Linux therefore blocked
+setuid operation before PolicyKit could authorize the fixed helper. Package
+`0.1.0-2` corrects the unit and adds a regression test for the active directives.
+
+Keep `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp=yes`, and the
+two narrow writable paths on the unprivileged daemon. PolicyKit still binds the
+action to the root-owned helper path. The helper validates its caller and fixed
+typed request, creates only the approved non-persistent state, then drops UID,
+GID, groups, capabilities, and applies `NoNewPrivs: 1` before executing
+`tun2proxy`.
+
+### Consequences
+
+- The daemon itself does not gain privilege; the desktop's normal PolicyKit
+  authentication remains required for the fixed helper.
+- A regression test must reject reintroducing `NoNewPrivileges=yes` while the
+  architecture depends on setuid-root `pkexec`.
+- Physical validation proved the packet engine runs as the desktop UID/GID with
+  no supplementary groups or capabilities and `NoNewPrivs: 1`.
+- The first failed launch left no TUN, route, ADB forward, or ownership journal.

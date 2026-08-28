@@ -120,6 +120,9 @@ or network-management operation.
 - Never interpolate untrusted values into shell commands.
 - No wildcard passwordless sudo policy.
 - Invoke the root-owned helper only through a fixed polkit action.
+- Do not set `NoNewPrivileges=yes` on `teatherd`; it would block the intended
+  setuid-root `pkexec` transition. Retain the user unit's filesystem/private-temp
+  hardening and bind PolicyKit authorization to the fixed root-owned helper path.
 - Validate `PKEXEC_UID`, clear the environment, accept only the fixed operation
   and a numeric loopback proxy port, and refuse conflicting host network state.
 - Open only a non-persistent `teather0`, then drop capabilities, supplementary
