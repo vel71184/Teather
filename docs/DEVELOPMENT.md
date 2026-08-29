@@ -6,6 +6,18 @@ P1 host-only checks passed on 2026-08-25; disposable-VM privileged/package/GUI
 validation and full physical P1 acceptance remain pending. Follow
 `docs/P1_HANDOFF.md` rather than restarting the P0 sequence.
 
+## Fresh Codex conversation
+
+Before development begins in a new Codex conversation, follow the mandatory
+[first-prompt reasoning gate](../AGENTS.md#fresh-codex-session-gate). The first
+prompt is read-only and ends after Codex recommends GPT-5.6 Sol with Ultra or
+High. The owner must select or confirm that level and prompt again before edits,
+builds, tests, devices, VMs, or network operations begin. Reasoning-level
+selection does not satisfy a separate implementation or live-test approval gate.
+During the same thread, also follow the
+[same-thread transition gate](../AGENTS.md#same-thread-reasoning-transition-gate)
+before entering a materially different phase that needs a different level.
+
 ## Pinned Android and P1 toolchain
 
 | Item | Pinned value |
