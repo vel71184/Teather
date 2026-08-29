@@ -11,18 +11,17 @@ or rebuild the P1 scaffold.
 On the first prompt of a new Codex conversation, follow
 [the repository gate](../AGENTS.md#fresh-codex-session-gate), recommend
 **GPT-5.6 Sol with Ultra**, and stop before analysis, implementation, or live
-operations. The current DNS decision is separable into resolver behavior,
-NetworkManager integration, virtual-DNS transport, security and cleanup,
-validation, and documentation reviews. Continue only after the owner selects or
-confirms Ultra and prompts again. This does not authorize a phone connection,
-resolver change, physical Phase 3 retry, or source implementation.
+operations. D-021 is already accepted and implemented; its current disposable-VM
+gate is separable into real NetworkManager integration, virtual-DNS transport,
+privilege and cleanup, packaging, validation, and documentation reviews. Continue
+only after the owner selects or confirms Ultra and prompts again. This does not
+authorize a phone connection, active-host resolver change, or physical Phase 3
+retry.
 
 Within the same thread, apply the
 [same-thread transition gate](../AGENTS.md#same-thread-reasoning-transition-gate).
-After the owner accepts a DNS design, stop before implementation and advise
-whether the bounded change now fits High or still requires Ultra. Reassess again
-before physical validation; changing the reasoning level never supplies the
-separate live-test approval.
+The current VM matrix remains Ultra. Reassess again before physical validation;
+changing the reasoning level never supplies the separate operator phone approval.
 
 ## Current resume point — D-021 implementation checkpoint
 
@@ -36,7 +35,7 @@ yet VM- or phone-accepted. Keep the phone disconnected and do not query ADB.
 - `198.18.0.0/15` remains the route, mappings use `198.18.0.0/16`, and the pinned
   third patch adds bounded RFC 1035 TCP DNS alongside UDP.
 - Linux status API is 2 with DNS readiness/mutation diagnostics. Local tests pass
-  31 cases plus helper and host-session D-Bus smoke. The full Android/Linux
+  37 cases plus helper and host-session D-Bus smoke. The full Android/Linux
   aggregate check passes.
 - Two clean tunnel builds and two same-source package builds are byte-identical;
   current hashes are recorded in `docs/PROJECT_STATUS.md`.
@@ -199,7 +198,7 @@ routes, or persistent state. The owner alone disables or restores Wi-Fi.
    ```
 
    The SHA-256 must be
-   `cf93c3f54af89300a4bb691bff04e6c10a9e0625e6666664c4e2c55e2d8774d8`.
+   `f3aa412bf64c3131eeb8f671161392164f5f72df04e404cb9c34cee7dea769d9`.
 
 2. Capture a private baseline outside the repository. Do not commit raw host or
    device identifiers:
@@ -265,8 +264,8 @@ routes, or persistent state. The owner alone disables or restores Wi-Fi.
 
 ## Phase 2 — privileged helper and TUN gate in the VM
 
-Use a controlled loopback SOCKS endpoint or pass the authorized phone through to
-the disposable VM. Do not disable the VM's existing network yet.
+Use a controlled loopback SOCKS endpoint for this phone-free D-021 matrix. Do not
+pass through a phone or disable the VM's existing network.
 
 Before every case, capture routes, rules, resolver, NetworkManager, firewall, and
 `teather0` state. Prove all items in the `Executable P1 checks` section of

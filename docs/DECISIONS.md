@@ -319,6 +319,11 @@ resolver design and satisfied D-013 for source implementation and isolated tests
 The conditional blocker language above records the pre-approval state; it is not
 the current resume status.
 
+**DNS resolution note (2026-08-27):** D-021 narrowly supersedes the prohibition
+on all NetworkManager writes. Teather may temporarily reapply DNS only on the
+active externally owned `teather0` device with preserve-external-IP; persistent
+profiles, direct resolver edits, and mutations to physical links remain forbidden.
+
 ## D-015 — Approve the bounded P1 Linux USB desktop architecture
 
 **Status:** Accepted · **Date:** 2026-08-25
@@ -359,6 +364,12 @@ approved `IFF_NO_PI` descriptor and caused virtual DNS to time out without
 leaving network residue. A second minimal pinned patch now makes the engine honor
 its existing packet-information argument. The fixed mutation and privilege model
 above is unchanged.
+
+**DNS replacement note (2026-08-27):** D-021 supersedes only this decision's
+no-nameserver/no-NetworkManager portions after the physical resolver gate failed.
+The helper, TUN, routes, privilege drop, ownership, and refusal boundaries remain
+authoritative. The temporary sentinel is applied by the unprivileged manager and
+must preserve the helper-owned address and routes.
 
 ### Refusal conditions
 

@@ -1,6 +1,6 @@
 # Project status
 
-- **Snapshot date:** 2026-08-29
+- **Snapshot date:** 2026-08-28
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
 - **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-3` implements
@@ -13,8 +13,9 @@ session so the next session starts from evidence instead of archaeology.
 > **Fresh-session gate:** On the first prompt of a new Codex conversation,
 > complete the mandatory read-only context pass, recommend a reasoning level, and
 > stop before implementation or live operations. The current owner-reviewed P1
-> DNS design is **GPT-5.6 Sol with Ultra** work because networking, security,
-> cleanup, testing, and documentation can be reviewed independently. See
+> D-021 disposable-VM integration is **GPT-5.6 Sol with Ultra** work because
+> networking, privilege, recovery, testing, and documentation can be reviewed
+> independently. See
 > [the repository agent instructions](../AGENTS.md#fresh-codex-session-gate).
 > Within the same thread, Codex must also stop before a materially new phase when
 > the recommended level changes in either direction.
@@ -79,7 +80,7 @@ VM validation; do not repeat the physical run or mutate the active host first.
 3. Preserve the completed reproducibility evidence: two clean tunnel builds were
    identical at `9ad64db8987a7035ab86edae99417506e5cc931bb876cd7736e9ba148f470146`,
    and two same-source package builds were identical at
-   `cf93c3f54af89300a4bb691bff04e6c10a9e0625e6666664c4e2c55e2d8774d8`.
+   `f3aa412bf64c3131eeb8f671161392164f5f72df04e404cb9c34cee7dea769d9`.
 4. Only after the VM passes, stop and request explicit phone connection before
    any ADB query or renewed Phase 3 run.
 
@@ -182,7 +183,7 @@ next handoff/recovery documents, and affected technical guidance agree.
 
 ## Work log
 
-### 2026-08-29 — add fresh-session Codex reasoning gate
+### 2026-08-28 — add fresh-session Codex reasoning gate
 
 - Completed: documented a mandatory first-prompt, read-only reasoning-level gate
   plus a symmetric same-thread High-to-Ultra or Ultra-to-High transition gate
@@ -193,8 +194,9 @@ next handoff/recovery documents, and affected technical guidance agree.
   from High for focused work with an accepted design and bounded verification.
 - Files/areas changed: AGENTS.md, README.md, docs/PROJECT_STATUS.md,
   docs/P1_HANDOFF.md, and docs/DEVELOPMENT.md.
-- Decisions made: the current P1 DNS design review is classified as Ultra; a
-  later bounded implementation must trigger reassessment and may move to High.
+- Decisions made: the then-current P1 DNS design review was classified as Ultra;
+  the gate now classifies D-021's multi-part VM validation as Ultra and requires
+  another reassessment before physical validation.
   The gate selects execution mode only and does not authorize implementation, device
   use, network mutation, or bypass of another approval stop.
 - Milestone transition: not applicable. P1 remains active.
@@ -202,8 +204,8 @@ next handoff/recovery documents, and affected technical guidance agree.
   so it must recommend the level and wait for owner confirmation rather than
   assert that the setting is active.
 - Next exact action: in a new Codex conversation, run the fresh-session gate; once
-  the owner confirms Ultra and prompts again, continue the owner-reviewed P1 DNS
-  design discussion without reconnecting the phone or changing resolver state.
+  the owner confirms Ultra and prompts again, continue the disposable-VM D-021
+  matrix without reconnecting the phone or changing active-host resolver state.
 
 ### 2026-08-27 — D-021 DNS implementation; paused before VM validation
 
@@ -211,7 +213,7 @@ next handoff/recovery documents, and affected technical guidance agree.
   preserve-external-IP flag, reserved sentinel/pool separation, UDP/TCP readiness,
   cleanup/recovery, API-v2 diagnostics, pinned TCP-DNS tunnel patch, checked-in
   verified Cargo lock, and Debian package `0.1.0-3`.
-- Verified with: 31 Python tests, strict helper checks, host-session D-Bus smoke,
+- Verified with: 37 Python tests, strict helper checks, host-session D-Bus smoke,
   two Rust TCP-DNS tests, read-only real NetworkManager 1.42.4 API access, the
   92-task Android build/lint/unit matrix, two byte-identical clean tunnel builds,
   and two byte-identical same-source package builds.

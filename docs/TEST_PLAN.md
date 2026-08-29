@@ -128,6 +128,14 @@ In a network namespace or disposable Debian 12 VM, prove:
 - `teather0` and both routes exist only while the non-persistent TUN fd is open;
 - the physical default remains preferred over metric 32000;
 - virtual DNS converts host queries into SOCKS domain requests;
+- NetworkManager 1.42+ temporarily installs only `198.19.0.1` on active
+  `teather0` using preserve-external-IP, without changing its address or routes;
+- sentinel DNS answers controlled readiness queries over both UDP and RFC 1035
+  TCP, with returned mappings restricted to `198.18.0.0/16`;
+- normal stop restores the prior applied DNS before TUN removal; forced loss and
+  next-start recovery remove an unambiguous stale sentinel without touching
+  unrelated state;
+- no persistent NetworkManager profile or direct resolver edit appears;
 - pre-existing interface, overlapping route/address collision, nonstandard IPv4
   policy rules, VPN/split-default ambiguity, and invalid helper input all fail
   before mutation;

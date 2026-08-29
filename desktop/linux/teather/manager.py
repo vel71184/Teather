@@ -201,12 +201,13 @@ class Manager:
             (route.get("dst", "default"), int(route.get("metric", 0)))
             for route in value["routes"]
         }
+        expected_routes = {(VIRTUAL_DNS_ROUTE, 0), ("default", ROUTE_METRIC)}
         if (
             len(addresses) != 1
             or addresses[0].get("local") != expected_address
             or int(addresses[0].get("prefixlen", -1)) != int(expected_prefix)
-            or (VIRTUAL_DNS_ROUTE, 0) not in route_values
-            or ("default", ROUTE_METRIC) not in route_values
+            or len(value["routes"]) != len(expected_routes)
+            or route_values != expected_routes
         ):
             raise TeatherError("tunnel-start", "Teather interface state is incomplete or unexpected")
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
@@ -481,10 +482,11 @@ class Manager:
             return
         if not self.dns_controller.resolver_is_active():
             self.disconnect()
-            self._state = "error"
-            self._error_category = "resolver-unavailable"
-            self._message = "Teather DNS disappeared; owned state was disconnected and restored"
-            self._emit_status()
+            if self._state == "disconnected":
+                self._state = "error"
+                self._error_category = "resolver-unavailable"
+                self._message = "Teather DNS disappeared; owned state was disconnected and restored"
+                self._emit_status()
 
     def diagnose(self) -> dict:
         issues: list[str] = []

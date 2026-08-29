@@ -41,7 +41,7 @@ On that first prompt:
    actually exposes it.
 
 Recommend **Ultra** for whole-repository processing, the first broad pass in a
-new milestone, P1 DNS design review, architecture or threat-model work,
+new milestone, live-network/DNS design review, architecture or threat-model work,
 security/privilege/recovery audits, milestone transitions, and changes spanning
 several independently reviewable subsystems. Ultra is appropriate when useful
 work can be delegated across Android, Linux networking, packaging, security,
@@ -74,11 +74,11 @@ If the next phase still fits the active recommendation, continue normally. Do no
 interrupt merely because a different file or component is next. A level change
 does not grant implementation, device, privilege, or live-test approval.
 
-For the current P1 work, the multi-part DNS design review begins in Ultra. After
-the owner accepts one bounded design, stop and reassess before implementation:
-recommend High if the implementation is focused with bounded verification, or
-keep/recommend Ultra if it still contains several independent networking,
-security, recovery, and documentation workstreams.
+For the current P1 work, D-021 is accepted and implemented. Its disposable-VM
+NetworkManager/DNS, privilege, recovery, packaging, and documentation matrix
+remains Ultra because those workstreams are independently reviewable. Reassess
+again before physical phone validation; a reasoning-level choice never satisfies
+the separate operator phone gate.
 
 These labels follow the current Codex distinction: High increases reasoning depth
 for complex work; Ultra adds automatic task delegation for separable complex
@@ -108,10 +108,10 @@ NetworkManager inventory, and firewall structure to baseline.
 The owner approved D-021's bounded DNS design. Package `0.1.0-3` source work is
 implemented: temporary per-device NetworkManager DNS, reserved sentinel
 `198.19.0.1`, a non-overlapping `198.18.0.0/16` mapping pool, and virtual DNS over
-UDP and TCP. Local tests and one clean tunnel/package build pass. The next job is
-disposable-VM DNS integration and cleanup validation; do not mutate the active
-host or query ADB. Request explicit phone connection only after the VM gate passes.
-P1 remains active;
+UDP and TCP. Local tests, the aggregate build, two clean tunnel builds, and two
+same-source package builds pass reproducibly. The next job is disposable-VM DNS
+integration and cleanup validation; do not mutate the active host or query ADB.
+Request explicit phone connection only after the VM gate passes. P1 remains active;
 do not start P2 general UDP, IPv6, broader DNS, WireGuard, wireless transports,
 multi-client support, cross-platform receivers, or P5 polish early.
 

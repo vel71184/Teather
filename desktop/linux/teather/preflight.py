@@ -5,7 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from .constants import INTERFACE_NAME, ROUTE_METRIC, VIRTUAL_DNS_POOL
+from .constants import INTERFACE_NAME, ROUTE_METRIC, VIRTUAL_DNS_ROUTE
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ def evaluate_routes(
             if info.get("family") == "inet" and info.get("local") == "192.0.2.1":
                 return PreflightResult(False, "address-collision", "192.0.2.1 is already assigned")
     defaults = []
-    virtual_pool = ipaddress.ip_network(VIRTUAL_DNS_POOL)
+    virtual_route = ipaddress.ip_network(VIRTUAL_DNS_ROUTE)
     for route in routes:
         destination = route.get("dst", "default")
         device = str(route.get("dev", ""))
@@ -64,8 +64,8 @@ def evaluate_routes(
                 network = ipaddress.ip_network(destination, strict=False)
             except ValueError:
                 return PreflightResult(False, "route-inspection", "Cannot parse an IPv4 route destination")
-            if network.version == 4 and network.overlaps(virtual_pool):
-                return PreflightResult(False, "route-collision", "An existing route overlaps the virtual-DNS pool")
+            if network.version == 4 and network.overlaps(virtual_route):
+                return PreflightResult(False, "route-collision", "An existing route overlaps the virtual-DNS route")
         if destination == "default":
             defaults.append(route)
             if re.search(r"(^|[-_.])(tun|tap|wg|vpn|tailscale|proton)", device, re.I):

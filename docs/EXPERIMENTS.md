@@ -220,7 +220,7 @@ completed on 2026-08-25.
 
 ## E-002 — System-wide TCP/DNS through the P1 backup interface
 
-**Date:** 2026-08-27 · **Status:** failed — DNS design review required
+**Date:** 2026-08-27 · **Status:** failed at original DNS gate — replacement retest pending
 
 The disposable-VM portion passed without a phone. In a Debian 12.15 GNOME guest,
 the real helper created only the approved `teather0` address and routes. QEMU's
@@ -244,6 +244,11 @@ workloads and the two-hour session were not attempted. Do not infer that the TUN
 data path failed; this run stopped before those tests. The current DNS design is
 unsupported on this host and returns to owner review. D-019 continues to defer
 permanent release signing until distribution is considered.
+
+**Resolution:** D-021 was accepted and package `0.1.0-3` implements temporary
+per-device NetworkManager sentinel DNS plus UDP/TCP virtual DNS. E-002 remains
+incomplete until that replacement passes the fresh disposable-VM matrix and the
+physical workload/session gate; the failed 2026-08-27 observation is not erased.
 
 ## E-003 — P1 failure-path restoration
 
@@ -270,9 +275,10 @@ nftables rule structure matched after normalizing live packet/byte counters.
 Android was stopped explicitly because this case intentionally attached to a
 manually started compatible relay.
 
-E-003 remains running because the DNS design stop prevented physical USB removal,
-daemon/helper/tunnel death, and the rest of the cable/service matrix. Do not run
-those cases until the E-002 design review is resolved.
+E-003 remains running because the DNS stop prevented physical USB removal,
+daemon/helper/tunnel death, and the rest of the cable/service matrix. D-021
+resolves the design decision, but do not resume those physical cases until its
+fresh disposable-VM DNS and cleanup gate passes.
 
 ## Planned experiment queue
 

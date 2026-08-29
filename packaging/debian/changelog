@@ -1,6 +1,7 @@
 teather (0.1.0-3) unstable; urgency=medium
 
   * Provide temporary NetworkManager DNS and virtual DNS over UDP and TCP.
+  * Depend explicitly on iproute2 for route and interface inspection.
 
  -- Teather Project <noreply@example.invalid>  Thu, 27 Aug 2026 00:00:00 +0000
 

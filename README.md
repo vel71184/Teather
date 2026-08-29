@@ -24,7 +24,8 @@ are not current requirements.
 > **High**, explain the scope classification, and stop before work begins. See
 > [AGENTS.md](AGENTS.md#fresh-codex-session-gate). The same stop applies within
 > a thread before a materially new phase that needs a High/Ultra change. The
-> current P1 DNS design review is an **Ultra** task.
+> current D-021 disposable-VM DNS, privilege, and cleanup matrix is an **Ultra**
+> task.
 
 ## Why this exists
 

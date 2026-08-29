@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import ipaddress
 import time
 from pathlib import Path
 from typing import Protocol
 
 from .constants import DNS_PRIORITY, DNS_SENTINEL, INTERFACE_NAME
 from .errors import TeatherError
-from .preflight import parse_nameservers
 
 
 NETWORKMANAGER_BUS = "org.freedesktop.NetworkManager"
@@ -175,9 +175,20 @@ class NetworkManagerDns:
 
     def _nameservers(self) -> list[str]:
         try:
-            return parse_nameservers(self.resolver_path.read_text(encoding="utf-8"))
+            resolver = self.resolver_path.read_text(encoding="utf-8")
         except OSError as error:
             raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
+        result: list[str] = []
+        for raw_line in resolver.splitlines():
+            fields = raw_line.split("#", 1)[0].strip().split()
+            if len(fields) != 2 or fields[0] != "nameserver":
+                continue
+            try:
+                address = ipaddress.ip_address(fields[1].split("%", 1)[0])
+            except ValueError:
+                continue
+            result.append(str(address))
+        return result
 
     def _wait_nameservers(self, expected_active: bool) -> None:
         deadline = time.monotonic() + self.timeout

@@ -147,7 +147,7 @@ daemonization, UDP gateway, and evasion features are disabled. The non-persisten
 TUN descriptor owns interface lifetime; daemon/helper death closes it and removes
 interface-bound routes.
 
-#### P1 resolver gate
+#### Historical P1 resolver gate — superseded by D-021
 
 P0 application clients use SOCKS hostname resolution (`socks5h`), so their DNS
 queries are resolved on the selected Android network. A transparent TUN changes
@@ -157,22 +157,22 @@ that link's resolver or leave a private LAN resolver that cannot be reached over
 Teather. The TUN route could therefore be healthy while hostname-based Internet
 access still fails.
 
-P1 selects tun2proxy virtual DNS: DNS packets addressed to an existing usable
+The original P1 design selected tun2proxy virtual DNS: DNS packets addressed to an existing usable
 non-loopback IPv4 nameserver enter `teather0`; tun2proxy maps responses into
 `198.18.0.0/15` and later opens SOCKS domain requests so Android performs upstream
 resolution. P1 does not carry arbitrary UDP.
 
-The daemon inspects resolver state immediately after the owner disables Wi-Fi.
+The original daemon inspected resolver state immediately after the owner disabled Wi-Fi.
 If no usable non-loopback IPv4 nameserver remains, it closes the tunnel safely and
 reports that P1 DNS is unsupported on that host. It does not call `resolvectl`,
 write `/etc/resolv.conf`, or alter NetworkManager. A retained but unreachable
 nameserver is a physical acceptance failure and returns the design to review.
 
-**Physical result (2026-08-27):** disabling Wi-Fi on the target Linux host removed
+**Physical result and supersession (2026-08-27):** disabling Wi-Fi on the target Linux host removed
 its only usable non-loopback IPv4 nameserver. The daemon reported
-`resolver-unavailable`, closed the tunnel, and restored owned state. This design
-therefore cannot satisfy P1 on that host. Resolver integration remains
-**proposed** and must be reviewed before implementation or another physical run.
+`resolver-unavailable`, closed the tunnel, and restored owned state. That design
+could not satisfy P1 on the host and is retained here only as failure history.
+D-021's accepted replacement below is implemented and awaiting VM validation.
 The host uses NetworkManager's default DNS mode to write a regular
 `/etc/resolv.conf`; neither `systemd-resolved` nor `resolvconf` is installed.
 

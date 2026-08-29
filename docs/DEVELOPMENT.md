@@ -1,10 +1,11 @@
 # Development guide
 
 Teather has a physically validated P0 implementation and an implemented P1 Linux
-USB Desktop working tree. D-013's source-implementation approval gate is complete.
-P1 host-only checks passed on 2026-08-25; disposable-VM privileged/package/GUI
-validation and full physical P1 acceptance remain pending. Follow
-`docs/P1_HANDOFF.md` rather than restarting the P0 sequence.
+USB Desktop. D-013's source-implementation approval gate is complete. The original
+package/GUI and privileged TUN phases passed in a disposable VM; D-021's newer
+temporary NetworkManager DNS behavior still requires a fresh VM regression matrix
+before physical P1 acceptance resumes. Follow `docs/P1_HANDOFF.md` rather than
+restarting P0 or the already accepted VM phases.
 
 ## Fresh Codex conversation
 
@@ -31,7 +32,7 @@ before entering a materially different phase that needs a different level.
 | P1 Android version | `versionCode 2` / `0.1.0-p1` |
 | P1 Linux target | Debian 12 GNOME amd64 |
 | P1 desktop stack | Python 3.11, PyGObject, GTK 3, Ayatana AppIndicator |
-| Packet engine | tun2proxy 0.8.3 plus the audited `--tun-fd` patch |
+| Packet engine | tun2proxy 0.8.3 plus audited inherited-fd, Linux packet-information, and TCP virtual-DNS patches with a checked-in Cargo lock |
 | Rust toolchain | 1.90.0 |
 
 The wrapper distribution checksum and wrapper JAR checksum are both enforced.
