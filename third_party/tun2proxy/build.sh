@@ -22,16 +22,17 @@ actual=$(sha256sum "$work/$archive" | awk '{print $1}')
 tar -xzf "$work/$archive" -C "$work"
 patch -d "$work/tun2proxy-0.8.3" -p1 < "$script_dir/patches/0001-accept-tun-fd-without-tun.patch"
 patch -d "$work/tun2proxy-0.8.3" -p1 < "$script_dir/patches/0002-honor-linux-packet-information-setting.patch"
+patch -d "$work/tun2proxy-0.8.3" -p1 < "$script_dir/patches/0003-support-virtual-dns-over-tcp.patch"
+actual_lock=$(sha256sum "$script_dir/Cargo.lock" | awk '{print $1}')
+[ "$actual_lock" = "$lock_checksum" ] || {
+  echo "tun2proxy checked-in dependency lock checksum mismatch" >&2
+  exit 1
+}
+install -m 0644 "$script_dir/Cargo.lock" "$work/tun2proxy-0.8.3/Cargo.lock"
 export CARGO_HOME=${CARGO_HOME:-"$work/cargo-home"}
 export CARGO_TARGET_DIR="$work/target"
 export RUSTFLAGS="-C link-arg=-Wl,--build-id=none -C debuginfo=0 --remap-path-prefix=$work=/usr/src/teather"
 export CARGO_PROFILE_RELEASE_STRIP=symbols
-cargo +1.90.0 generate-lockfile --manifest-path "$work/tun2proxy-0.8.3/Cargo.toml"
-actual_lock=$(sha256sum "$work/tun2proxy-0.8.3/Cargo.lock" | awk '{print $1}')
-[ "$actual_lock" = "$lock_checksum" ] || {
-  echo "tun2proxy generated dependency lock checksum mismatch" >&2
-  exit 1
-}
 cargo +1.90.0 build \
   --manifest-path "$work/tun2proxy-0.8.3/Cargo.toml" \
   --locked --release --no-default-features --bin tun2proxy-bin

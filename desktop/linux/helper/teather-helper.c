@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
         "--tun-fd", descriptor_text,
         "--close-fd-on-drop", "true",
         "--dns", "virtual",
-        "--virtual-dns-pool", "198.18.0.0/15",
+        "--virtual-dns-pool", "198.18.0.0/16",
         "--mtu", "1500",
         "--tcp-timeout", "300",
         "--max-sessions", "64",

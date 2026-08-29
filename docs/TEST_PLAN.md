@@ -93,16 +93,17 @@ Capture relevant Linux state before and after each test.
 | Owner manually disables Wi-Fi | Teather becomes the remaining default without a Teather-initiated Wi-Fi mutation |
 | Owner manually restores Wi-Fi | Existing Wi-Fi route becomes preferred again without restarting Teather |
 | Receiver process is killed | Non-persistent `teather0` and its attached routes disappear automatically |
-| No usable non-loopback IPv4 resolver exists | Startup/disconnect refuses mutation and leaves existing DNS unchanged |
-| Wi-Fi removal withdraws its resolver | Teather disconnects safely; P1 DNS returns to design review |
-| Wi-Fi leaves a LAN-only resolver behind | Queries do not stall or leak to the unreachable Wi-Fi resolver |
+| NetworkManager missing or older than 1.42 | Refuse before tunnel mutation |
+| Temporary DNS reapply changes TUN routes/address | Disconnect and restore owned state |
+| UDP or TCP DNS readiness fails | Never report connected; restore resolver and tunnel |
+| Daemon dies with temporary DNS active | Interface state disappears and next start removes any stale sentinel |
 
 Do not automate a destructive route test on the developer's main session until it
 passes in a network namespace or disposable VM where the scenario permits.
 
 For P1, snapshot NetworkManager connection profiles and runtime state as well as
-routes, rules, DNS, and firewall state. Teather must not issue a NetworkManager
-write operation. Read-only inspection is allowed. Test the exact manual sequence:
+routes, rules, DNS, and firewall state. Only the temporary `teather0` applied
+connection may differ while active; no persistent profile may appear. Test the exact manual sequence:
 Teather ready, owner disables Wi-Fi, Teather traffic succeeds, owner restores
 Wi-Fi, and the original path becomes preferred. Recovery must not depend on the
 ongoing Internet connection or chat session.
@@ -148,9 +149,11 @@ the rule that disconnect stops only a Linux-started relay.
 
 The physical P1 exit captures routes, rules, resolver, NetworkManager, and
 firewall before and after every failure scenario. After Wi-Fi is manually
-disabled, validate that a usable non-loopback IPv4 nameserver remains before browsing. Exercise
-browser TCP fallback, Git, SSH, package retrieval, and DNS, then run a two-hour
-session while observing errors and resource use. Any cleanup mismatch or
+disabled, validate that the resolver contains only `198.19.0.1`, `dns_ready`
+remains true, and controlled DNS probes pass over both UDP and TCP before
+browsing. Exercise browser TCP fallback, Git, SSH, package retrieval, and DNS,
+then run a two-hour session while observing errors and resource use. Any cleanup
+mismatch, persistent NetworkManager mutation, competing nameserver, or
 destination disclosure fails the milestone.
 
 ## Compatibility workloads

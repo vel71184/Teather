@@ -35,8 +35,8 @@ Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 **Status:** Host-only checks passed on 2026-08-25 and both disposable-VM phases
 passed on 2026-08-26. Debug-APK verification passed on 2026-08-27. The first
 physical run that day connected the bounded tunnel but failed safely when Wi-Fi
-removal left no usable nameserver. P1 remains active at an explicit DNS design
-review stop. Permanent release signing is deferred by D-019 while the app is
+removal left no usable nameserver. D-021's replacement is implemented in package
+`0.1.0-3` and awaits disposable-VM validation. Permanent release signing is deferred by D-019 while the app is
 private. The exact resume sequence is in `docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
@@ -65,8 +65,8 @@ Accepted operating model (D-014):
   preferred while it is present.
 - Let the owner manually disable Wi-Fi to make Teather the remaining default and
   manually restore Wi-Fi to recover or switch back.
-- Do not perform NetworkManager writes, create persistent connection profiles,
-  overwrite `/etc/resolv.conf`, or flush firewall state.
+- Permit only D-021's temporary active-device DNS on `teather0`; do not create
+  persistent profiles, directly edit `/etc/resolv.conf`, or flush firewall state.
 
 Deliverables:
 
@@ -84,8 +84,8 @@ Deliverables:
 - Reproducibly pinned tun2proxy 0.8.3 with virtual DNS, IPv4-only behavior, 64
   sessions, 300-second TCP timeout, destination logging disabled, and the audited
   `--tun-fd` validation patch.
-- Resolver gate: use the host's retained usable non-loopback IPv4 nameserver after
-  Wi-Fi is manually disabled or disconnect safely and return to design review.
+- Resolver integration: temporarily advertise reserved sentinel `198.19.0.1`
+  through NetworkManager and verify virtual DNS over UDP and TCP before ready.
 - Debian 12 amd64 package with desktop/icon, D-Bus activation, optional systemd
   user watcher, polkit action, helper, tunnel binary, recovery guide, and licenses.
 

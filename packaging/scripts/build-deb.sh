@@ -2,7 +2,7 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.1.0-2
+version=0.1.0-3
 source_date_epoch=1787788800
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT HUP INT TERM

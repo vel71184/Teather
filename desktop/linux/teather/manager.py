@@ -5,15 +5,25 @@ import os
 import signal
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
 from .adb import AdbClient, AdbDevice
 from .android_status import AndroidStatus
 from .config import ConfigStore
-from .constants import RELAY_PORT
+from .constants import (
+    DNS_SENTINEL,
+    INTERFACE_ADDRESS,
+    INTERFACE_NAME,
+    RELAY_PORT,
+    ROUTE_METRIC,
+    VIRTUAL_DNS_ROUTE,
+)
+from .dns_probe import probe_virtual_dns
 from .errors import TeatherError
 from .journal import Ownership, OwnershipJournal
+from .networkmanager import NetworkManagerDns
 from .preflight import evaluate_routes, parse_nameservers
 
 
@@ -26,6 +36,9 @@ class Manager:
         helper: str = "/usr/libexec/teather-helper",
         resolver_path: Path = Path("/etc/resolv.conf"),
         process_factory: Callable[..., subprocess.Popen] = subprocess.Popen,
+        dns_controller: NetworkManagerDns | None = None,
+        dns_probe: Callable[[], dict[str, str]] = probe_virtual_dns,
+        interface_snapshot: Callable[[], str] | None = None,
     ):
         self.config = config or ConfigStore()
         self.journal = journal or OwnershipJournal()
@@ -33,12 +46,16 @@ class Manager:
         self.helper = helper
         self.resolver_path = resolver_path
         self.process_factory = process_factory
+        self.dns_controller = dns_controller or NetworkManagerDns(resolver_path=resolver_path)
+        self.dns_probe = dns_probe
+        self.interface_snapshot = interface_snapshot or self._system_interface_snapshot
         self._state = "disconnected"
         self._error_category = "none"
         self._message = "No active connection"
         self._active_id = ""
         self._active_serial: str | None = None
         self._tunnel: subprocess.Popen | None = None
+        self._dns_ready = False
         self._lock = threading.RLock()
         self._devices: dict[str, AdbDevice] = {}
         self.on_status_changed: Callable[[dict], None] = lambda _status: None
@@ -106,13 +123,14 @@ class Manager:
             "rejected_clients": 0,
         }
         return {
-            "api_version": 1,
+            "api_version": 2,
             "state": self._state,
             "active_device_id": self._active_id,
             "error_category": self._error_category,
             "message": self._message,
             "tcp_supported": True,
             "dns_mode": "virtual",
+            "dns_ready": self._dns_ready,
             "udp_supported": False,
             "ipv6_supported": False,
             **metrics,
@@ -163,6 +181,71 @@ class Manager:
             raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
         if not parse_nameservers(resolver):
             raise TeatherError("resolver-unavailable", "No usable non-loopback nameserver is configured")
+        self.dns_controller.preflight()
+
+    def _system_interface_snapshot(self) -> str:
+        address = self._run_json(["/usr/sbin/ip", "-j", "-4", "address", "show", "dev", INTERFACE_NAME])
+        routes = self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "dev", INTERFACE_NAME])
+        try:
+            value = {"address": json.loads(address), "routes": json.loads(routes)}
+        except ValueError as error:
+            raise TeatherError("route-inspection", "Cannot parse Teather interface state") from error
+        expected_address, expected_prefix = INTERFACE_ADDRESS.split("/", 1)
+        addresses = [
+            info
+            for entry in value["address"]
+            for info in entry.get("addr_info", [])
+            if info.get("family") == "inet"
+        ]
+        route_values = {
+            (route.get("dst", "default"), int(route.get("metric", 0)))
+            for route in value["routes"]
+        }
+        if (
+            len(addresses) != 1
+            or addresses[0].get("local") != expected_address
+            or int(addresses[0].get("prefixlen", -1)) != int(expected_prefix)
+            or (VIRTUAL_DNS_ROUTE, 0) not in route_values
+            or ("default", ROUTE_METRIC) not in route_values
+        ):
+            raise TeatherError("tunnel-start", "Teather interface state is incomplete or unexpected")
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    def _wait_interface_snapshot(self) -> str:
+        deadline = time.monotonic() + 5
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                snapshot = self.interface_snapshot()
+                if snapshot:
+                    return snapshot
+            except Exception as error:
+                last_error = error
+            time.sleep(0.1)
+        raise TeatherError("tunnel-start", "Teather interface did not become ready") from last_error
+
+    def _cleanup_tunnel_dns(self, cleanup_errors: list[str]) -> None:
+        try:
+            self.dns_controller.restore_while_active()
+        except Exception:
+            # Interface removal is the authoritative fallback for temporary state.
+            pass
+        if self._tunnel is not None and self._tunnel.poll() is None:
+            try:
+                self._tunnel.send_signal(signal.SIGTERM)
+                try:
+                    self._tunnel.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._tunnel.kill()
+                    self._tunnel.wait(timeout=2)
+            except Exception:
+                cleanup_errors.append("tunnel-process")
+        self._tunnel = None
+        self._dns_ready = False
+        try:
+            self.dns_controller.ensure_no_residue()
+        except Exception:
+            cleanup_errors.append("resolver-state")
 
     def connect(self, device_id: str = "") -> dict:
         with self._lock:
@@ -218,23 +301,24 @@ class Manager:
                 if exit_code is not None:
                     detail = self._tunnel.stderr.read(240).strip() if self._tunnel.stderr else ""
                     raise TeatherError("tunnel-start", detail or "Privileged tunnel helper exited")
+                interface_before_dns = self._wait_interface_snapshot()
+                self.dns_controller.apply()
+                interface_after_dns = self.interface_snapshot()
+                if interface_after_dns != interface_before_dns:
+                    raise TeatherError(
+                        "networkmanager-route-mutation",
+                        "NetworkManager changed Teather's externally owned address or routes",
+                    )
+                self.dns_probe()
+                self._dns_ready = True
                 self._active_id = selected_id
                 self._active_serial = serial
                 self._state = "connected"
-                self._message = "Connected; disable Wi-Fi manually, then verify the resolver gate"
+                self._message = "Connected; Teather DNS is ready and Wi-Fi may be disabled manually"
                 return self._emit_status()
             except Exception as error:
                 cleanup_errors: list[str] = []
-                if self._tunnel is not None and self._tunnel.poll() is None:
-                    try:
-                        self._tunnel.send_signal(signal.SIGTERM)
-                        try:
-                            self._tunnel.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            self._tunnel.kill()
-                            self._tunnel.wait(timeout=2)
-                    except Exception:
-                        cleanup_errors.append("tunnel-process")
+                self._cleanup_tunnel_dns(cleanup_errors)
                 if local_port is not None and serial is not None:
                     try:
                         self.adb.remove_forward(serial, local_port)
@@ -274,17 +358,7 @@ class Manager:
         with self._lock:
             ownership = self.journal.load()
             cleanup_errors: list[str] = []
-            if self._tunnel is not None and self._tunnel.poll() is None:
-                try:
-                    self._tunnel.send_signal(signal.SIGTERM)
-                    try:
-                        self._tunnel.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        self._tunnel.kill()
-                        self._tunnel.wait(timeout=2)
-                except Exception:
-                    cleanup_errors.append("tunnel-process")
-            self._tunnel = None
+            self._cleanup_tunnel_dns(cleanup_errors)
             serial = self._active_serial
             if ownership and serial is None:
                 try:
@@ -335,6 +409,7 @@ class Manager:
 
     def recover(self) -> dict:
         with self._lock:
+            self.dns_controller.recover()
             ownership = self.journal.load()
             if ownership:
                 self.discover()
@@ -404,15 +479,11 @@ class Manager:
                 self._message = "Tunnel exited; Teather cleaned its owned resources"
                 self._emit_status()
             return
-        try:
-            resolver = self.resolver_path.read_text(encoding="utf-8")
-        except OSError:
-            resolver = ""
-        if not parse_nameservers(resolver):
+        if not self.dns_controller.resolver_is_active():
             self.disconnect()
             self._state = "error"
             self._error_category = "resolver-unavailable"
-            self._message = "No usable nameserver remains; Teather disconnected without changing DNS"
+            self._message = "Teather DNS disappeared; owned state was disconnected and restored"
             self._emit_status()
 
     def diagnose(self) -> dict:
@@ -431,12 +502,22 @@ class Manager:
             issues.append("resolver-unreadable")
         if nameservers == 0:
             issues.append("no-usable-nameserver")
+        try:
+            networkmanager_version = self.dns_controller.check_supported()
+        except TeatherError as error:
+            networkmanager_version = "unavailable"
+            issues.append(error.category)
         return {
             "ready": not issues,
             "issues": ",".join(issues) if issues else "none",
             "usable_nameservers": nameservers,
+            "networkmanager_version": networkmanager_version,
+            "dns_integration": "temporary-active-device",
+            "dns_ready": self._dns_ready,
             "recovery_guide": "/usr/share/doc/teather/RECOVERY.md.gz",
-            "networkmanager_mutation": False,
-            "resolver_mutation": False,
+            "networkmanager_mutation": self._dns_ready,
+            "resolver_mutation": self._dns_ready,
+            "persistent_networkmanager_mutation": False,
+            "direct_resolver_mutation": False,
             "firewall_mutation": False,
         }

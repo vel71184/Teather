@@ -11,6 +11,7 @@ ip -details link show teather0
 ip -4 address show dev teather0
 ip -4 route show dev teather0
 adb forward --list
+grep -n '198\.19\.0\.1' /etc/resolv.conf
 ```
 
 The interface is non-persistent. Stopping the daemon/helper normally closes its
@@ -30,6 +31,19 @@ removal is:
 ```bash
 sudo ip link delete teather0
 ```
+
+Package `0.1.0-3` uses only temporary NetworkManager DNS on `teather0`. If the
+interface is gone but `/etc/resolv.conf` still contains `198.19.0.1`, ask
+NetworkManager to regenerate its owned resolver file, then verify the sentinel is
+gone:
+
+```bash
+nmcli general reload dns-rc
+grep -n '198\.19\.0\.1' /etc/resolv.conf
+```
+
+Do not run that reload while an unexpected `teather0` exists; inspect ownership
+first. Never edit `/etc/resolv.conf` manually.
 
 Use `teather recover` with the phone reconnected to remove only the ADB forward
 recorded in Teather's mode-0600 ownership journal. For manual recovery, copy the

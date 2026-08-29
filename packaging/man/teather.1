@@ -44,9 +44,10 @@ Run read-only diagnostics.
 .B recover [--json]
 Clean only journaled resources, then report diagnostics.
 .SH LIMITATIONS
-P1 supports TCP and virtual DNS over IPv4. General UDP and IPv6 are unsupported.
-Teather does not change Wi-Fi, NetworkManager profiles, system DNS, firewall rules,
-or physical-interface state.
+P1 supports TCP and virtual DNS over UDP and TCP for IPv4. General UDP and IPv6
+are unsupported. Teather does not change Wi-Fi, persistent NetworkManager
+profiles, firewall rules, or physical-interface state. While connected it applies
+temporary DNS only to teather0 through NetworkManager.
 .SH FILES
 .TP
 .I ~/.config/teather/config.json

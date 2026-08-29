@@ -3,9 +3,9 @@
 - **Snapshot date:** 2026-08-29
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
-- **Runnable build:** Android `0.1.0-p1` and Debian package `0.1.0-2` pass source,
-  isolated-VM, install, control, bounded-interface, privilege-drop, and cleanup
-  gates; physical P1 is stopped at a failed DNS-retention gate
+- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-3` implements
+  D-021 temporary DNS and passes local source/package gates. Its new DNS behavior
+  still requires disposable-VM validation before physical P1 resumes.
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -47,8 +47,10 @@ P1 testing and defers a permanent release identity until distribution is being
 considered. The debug APK is verified. On 2026-08-27 the physical run connected
 the corrected bounded tunnel but disabling Wi-Fi removed the only usable
 non-loopback IPv4 nameserver. Teather failed safely and restored owned state. The
-current objective is an owner-reviewed DNS design; do not repeat the physical run
-or change resolver state before approval.
+owner approved D-021's transient per-device NetworkManager design. Its source,
+third pinned tunnel patch, reserved sentinel/mapping split, API-v2 diagnostics,
+and Debian package `0.1.0-3` are implemented. The current objective is isolated
+VM validation; do not repeat the physical run or mutate the active host first.
 
 ## Implemented P0 surface
 
@@ -70,18 +72,16 @@ or change resolver state before approval.
 
 ## Next concrete actions
 
-1. Keep P1 active. E-002 failed at DNS retention; E-003 gained two physical safe-
-   cleanup cases but remains incomplete. Do not advance to P2.
-2. The phone is not needed and may remain disconnected. Do not repeat Phase 3,
-   disable Wi-Fi again, or edit resolver/NetworkManager state.
-3. Review DNS design choices with the owner, including security, persistence,
-   cleanup, and failure behavior. Begin with the unapproved proposal in
-   `docs/ARCHITECTURE.md`: temporary per-device NetworkManager DNS plus virtual
-   DNS over UDP and TCP, with no persistent profile or direct `resolv.conf` edit.
-   Record a new or amended decision and obtain explicit approval before
-   implementation or another physical run.
-4. Preserve Debian package `0.1.0-2` and its D-020 PolicyKit correction. The
-   Phase 2 VM remains powered off unless a regression requires isolated testing.
+1. Keep P1 active; E-002/E-003 remain incomplete. Do not advance to P2.
+2. Keep the phone disconnected and do not query ADB. Boot a fresh disposable VM
+   overlay and validate package `0.1.0-3`, NetworkManager preserved external
+   IP/routes, UDP/TCP sentinel DNS, failure cleanup, and no persistence.
+3. Preserve the completed reproducibility evidence: two clean tunnel builds were
+   identical at `9ad64db8987a7035ab86edae99417506e5cc931bb876cd7736e9ba148f470146`,
+   and two same-source package builds were identical at
+   `cf93c3f54af89300a4bb691bff04e6c10a9e0625e6666664c4e2c55e2d8774d8`.
+4. Only after the VM passes, stop and request explicit phone connection before
+   any ADB query or renewed Phase 3 run.
 
 Preserve the P1 implementation and isolated-validation fixes. Generated
 `__pycache__` files, private VM evidence, signing keys, and build credentials are
@@ -100,7 +100,7 @@ not implementation artifacts and must not be staged.
   work is intentionally deferred to the Wi-Fi milestone.
 - P1's first Linux mode is a non-persistent `teather0` backup interface. Existing
   Wi-Fi/Ethernet remains untouched and preferred; the owner manually disables or
-  restores it. Teather performs no NetworkManager writes (D-014).
+  restores it. D-021 permits only temporary per-device DNS on `teather0`.
 - The exact P1 helper, route, virtual-DNS, trust, D-Bus, packaging, and recovery
   architecture is approved (D-015 through D-017).
 - Work must stop for explicit planning and approval after P1, before P2 (D-018).
@@ -108,6 +108,8 @@ not implementation artifacts and must not be staged.
   until distribution is considered (D-019).
 - The user manager permits its intended fixed PolicyKit transition while the
   helper/tunnel privilege drop remains strict (D-020).
+- Temporary NetworkManager DNS with a reserved sentinel and UDP/TCP virtual DNS
+  is accepted for P1 (D-021).
 
 See `docs/DECISIONS.md` for rationale and status.
 
@@ -115,11 +117,9 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- The target Debian host does not retain a usable non-loopback IPv4 nameserver
-  after Wi-Fi is disabled. The approved no-resolver-mutation design therefore
-  cannot pass P1 on this host. A replacement DNS design is unresolved. UDP
-  strategy and IPv6 policy remain P2 questions and are not authorized as a P1
-  workaround.
+- D-021 should resolve the observed DNS loss, but preservation of externally
+  configured TUN state, resolver exclusion, and cleanup remain unproven in a real
+  NetworkManager guest and on the physical host. General UDP and IPv6 remain P2.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
@@ -139,8 +139,9 @@ The owner-approved implementation plan on 2026-08-25 resolves D-013 and authoriz
 P1 source work. It does not authorize unbounded experimentation on the active
 host: helper/network behavior must pass isolated tests first, and the physical
 gate must capture before/after routes, rules, resolver, NetworkManager, and
-firewall state. No P1 code may alter NetworkManager, resolver configuration,
-firewall, policy rules, or physical interfaces.
+firewall state. D-021 authorizes only temporary `teather0` DNS through
+NetworkManager; persistent profiles, direct resolver edits, firewall, policy
+rules, and physical-interface mutations remain forbidden.
 
 ## Evidence recorded so far
 
@@ -203,6 +204,24 @@ next handoff/recovery documents, and affected technical guidance agree.
 - Next exact action: in a new Codex conversation, run the fresh-session gate; once
   the owner confirms Ultra and prompts again, continue the owner-reviewed P1 DNS
   design discussion without reconnecting the phone or changing resolver state.
+
+### 2026-08-27 — D-021 DNS implementation; paused before VM validation
+
+- Completed: implemented temporary NetworkManager active-device DNS with the
+  preserve-external-IP flag, reserved sentinel/pool separation, UDP/TCP readiness,
+  cleanup/recovery, API-v2 diagnostics, pinned TCP-DNS tunnel patch, checked-in
+  verified Cargo lock, and Debian package `0.1.0-3`.
+- Verified with: 31 Python tests, strict helper checks, host-session D-Bus smoke,
+  two Rust TCP-DNS tests, read-only real NetworkManager 1.42.4 API access, the
+  92-task Android build/lint/unit matrix, two byte-identical clean tunnel builds,
+  and two byte-identical same-source package builds.
+- Milestone transition: not applicable; P1 remains active.
+- Risks or failures: the sandbox-only D-Bus smoke cannot reach the host user bus;
+  the required host-session rerun passed. Fresh lock generation changed with the
+  registry index, so the previously verified checksum-matching lock is now a
+  checked-in build input. Real NetworkManager mutation/cleanup is not yet tested.
+- Next exact action: keep the phone disconnected; run the fresh disposable-VM
+  DNS matrix, then request the phone explicitly.
 
 ### 2026-08-27 — physical P1 stopped at DNS gate; cleanup passed
 

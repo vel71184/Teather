@@ -1,0 +1,121 @@
+From: Teather Project <noreply@example.invalid>
+Subject: [PATCH] support virtual DNS over TCP
+
+tun2proxy 0.8.3 handles virtual DNS only for UDP port 53. System resolvers
+must be able to retry over TCP when responses are truncated or policy requires
+TCP. Intercept TCP port 53 in virtual mode and implement RFC 1035 two-byte
+length framing with a bounded 4096-byte query.
+---
+ src/lib.rs | 85 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 85 insertions(+)
+
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -66,6 +66,7 @@
+ pub mod win_svc;
+
+ const DNS_PORT: u16 = 53;
++const MAX_VIRTUAL_DNS_MESSAGE: usize = 4096;
+
+ #[allow(unused)]
+ #[derive(Hash, Copy, Clone, Eq, PartialEq, Debug)]
+@@ -300,6 +301,17 @@
+                 }
+                 log::trace!("Session count {}", task_count.fetch_add(1, Relaxed).saturating_add(1));
+                 let info = SessionInfo::new(tcp.local_addr(), tcp.peer_addr(), IpProtocol::Tcp);
++                if info.dst.port() == DNS_PORT && args.dns == ArgDns::Virtual {
++                    tokio::spawn(async move {
++                        if let Some(virtual_dns) = virtual_dns {
++                            if let Err(err) = handle_virtual_dns_tcp_stream(tcp, virtual_dns).await {
++                                log::error!("{info} error \"{err}\"");
++                            }
++                        }
++                        log::trace!("Session count {}", task_count.fetch_sub(1, Relaxed).saturating_sub(1));
++                    });
++                    continue;
++                }
+                 let domain_name = if let Some(virtual_dns) = &virtual_dns {
+                     let mut virtual_dns = virtual_dns.lock().await;
+                     virtual_dns.touch_ip(&tcp.peer_addr().ip());
+@@ -436,6 +448,79 @@
+     Ok(())
+ }
+
++async fn handle_virtual_dns_tcp_stream<S>(mut tcp: S, dns: Arc<Mutex<VirtualDns>>) -> crate::Result<()>
++where
++    S: AsyncRead + AsyncWrite + Unpin,
++{
++    loop {
++        let length = match tcp.read_u16().await {
++            Ok(length) => usize::from(length),
++            Err(error) if error.kind() == ErrorKind::UnexpectedEof => break,
++            Err(error) => return Err(error.into()),
++        };
++        if length == 0 || length > MAX_VIRTUAL_DNS_MESSAGE {
++            return Err("Invalid virtual DNS TCP message length".into());
++        }
++        let mut query = vec![0_u8; length];
++        tcp.read_exact(&mut query).await?;
++        let (message, qname, ip) = dns.lock().await.generate_query(&query)?;
++        let response_length = u16::try_from(message.len()).map_err(|_| "Virtual DNS TCP response is too large")?;
++        tcp.write_u16(response_length).await?;
++        tcp.write_all(&message).await?;
++        tcp.flush().await?;
++        log::debug!("Virtual DNS TCP query: {qname} -> {ip}");
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod teather_virtual_dns_tcp_tests {
++    use super::*;
++    use std::str::FromStr;
++    use tokio::io::duplex;
++    use tproxy_config::IpCidr;
++
++    fn query() -> Vec<u8> {
++        vec![
++            0x54, 0x45, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++            0x07, b't', b'e', b'a', b't', b'h', b'e', b'r',
++            0x07, b'i', b'n', b'v', b'a', b'l', b'i', b'd',
++            0x00, 0x00, 0x01, 0x00, 0x01,
++        ]
++    }
++
++    #[tokio::test]
++    async fn virtual_dns_tcp_uses_length_prefixed_messages() {
++        let (mut client, server) = duplex(8192);
++        let dns = Arc::new(Mutex::new(VirtualDns::new(
++            IpCidr::from_str("198.18.0.0/16").unwrap(),
++        )));
++        let task = tokio::spawn(handle_virtual_dns_tcp_stream(server, dns));
++        let query = query();
++        client.write_u16(query.len() as u16).await.unwrap();
++        client.write_all(&query).await.unwrap();
++        let response_length = client.read_u16().await.unwrap() as usize;
++        assert!(response_length >= query.len());
++        let mut response = vec![0_u8; response_length];
++        client.read_exact(&mut response).await.unwrap();
++        assert_eq!(&response[..2], &[0x54, 0x45]);
++        assert_ne!(response[2] & 0x80, 0);
++        drop(client);
++        task.await.unwrap().unwrap();
++    }
++
++    #[tokio::test]
++    async fn virtual_dns_tcp_rejects_zero_length_messages() {
++        let (mut client, server) = duplex(64);
++        let dns = Arc::new(Mutex::new(VirtualDns::new(
++            IpCidr::from_str("198.18.0.0/16").unwrap(),
++        )));
++        let task = tokio::spawn(handle_virtual_dns_tcp_stream(server, dns));
++        client.write_u16(0).await.unwrap();
++        assert!(task.await.unwrap().is_err());
++    }
++}
++
+ async fn copy_and_record_traffic<R, W>(reader: &mut R, writer: &mut W, is_tx: bool) -> tokio::io::Result<u64>
+ where
+     R: tokio::io::AsyncRead + Unpin + ?Sized,
+--
+2.39.5

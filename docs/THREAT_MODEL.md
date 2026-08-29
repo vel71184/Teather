@@ -96,15 +96,15 @@ offline or leaking traffic through an unintended path.
 - Emergency diagnostic and restoration command.
 - Never delete unrelated routes or firewall rules.
 - Keep existing NetworkManager-managed Wi-Fi/Ethernet connections, profiles,
-  routes, and DNS untouched. Read-only inspection is allowed; the first P1 mode
-  performs no NetworkManager writes.
+  routes, and DNS untouched. D-021 permits only a temporary active-device DNS
+  update on `teather0`, using the preserve-external-IP reapply flag.
 - Use a non-persistent Teather TUN whose interface-bound routes disappear when its
   owner exits. Give its default lower preference than every existing physical
   default so restoring Wi-Fi independently restores Internet access.
-- Do not overwrite `/etc/resolv.conf` or install Teather-owned resolver state in
-  P1. Require a retained usable non-loopback IPv4 nameserver; if none remains
-  after the owner disables Wi-Fi, close the tunnel without resolver mutation and
-  return the DNS design to review.
+- Do not write `/etc/resolv.conf` directly or create persistent resolver state.
+  Reserve a sentinel outside the virtual mapping pool, exclude competing DNS with
+  negative priority, verify UDP/TCP readiness, and treat any residue or external
+  route/address change as cleanup failure.
 
 ### Privilege escalation on Linux
 

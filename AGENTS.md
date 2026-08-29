@@ -105,9 +105,13 @@ failed safely at the required DNS gate: disabling Wi-Fi removed the only usable
 non-loopback IPv4 nameserver. Cleanup restored routes, rules, resolver,
 NetworkManager inventory, and firewall structure to baseline.
 
-The phone is no longer needed and may remain disconnected. Do not repeat Phase 3,
-change resolver state, or improvise around the failure. The next job is an
-owner-reviewed P1 DNS design discussion and explicit approval. P1 remains active;
+The owner approved D-021's bounded DNS design. Package `0.1.0-3` source work is
+implemented: temporary per-device NetworkManager DNS, reserved sentinel
+`198.19.0.1`, a non-overlapping `198.18.0.0/16` mapping pool, and virtual DNS over
+UDP and TCP. Local tests and one clean tunnel/package build pass. The next job is
+disposable-VM DNS integration and cleanup validation; do not mutate the active
+host or query ADB. Request explicit phone connection only after the VM gate passes.
+P1 remains active;
 do not start P2 general UDP, IPv6, broader DNS, WireGuard, wireless transports,
 multi-client support, cross-platform receivers, or P5 polish early.
 

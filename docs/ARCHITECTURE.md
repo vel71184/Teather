@@ -97,13 +97,13 @@ adds:
 
 - a non-persistent `teather0` TUN device that behaves as a virtual backup network
   interface;
-- pinned `tun2proxy` 0.8.3 with two audited patches for `--tun-fd` validation and
-  inherited Linux `IFF_NO_PI` packet framing;
+- pinned `tun2proxy` 0.8.3 with audited inherited-fd, packet-framing, and TCP
+  virtual-DNS patches;
 - a Teather-owned default route with lower preference than every existing
   physical default and no mutation of those existing routes;
 - route installation that excludes the loopback ADB/relay path from recursion;
-- tun2proxy virtual DNS using `198.18.0.0/15`, while retaining and validating the
-  host's existing nameserver instead of configuring DNS;
+- a routed `198.18.0.0/15`, virtual mappings limited to `198.18.0.0/16`, and the
+  reserved temporary NetworkManager DNS sentinel `198.19.0.1`;
 - signal-safe and crash-recoverable cleanup;
 - preflight and postflight state snapshots;
 - a diagnostic command that never mutates state.
@@ -115,10 +115,10 @@ the kernel can then select the remaining `teather0` default. Re-enabling Wi-Fi
 must make the pre-existing physical default preferred again without a Teather
 restart.
 
-The P1 receiver may read NetworkManager state for diagnostics, but it must not
-issue NetworkManager write operations or create a persistent NetworkManager
-profile. It must never delete or replace an existing default route, rewrite an
-existing link's DNS, flush firewall state, or persist the TUN. Closing or crashing
+Under D-021 the P1 receiver performs one bounded NetworkManager active-device
+DNS update on `teather0`; it creates no persistent profile and never changes an
+existing link. It must never delete or replace an existing default route, edit
+`/etc/resolv.conf` directly, flush firewall state, or persist the TUN. Closing or crashing
 the owner process must remove `teather0` and its attached routes automatically;
 explicit cleanup handles any additional Teather-owned state.
 
@@ -176,17 +176,15 @@ therefore cannot satisfy P1 on that host. Resolver integration remains
 The host uses NetworkManager's default DNS mode to write a regular
 `/etc/resolv.conf`; neither `systemd-resolved` nor `resolvconf` is installed.
 
-**Proposed next design (not approved):** use NetworkManager's temporary active-
-device modification API to advertise a dedicated Teather DNS sentinel only on
-the externally observed `teather0` connection, with a negative DNS priority to
-exclude other connections. Extend the pinned tunnel engine's virtual DNS handler
-to answer both UDP and TCP port 53 for that sentinel. Do not create a persistent
-NetworkManager profile, enable a global DNS plugin, or edit `/etc/resolv.conf`
-directly. Connection must fail closed unless the temporary resolver state is
-verified before Wi-Fi removal; interface teardown must remove the runtime profile
-and restore the prior resolver state. This proposal requires a revised decision,
-threat-model/test updates, isolated NetworkManager testing, and explicit owner
-approval before implementation.
+**Accepted replacement (D-021):** NetworkManager temporarily advertises the
+dedicated `198.19.0.1` sentinel only on the externally observed `teather0`
+connection with DNS priority `-32768`. `Reapply` uses the preserve-external-IP
+flag, and the daemon verifies the TUN address/routes are unchanged. Virtual DNS
+answers UDP and length-prefixed TCP port 53; mappings use `198.18.0.0/16`, so the
+sentinel cannot collide. Connection fails closed unless resolver state and both
+DNS probes pass. Normal teardown restores the original applied connection and
+next-start recovery performs a bounded NetworkManager DNS regeneration only for
+unambiguous stale sentinel state.
 
 P1 implements the route boundary through the fixed helper and per-user daemon
 described above. The graphical application does not manipulate networking

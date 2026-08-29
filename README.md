@@ -12,7 +12,8 @@ as little receiver-side software as each platform permits.
 > **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
 > host-only checks, both disposable-VM phases, and debug-APK verification are
 > complete. The first physical P1 run failed safely at the host DNS-retention
-> gate; DNS design review is required before another run.
+> gate. The bounded replacement is implemented in package `0.1.0-3` and awaits
+> disposable-VM validation before another phone run.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -132,10 +133,11 @@ route without Teather editing the connection profile. The exact route,
 virtual-DNS, privilege, and recovery design is accepted in D-015; live testing
 remains gated on isolated verification.
 
-**P1 resolver gate:** tun2proxy virtual DNS uses the host's existing nameserver;
-Teather does not configure one. If disabling Wi-Fi leaves no usable non-loopback
-IPv4 nameserver, P1 disconnects safely and returns to design review. General UDP and
-IPv6 remain unsupported.
+**P1 resolver design:** NetworkManager temporarily advertises `198.19.0.1` only
+on `teather0` with leak-excluding priority. The endpoint is routed through
+Teather, while virtual mappings use the separate `198.18.0.0/16` pool. The pinned
+tunnel answers DNS over UDP and TCP. No persistent profile or direct
+`/etc/resolv.conf` edit is used. General UDP and IPv6 remain unsupported.
 
 ADB is acceptable here because Teather is personal-first and USB debugging is a
 reasonable development prerequisite. It lets the project validate the most
@@ -263,9 +265,10 @@ verified debug signature. D-019 defers a permanent release identity while Teathe
 is privately tested. During physical validation, package `0.1.0-2` corrected the
 user-service PolicyKit launch boundary and connected the bounded tunnel, but
 disabling Wi-Fi removed the host's only usable nameserver. Teather disconnected
-and restored its state as designed. The next step is the explicit DNS design
-review in [the P1 handoff](docs/P1_HANDOFF.md); do not reconnect the phone or
-repeat physical acceptance before that review is approved.
+and restored its state as designed. D-021's replacement is now implemented in
+package `0.1.0-3`; the next step is the disposable-VM DNS matrix in [the P1
+handoff](docs/P1_HANDOFF.md). Do not reconnect the phone or repeat physical
+acceptance until that matrix passes.
 
 The deterministic source-level gate remains:
 

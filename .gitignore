@@ -37,6 +37,7 @@ hs_err_pid*
 # Rust
 target/
 Cargo.lock
+!third_party/tun2proxy/Cargo.lock
 
 # Keep Cargo.lock once a runnable application crate exists. Remove the ignore
 # above at that time; it is normally committed for applications.

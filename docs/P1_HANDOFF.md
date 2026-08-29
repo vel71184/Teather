@@ -24,6 +24,28 @@ whether the bounded change now fits High or still requires Ultra. Reassess again
 before physical validation; changing the reasoning level never supplies the
 separate live-test approval.
 
+## Current resume point — D-021 implementation checkpoint
+
+The owner approved transient per-device NetworkManager DNS and requested
+implementation. Package `0.1.0-3` now contains the implementation, but it is not
+yet VM- or phone-accepted. Keep the phone disconnected and do not query ADB.
+
+- NetworkManager 1.42+ `Reapply` uses preserve-external-IP and temporary
+  `198.19.0.1` DNS at priority `-32768`; no persistent profile or direct resolver
+  write is used.
+- `198.18.0.0/15` remains the route, mappings use `198.18.0.0/16`, and the pinned
+  third patch adds bounded RFC 1035 TCP DNS alongside UDP.
+- Linux status API is 2 with DNS readiness/mutation diagnostics. Local tests pass
+  31 cases plus helper and host-session D-Bus smoke. The full Android/Linux
+  aggregate check passes.
+- Two clean tunnel builds and two same-source package builds are byte-identical;
+  current hashes are recorded in `docs/PROJECT_STATUS.md`.
+
+Next: create a fresh disposable-VM overlay, install `0.1.0-3`, and prove external
+TUN state preservation, resolver exclusivity, UDP/TCP readiness, normal/failure/
+next-start cleanup, and absence of persistent NetworkManager files. Only then
+request the phone for renewed Phase 3.
+
 ## Evidence already complete
 
 - `env ANDROID_HOME=/tmp/android-sdk GRADLE_USER_HOME=/tmp/teather-gradle2 make
@@ -134,9 +156,9 @@ physical cable/service failure recovery.
   byte counters; no rule changed. Raw private evidence remains under `/tmp`, not
   in the repository.
 
-**Stop:** do not repeat Phase 3 or alter resolver state. The current P1 DNS design
-is unsupported on this host. The next action is an owner-reviewed DNS design and
-explicit approval. The phone is not needed for that discussion.
+**Historical stop resolved by D-021:** do not repeat Phase 3 until the replacement
+passes its fresh disposable-VM matrix. The active next action is the phone-free VM
+gate above.
 
 ## Safety boundary
 
@@ -159,24 +181,25 @@ Teather must create only:
 - one dynamically allocated loopback ADB forward;
 - mode-0600 per-user configuration and runtime journal files.
 
-It must not change NetworkManager profiles, resolver configuration, firewall
-rules, policy rules, physical interfaces, existing routes, or persistent network
-state. The owner alone disables or restores Wi-Fi.
+It may change only temporary DNS on NetworkManager's active `teather0`
+connection. It must not create persistent profiles, directly edit resolver
+files, or change firewall rules, policy rules, physical interfaces, existing
+routes, or persistent state. The owner alone disables or restores Wi-Fi.
 
 ## Phase 1 — package, D-Bus, GUI, and watcher in the VM
 
-1. Copy `build/p1/teather_0.1.0-2_amd64.deb`, this handoff,
+1. Copy `build/p1/teather_0.1.0-3_amd64.deb`, this handoff,
    `docs/P1_RECOVERY.md`, and `docs/TEST_PLAN.md` into the VM. Verify the artifact
    before installing it:
 
    ```bash
-   sha256sum teather_0.1.0-2_amd64.deb
-   dpkg-deb --info teather_0.1.0-2_amd64.deb
-   dpkg-deb --contents teather_0.1.0-2_amd64.deb
+   sha256sum teather_0.1.0-3_amd64.deb
+   dpkg-deb --info teather_0.1.0-3_amd64.deb
+   dpkg-deb --contents teather_0.1.0-3_amd64.deb
    ```
 
    The SHA-256 must be
-   `77b70295a838daf5a85e0ba4a7e33a1f7109b0f049bee4775cb323a00f880804`.
+   `cf93c3f54af89300a4bb691bff04e6c10a9e0625e6666664c4e2c55e2d8774d8`.
 
 2. Capture a private baseline outside the repository. Do not commit raw host or
    device identifiers:
@@ -194,7 +217,7 @@ state. The owner alone disables or restores Wi-Fi.
 
    ```bash
    sudo apt-get update
-   sudo apt-get install ./teather_0.1.0-2_amd64.deb
+   sudo apt-get install ./teather_0.1.0-3_amd64.deb
    ```
 
    If `sudo` fails, stop and preserve its exact output. Do not improvise a broad
@@ -252,6 +275,12 @@ Before every case, capture routes, rules, resolver, NetworkManager, firewall, an
 - `teather0` and both routes exist only while the inherited TUN descriptor lives;
 - the existing physical default remains preferred over metric 32000;
 - virtual DNS produces SOCKS domain requests;
+- temporary per-device NetworkManager DNS installs only `198.19.0.1`, answers
+  both UDP and TCP probes, and leaves the externally owned `teather0` address
+  and routes byte-for-byte equivalent;
+- normal disconnect restores the prior resolver state before `teather0` is
+  removed, while crash recovery regenerates DNS only after the interface is
+  gone and never creates a persistent NetworkManager profile;
 - interface/address/route collisions, nonstandard IPv4 rules, VPN/split-default
   ambiguity, invalid helper input, and an unsafe tunnel path fail before mutation;
 - the helper drops capabilities, supplementary groups, GID, and UID before the
@@ -267,8 +296,9 @@ snapshot after the matrix passes.
 
 ## Phase 3 — physical P1 acceptance
 
-**Blocked after the 2026-08-27 step-5 failure. Do not rerun this sequence until
-the DNS design review is recorded and explicitly approved.**
+**Blocked after the 2026-08-27 step-5 failure. D-021 is approved and implemented,
+but do not rerun this sequence until package `0.1.0-3` passes the new VM DNS and
+cleanup matrix.**
 
 Start this phase only after Phases 1 and 2 pass and the explicit operator phone
 gate above is satisfied.
@@ -286,10 +316,11 @@ gate above is satisfied.
 4. Approve the detected hashed device locally, connect through the GUI or CLI,
    and confirm the existing Wi-Fi/Ethernet default remains preferred. Confirm the
    Android relay and dynamic ADB forward are ready before changing Wi-Fi.
-5. Manually disable Wi-Fi. Immediately verify a usable non-loopback IPv4
-   nameserver remains. If none remains—or it is retained but unreachable—run
-   `teather disconnect`, manually restore Wi-Fi, record a DNS failure, and return
-   the design to review. Do not edit resolver configuration.
+5. Manually disable Wi-Fi. Immediately verify the resolver contains only the
+   Teather sentinel `198.19.0.1`, `dns_ready` remains true, and controlled UDP
+   and TCP DNS probes return addresses from `198.18.0.0/16`. If any check fails,
+   run `teather disconnect`, manually restore Wi-Fi, record the failure, and
+   return the design to review. Do not edit resolver configuration.
 6. With the resolver gate satisfied, exercise a browser, hostname and IP-literal
    HTTPS, Git over HTTPS, SSH to a controlled endpoint, package metadata lookup,
    and DNS TCP fallback. Treat unsupported general UDP/QUIC as a documented P1
@@ -308,7 +339,8 @@ gate above is satisfied.
 Record E-002 for system-wide TCP/DNS behavior and E-003 for cleanup/failure
 restoration in `docs/EXPERIMENTS.md`. Update `docs/PROJECT_STATUS.md` with exact
 commands, outcomes, failures, and the next action. Any cleanup mismatch,
-destination disclosure, resolver mutation, or NetworkManager mutation fails P1.
+destination disclosure, direct resolver edit, persistent NetworkManager change,
+unapproved link mutation, competing nameserver, or DNS residue fails P1.
 
 After P1 acceptance, stop. D-018 requires explicit P2 design discussion and owner
 approval before general UDP, IPv6, broader DNS, suspend/resume, or protocol work.

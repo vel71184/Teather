@@ -491,3 +491,33 @@ GID, groups, capabilities, and applies `NoNewPrivs: 1` before executing
 - Physical validation proved the packet engine runs as the desktop UID/GID with
   no supplementary groups or capabilities and `NoNewPrivs: 1`.
 - The first failed launch left no TUN, route, ADB forward, or ownership journal.
+
+## D-021 — Use temporary per-device NetworkManager DNS for P1
+
+**Status:** Accepted · **Date:** 2026-08-27
+
+### Decision
+
+The owner approved a narrow exception to D-014/D-015's original no-write DNS
+boundary. While `teather0` exists, the unprivileged manager uses NetworkManager's
+active-device `Reapply` API with `PRESERVE_EXTERNAL_IP` to advertise only
+`198.19.0.1`, priority `-32768`, and ignored automatic DNS. It never edits
+`/etc/resolv.conf` directly, creates a persistent profile, changes another link,
+or enables a global DNS plugin.
+
+Keep `198.18.0.0/15` routed through Teather, allocate virtual mappings only from
+`198.18.0.0/16`, and reserve `198.19.0.1` as the collision-free DNS sentinel.
+Virtual DNS must answer both UDP and RFC 1035 TCP. Connection is not ready until
+the resolver contains only the sentinel, the external address/routes are
+unchanged, and both probes pass.
+
+### Consequences
+
+- Debian depends on NetworkManager 1.42 or newer.
+- Normal cleanup restores the original applied connection before interface
+  removal; next-start recovery asks NetworkManager to regenerate DNS only when a
+  stale sentinel exists and no ambiguous `teather0` remains.
+- Any persistence, competing nameserver, route/address change, or cleanup residue
+  fails closed and fails P1.
+- General UDP, IPv6, private application DoH, and automatic Wi-Fi control remain
+  outside P1.

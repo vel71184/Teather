@@ -12,8 +12,9 @@ then drops privileges before executing the tunnel process with an inherited file
 descriptor. It is not intended to be run directly.
 .PP
 The helper refuses ambiguous interfaces, routes, VPN policy, and default-route
-preference. It does not alter system DNS, NetworkManager, firewall rules, policy
-rules, or physical interfaces.
+preference. The unprivileged manager temporarily advertises Teather DNS through
+NetworkManager after the helper is ready; the helper itself does not alter DNS,
+NetworkManager, firewall rules, policy rules, or physical interfaces.
 .SH FILES
 .TP
 .I /usr/share/doc/teather/RECOVERY.md.gz
