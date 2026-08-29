@@ -6,6 +6,24 @@ guide, and pinned tunnel build are implemented in the working tree. Host-only
 checks and partial Android control tests passed on 2026-08-25. Do not restart P0
 or rebuild the P1 scaffold.
 
+## Fresh-session reasoning gate
+
+On the first prompt of a new Codex conversation, follow
+[the repository gate](../AGENTS.md#fresh-codex-session-gate), recommend
+**GPT-5.6 Sol with Ultra**, and stop before analysis, implementation, or live
+operations. The current DNS decision is separable into resolver behavior,
+NetworkManager integration, virtual-DNS transport, security and cleanup,
+validation, and documentation reviews. Continue only after the owner selects or
+confirms Ultra and prompts again. This does not authorize a phone connection,
+resolver change, physical Phase 3 retry, or source implementation.
+
+Within the same thread, apply the
+[same-thread transition gate](../AGENTS.md#same-thread-reasoning-transition-gate).
+After the owner accepts a DNS design, stop before implementation and advise
+whether the bounded change now fits High or still requires Ultra. Reassess again
+before physical validation; changing the reasoning level never supplies the
+separate live-test approval.
+
 ## Evidence already complete
 
 - `env ANDROID_HOME=/tmp/android-sdk GRADLE_USER_HOME=/tmp/teather-gradle2 make
