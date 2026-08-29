@@ -20,6 +20,73 @@ If those files disagree, stop and reconcile them. `docs/PROJECT_STATUS.md` is th
 resume point, while accepted entries in `docs/DECISIONS.md` are authoritative for
 technical choices.
 
+## Fresh Codex session gate
+
+On the first prompt of every new Codex conversation about Teather, including a
+prompt that says only "continue" or "resume," perform the read order above and
+then stop after advising the owner which reasoning level should be used. Treat a
+context reset or imported conversation as a new conversation when it is not clear
+that this gate already ran.
+
+On that first prompt:
+
+1. Use read-only inspection only. Do not edit files, run tests or builds, operate
+   a phone or VM, change networking, or begin implementation.
+2. Classify the requested work and recommend **GPT-5.6 Sol with Ultra** or
+   **GPT-5.6 Sol with High**.
+3. State the recommendation, the task boundaries that caused it, and whether the
+   scope must be narrowed or divided.
+4. Stop and wait for the owner to select or confirm that level and prompt again.
+   Do not claim to know the active selector setting unless the environment
+   actually exposes it.
+
+Recommend **Ultra** for whole-repository processing, the first broad pass in a
+new milestone, P1 DNS design review, architecture or threat-model work,
+security/privilege/recovery audits, milestone transitions, and changes spanning
+several independently reviewable subsystems. Ultra is appropriate when useful
+work can be delegated across Android, Linux networking, packaging, security,
+testing, or documentation.
+
+Recommend **High** for a focused task with an accepted design and a narrow
+completion test: one component implementation, one bug, one test group, one
+packaging fix, or a bounded documentation update. If a High task expands into
+several independent workstreams or crosses an approval boundary, stop again and
+recommend Ultra or ask the owner to narrow the task.
+
+## Same-thread reasoning transition gate
+
+Within an existing conversation, reassess the appropriate level when work reaches
+a materially different phase, not at every file, command, or ordinary subtask.
+Examples include design moving to implementation, a focused fix expanding into a
+repository-wide audit, a broad review narrowing to one approved change,
+implementation reaching live device or network validation, or a milestone
+transition beginning.
+
+If the best level changes in either direction, **High to Ultra or Ultra to High**:
+
+1. Finish only the current safe unit of work; do not enter the new phase.
+2. Tell the owner what phase finished, what phase is next, which level the next
+   phase needs, and why.
+3. Stop and wait for the owner to select or confirm the new level and prompt
+   again.
+
+If the next phase still fits the active recommendation, continue normally. Do not
+interrupt merely because a different file or component is next. A level change
+does not grant implementation, device, privilege, or live-test approval.
+
+For the current P1 work, the multi-part DNS design review begins in Ultra. After
+the owner accepts one bounded design, stop and reassess before implementation:
+recommend High if the implementation is focused with bounded verification, or
+keep/recommend Ultra if it still contains several independent networking,
+security, recovery, and documentation workstreams.
+
+These labels follow the current Codex distinction: High increases reasoning depth
+for complex work; Ultra adds automatic task delegation for separable complex
+work. Re-check the official Codex model guidance if those product definitions
+change. This gate chooses an execution mode only. It does not grant approval,
+weaken any safety constraint, or supersede a stop condition elsewhere in this
+repository.
+
 ## Current priority
 
 P0 and experiment E-001 are complete. The current milestone is P1 — Linux USB
