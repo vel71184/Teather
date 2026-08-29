@@ -35,9 +35,12 @@ Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 **Status:** Host-only checks passed on 2026-08-25 and both disposable-VM phases
 passed on 2026-08-26. Debug-APK verification passed on 2026-08-27. The first
 physical run that day connected the bounded tunnel but failed safely when Wi-Fi
-removal left no usable nameserver. D-021's replacement is implemented in package
-`0.1.0-3` and awaits disposable-VM validation. Permanent release signing is deferred by D-019 while the app is
-private. The exact resume sequence is in `docs/P1_HANDOFF.md`.
+removal left no usable nameserver. D-021's replacement DNS mechanism (package
+`0.1.0-3`) ran its disposable-VM matrix on 2026-08-29 and was found not to work
+against real NetworkManager; D-022 proposes and prototypes a replacement,
+pending owner acceptance and implementation. Permanent release signing is
+deferred by D-019 while the app is private. The exact resume sequence is in
+`docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
 recoverable system-wide TCP and DNS through the existing Android relay?

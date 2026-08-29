@@ -74,11 +74,13 @@ If the next phase still fits the active recommendation, continue normally. Do no
 interrupt merely because a different file or component is next. A level change
 does not grant implementation, device, privilege, or live-test approval.
 
-For the current P1 work, D-021 is accepted and implemented. Its disposable-VM
-NetworkManager/DNS, privilege, recovery, packaging, and documentation matrix
-remains Ultra because those workstreams are independently reviewable. Reassess
-again before physical phone validation; a reasoning-level choice never satisfies
-the separate operator phone gate.
+For the current P1 work, D-021's VM matrix ran and found its DNS mechanism does
+not work (see above); D-022 proposes and prototypes a replacement but is not
+yet implemented in shipped source. Design and implementation of D-022's
+remaining pieces, NetworkManager/DNS/privilege/recovery/packaging work, and
+documentation remain Ultra because those workstreams are independently
+reviewable. Reassess again before physical phone validation; a reasoning-level
+choice never satisfies the separate operator phone gate.
 
 These labels follow the current Codex distinction: High increases reasoning depth
 for complex work; Ultra adds automatic task delegation for separable complex
@@ -105,21 +107,45 @@ failed safely at the required DNS gate: disabling Wi-Fi removed the only usable
 non-loopback IPv4 nameserver. Cleanup restored routes, rules, resolver,
 NetworkManager inventory, and firewall structure to baseline.
 
-The owner approved D-021's bounded DNS design. Package `0.1.0-3` source work is
-implemented: temporary per-device NetworkManager DNS, reserved sentinel
-`198.19.0.1`, a non-overlapping `198.18.0.0/16` mapping pool, and virtual DNS over
-UDP and TCP. Local tests, the aggregate build, two clean tunnel builds, and two
-same-source package builds pass reproducibly. The next job is disposable-VM DNS
-integration and cleanup validation. A fresh guest installed `0.1.0-3` and
-reported API 2, but an SSH-launched first case was correctly classified as a
-remote PolicyKit subject and NetworkManager denied `network-control`; owned TUN,
-route, resolver, process, and journal state cleaned successfully. The evidence
-overlay is powered off and healthy. Resume through the guest's active GNOME
-session with the real product `pkexec` path; do not weaken PolicyKit, mutate the
-active host, or query ADB. Request explicit phone connection only after the VM
-gate passes. P1 remains active;
-do not start P2 general UDP, IPv6, broader DNS, WireGuard, wireless transports,
-multi-client support, cross-platform receivers, or P5 polish early.
+**D-021 is superseded in practice, not accepted.** On 2026-08-29 the disposable-VM
+DNS matrix finally ran from the guest's real active GNOME session (the SSH/remote
+PolicyKit gate is confirmed resolved), but D-021's `Reapply`-based DNS mechanism
+itself failed: NetworkManager accepts the sentinel DNS settings on `teather0`
+without error, but `/etc/resolv.conf` never reflects them, because `teather0` is
+an externally-assumed connection and `Reapply` does not regenerate the live
+`IP4Config` NetworkManager's DNS manager reads for that kind of connection. This
+reproduced identically under both TCG and KVM acceleration, so it is not a
+timing or VM-speed problem. See E-002 in `docs/EXPERIMENTS.md` for the full
+diagnostic trail.
+
+**D-022 (Proposed, prototyped, not yet implemented in shipped source)** replaces
+D-021's mechanism: NetworkManager owns the `teather0` connection from creation
+(a native `tun`-type connection with `tun.owner` delegation) instead of
+discovering it after the fact, and DNS uses an additive, non-exclusive priority
+(worse than the physical link's) instead of D-021's exclusive negative priority.
+Both pieces were validated end-to-end via `nmcli` in the disposable VM: DNS came
+up as only the sentinel while active, an unprivileged process successfully
+attached to the owner-delegated TUN device, and teardown left the host at exact
+baseline. This also corrected the actual product requirement: the default
+behavior is now automatic failover to Teather once Wi-Fi's route/resolver truly
+disappears (with a user-facing toggle to require manual confirmation instead,
+given the phone's upstream may be metered cellular) — not D-014's original
+"the owner manually disables/restores" as the only model. See D-022 in
+`docs/DECISIONS.md` for the full trade-off (a broader NetworkManager permission
+scope vs. the current narrower single-purpose polkit action) and evidence.
+
+The pre-D-022 working tree is preserved unmodified on branch
+`archive/d021-reapply-dns-approach` (commit `c78d45f`); nothing was deleted.
+
+Next job: get explicit owner acceptance of D-022's privilege trade-off, then
+design the remaining pieces (routes beyond the base address, refusal/collision
+checks equivalent to the current helper's, the actual helper-shrink, and the
+automatic-failover toggle setting), implement in shipped source, and rerun the
+full disposable-VM gate matrix before any physical phone reconnection. Do not
+mutate the active host, query ADB, or request the phone until that passes. P1
+remains active; do not start P2 general UDP, IPv6, broader DNS, WireGuard,
+wireless transports, multi-client support, cross-platform receivers, or P5
+polish early.
 
 ## Hard constraints
 
@@ -152,6 +178,11 @@ multi-client support, cross-platform receivers, or P5 polish early.
 - A changed architectural choice requires an update to `docs/DECISIONS.md`.
 - A completed experiment requires an entry in `docs/EXPERIMENTS.md`.
 - End each meaningful work session by updating `docs/PROJECT_STATUS.md`.
+- Prefer the lightest mechanism that meets the milestone's requirement. The
+  phone pays for CPU, battery, and thermal cost; a heavier design (a new
+  background process, continuous polling, a full userspace TCP/IP stack)
+  needs measured justification in `docs/EXPERIMENTS.md`, not an assumption
+  that it is necessary.
 
 ## Testing expectations
 

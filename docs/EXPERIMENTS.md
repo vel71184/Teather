@@ -258,6 +258,44 @@ and journal. This is useful failure-path evidence, not a verdict on the active
 GNOME product path. The replacement retest must run from the active desktop with
 packaged authorization and no permissive test rule.
 
+On 2026-08-29 the replacement retest ran from the guest's real active GNOME
+session (confirmed via `loginctl`: `Type=x11 Remote=no Active=yes`), driven
+through the actual GDM desktop rather than SSH. Two environment problems were
+found and fixed first, unrelated to Teather: the disposable-VM launcher used
+`-accel tcg`; under software emulation GNOME Shell segfaulted on an AVX2
+gather instruction roughly every 15-25 seconds (a QEMU TCG bug, confirmed via
+`dmesg`), and `auth_admin_keep` polkit authorizations expire after a few
+minutes, requiring a fresh graphical prompt per attempt (confirmed by
+catching the actual "Authentication Required" dialog). Switching the launcher
+to `-accel kvm -cpu host` fixed the crash-loop; `/dev/kvm` is available on
+this host contrary to the stale 2026-08-26 status note.
+
+With both fixed, `network-control` authorization from the active session
+succeeded (NetworkManager's own audit log recorded
+`op="device-reapply" ... result="success"`), confirming the original SSH/remote
+gate is resolved. The DNS gate still failed at the same
+`_wait_nameservers` timeout. A step-by-step manual reproduction (bypassing the
+5-second auto-cleanup so state could be inspected) showed `Reapply()` accepts
+`ipv4.dns-data=['198.19.0.1']`, `ipv4.dns-priority=-32768`, and
+`ipv4.ignore-auto-dns=true` without error, but `/etc/resolv.conf` never
+reflects the change even when the interface is held up for 25 seconds, and a
+manual `Reload(DNS)` call afterward times out rather than fixing it. The
+NetworkManager audit line for the successful `Reapply` itself only lists
+`ipv4.dns-priority,ipv4.ignore-auto-dns` as changed args, never `ipv4.dns` or
+`ipv4.dns-data`.
+
+**Inference, not yet fully proven:** `teather0` is a NetworkManager
+*externally-assumed* connection (`sys-iface-state: 'external'` in the NM
+log), because Teather's helper creates the interface with raw `ip` commands
+outside NM's connection API. `Reapply()` on an assumed connection appears to
+update the stored connection profile without regenerating the live
+`IP4Config` object that NM's DNS manager reads — a semantic gap specific to
+externally-assumed devices, not a timing or VM-speed problem (reproduced
+identically under both TCG and KVM). See D-022 for the proposed replacement
+mechanism (NetworkManager-native `tun` connection ownership instead of an
+externally-assumed one) and `archive/d021-reapply-dns-approach` for the
+preserved working tree of the current implementation before any change.
+
 ## E-003 — P1 failure-path restoration
 
 **Date:** 2026-08-26 · **Status:** running

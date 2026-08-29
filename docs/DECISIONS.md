@@ -114,6 +114,17 @@ specifically to accept or reject this proposal with evidence.
 
 Retain a private authenticated relay protocol and provide thin Teather receivers.
 
+**Clarification (2026-08-29):** this proposal is a major evolutionary step for
+Teather, not its final architecture. WireGuard is now the de facto standard
+tunnel primitive (mainline Linux kernel since 2020, mature first-party clients
+on every target platform, and the base later mesh-VPN products such as
+Tailscale were built on). The value of reaching standard-client compatibility
+is that it removes the need for a custom receiver per platform and *opens up*
+further evolution — it is not intended to be where the project's evolution
+stops. See README's "Next major evolution, not the destination" and P5-P7 in
+`docs/ROADMAP.md`, both of which already assume further work follows this
+milestone.
+
 ## D-007 — Use Kotlin for Android platform integration
 
 **Status:** Accepted · **Date:** 2026-08-22
@@ -161,6 +172,17 @@ Carrier behavior is outside the application's control, varies by network and
 plan, and changes over time. Unsupported promises would make the architecture
 brittle and the documentation misleading.
 
+**Clarification (2026-08-29):** this decision constrains *promises and
+features*, not the project's actual motivation. README's "Why this exists" now
+states plainly that avoiding carrier tethering classification/surcharges — by
+using an on-device relay whose traffic is structurally indistinguishable from
+the phone's own app traffic, rather than NAT'd/forwarded hotspot traffic — is
+the real primary goal, not an incidental side effect. Earlier documentation
+drafts hedged away from stating that plainly; this note and the README rewrite
+correct that. D-009 itself is unchanged: no guaranteed-bypass claims, and no
+purpose-built stealth/fingerprint-camouflage features beyond what the relay
+architecture already provides structurally.
+
 ## D-010 — Defer licensing until before public access
 
 **Status:** Open · **Date:** 2026-08-22
@@ -178,6 +200,180 @@ license file will be added and reuse/redistribution is not granted.
 
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
+
+## D-022 — Propose NetworkManager-native `tun` ownership to replace D-021's Reapply DNS mechanism
+
+**Status:** Proposed · **Date:** 2026-08-29
+
+### Problem
+
+D-021's disposable-VM retest (see E-002) confirmed the `network-control`
+polkit gate works correctly from the guest's real active GNOME session, but
+found a second, independent failure: NetworkManager's `Reapply()` call on
+`teather0` accepts the DNS sentinel settings and reports success, yet
+`/etc/resolv.conf` never reflects them, even when held for 25 seconds and
+even after a manual `Reload(DNS)` call. This reproduced identically under
+both TCG and KVM acceleration, ruling out a timing/environment fluke.
+
+The likely cause: `teather0` is an *externally-assumed* NetworkManager
+connection. Teather's privileged helper creates the interface and its
+address/routes with raw `ip` commands, entirely outside NetworkManager's
+connection API; NetworkManager only notices the interface afterward and
+auto-generates a matching connection object marked
+`sys-iface-state: 'external'`. `Reapply()` on that kind of connection appears
+to update the stored profile without regenerating the live `IP4Config` that
+NetworkManager's DNS manager actually reads. D-021's mechanism depends on a
+code path NetworkManager does not fully support for assumed devices.
+
+### Proposal
+
+Instead of the helper creating the interface with raw `ip` commands and
+letting NetworkManager discover it after the fact, create a proper
+NetworkManager `tun`-type connection *before* activation, with:
+
+- `tun.mode=tun`, `tun.owner`/`tun.group` set to the desktop user, so the
+  kernel lets that unprivileged user attach to the persistent device
+  directly (no root needed for this step at all).
+- `ipv4.method=manual` with the same fixed `192.0.2.1/32` address and
+  `198.18.0.0/15`/default-metric-32000 routes D-021/D-015 already specify.
+- `ipv4.dns-data`, `ipv4.dns-priority`, `ipv4.ignore-auto-dns` set as part of
+  the *same* connection profile NetworkManager fully manages from creation,
+  not bolted on afterward — the normal, supported DNS-manager path.
+- The connection marked transient/unsaved (in-memory only, never written to
+  `/etc/NetworkManager/system-connections`), satisfying D-014's
+  non-persistence requirement.
+
+If this works as expected, the unprivileged manager process (already proven
+to hold working, active-session `network-control` authorization) would
+create and activate the connection itself via NetworkManager's D-Bus API.
+The only remaining privileged step would be opening the resulting
+already-owned persistent TUN device and handing its fd to `tun2proxy` —
+likely shrinking `teather-helper.c` substantially, since most of its current
+route/rule/collision-parsing logic exists only because Teather duplicates
+IP/route bookkeeping NetworkManager would otherwise own directly.
+
+### Trade-off to resolve before accepting
+
+The current custom polkit action
+(`io.github.vel71184.teather.configure-tunnel`) is deliberately narrow:
+exactly one fixed typed command, matching the threat model's preference for
+"a minimal helper with a fixed typed API." Relying on NetworkManager's own
+`network-control`/settings-modify authorization instead is broader in
+principle — it is not scoped to only `teather0`. This is a real philosophical
+trade (narrower-but-currently-broken vs. broader-but-standard-and-working),
+not a free improvement, and should be weighed explicitly rather than adopted
+silently.
+
+### Prototype result — 2026-08-29
+
+Prototyped in the disposable VM via `nmcli` from the real active GNOME
+session (outside the repository; not yet implemented in shipped source):
+
+```
+nmcli connection add type tun ifname teather0 con-name teather0-proto \
+  save no \
+  tun.mode tun tun.owner 1000 tun.group 1000 tun.pi no \
+  ipv4.method manual ipv4.addresses 192.0.2.1/32 \
+  ipv4.dns 198.19.0.1 ipv4.dns-priority -32768 ipv4.ignore-auto-dns yes \
+  ipv6.method disabled connection.autoconnect no
+nmcli connection up teather0-proto
+```
+
+Result: full success on every count.
+
+- The interface came up with exactly the specified `192.0.2.1/32` address.
+- `/etc/resolv.conf` immediately read `nameserver 198.19.0.1` — **only** the
+  sentinel, correctly excluding the existing DHCP nameserver — the exact
+  outcome D-021's `Reapply()` mechanism could never produce.
+- An unprivileged Python process (uid 1000, no capabilities) successfully
+  opened `/dev/net/tun` and attached to the already-existing `teather0` via
+  `TUNSETIFF`, confirming `tun.owner` delegation works for handing the
+  descriptor to `tun2proxy` without a root helper.
+- `save no` genuinely kept the connection in-memory only —
+  `/etc/NetworkManager/system-connections/` stayed empty throughout.
+- Teardown (`connection down` + `connection delete`) left the host
+  byte-for-byte back to baseline: no `teather0`, `resolv.conf` back to the
+  original nameserver, `nmcli connection show` back to the original two
+  connections.
+
+This confirms the root-cause hypothesis above and validates the proposed
+replacement mechanism end-to-end in this environment. It does not yet cover
+route configuration beyond the base address (the `198.18.0.0/15` DNS-pool
+route and the metric-32000 default still need adding to the same `nmcli`
+invocation, straightforward extensions of `ipv4.routes`), collision/refusal
+checks equivalent to the current helper's validation matrix, or the
+privileged-helper shrink itself.
+
+### Second finding: D-021's DNS model is exclusive when it should be additive
+
+Independent of the NM-native-tun mechanism above, re-examining the owner's
+intent surfaced a mismatch with D-021 itself, not just its buggy
+implementation. D-021 sets DNS priority to `-32768` (NetworkManager's
+*exclusive* range — this device's DNS servers replace all others) and
+`ignore-auto-dns=true`, applied as soon as `teather0` exists. D-014 requires
+"the owner manually disables [Wi-Fi] ... when choosing Teather." Together,
+this means: even when it worked, D-021 would make Teather's virtual DNS the
+*only* resolver the instant `teather0` connects, regardless of whether
+Wi-Fi is still up and still the preferred route — new DNS lookups would
+resolve into Teather's virtual pool and tunnel through it even while Wi-Fi
+was fine. That is a manual-switch model with a DNS side effect, not the
+"Wi-Fi stays default while present, Teather is silent standby, automatic
+takeover only once Wi-Fi truly disappears" model the owner actually wants
+(the same relationship as two coexisting links like Ethernet and Wi-Fi,
+where the OS picks the default and falls back automatically).
+
+The fix is simpler than D-021's exclusive mechanism: use a **positive**
+(non-exclusive) `ipv4.dns-priority` for Teather's sentinel — worse than
+Wi-Fi's default DNS priority — and do **not** set `ignore-auto-dns`.
+Prototyped and confirmed in the VM: with `ipv4.dns-priority 32767` and no
+`ignore-auto-dns`, `/etc/resolv.conf` correctly listed *both* nameservers,
+the primary connection's first and the Teather sentinel second:
+
+```
+# Generated by NetworkManager
+nameserver 10.0.2.3
+nameserver 198.19.0.1
+```
+
+This is standard multi-homed DNS behavior (the same thing that happens when
+you plug in a second, lower-priority network): while the primary resolver
+is reachable, the OS resolver (glibc, per `resolv.conf` nameserver order)
+uses it first and real traffic stays on the primary route because
+resolution returns real, directly-routable addresses. Only when the
+primary nameserver becomes unreachable does resolution fall through to
+Teather's sentinel, which is exactly when Teather's default route
+(deliberately worse metric, per D-014/D-015 — unchanged by this proposal)
+also becomes the only one left. Routing-level fallback already works this
+way with no changes needed; DNS should follow the same additive,
+priority-ordered model instead of forcing exclusivity.
+
+**Resolved (2026-08-29):** default behavior is automatic failover — Teather
+becomes the active path the moment Wi-Fi's route/resolver actually disappears,
+with no manual toggle required to reach that point, mirroring Ethernet/Wi-Fi
+failover. However, unlike a free always-on Ethernet link, the phone's upstream
+may be metered cellular data, and the owner's plan can change from unlimited to
+capped at any time without a code change. So automatic failover itself must be
+a user-facing setting, on by default, that the owner can switch off in favor of
+requiring manual confirmation before Teather becomes active. This supersedes
+D-014's "the owner manually disables/restores" as the *only* model — manual
+control remains available as an explicit opt-out, not the default. Wi-Fi/
+Ethernet themselves are still never touched by Teather either way; only
+whether Teather activates automatically once they're gone is configurable.
+Not yet implemented: the setting itself, its storage location (likely
+`~/.config/teather/config.json`, already mode-0600 per D-017), and how the
+manager's `connect()` state machine checks it before proceeding when a
+physical link disappears.
+
+### Status
+
+**Proposed, with a successful end-to-end prototype of both the NM-native-tun
+ownership mechanism and the additive (non-exclusive) DNS priority fix.** Implementation in
+shipped source has not started. The current D-021 implementation is
+preserved unmodified on the `archive/d021-reapply-dns-approach` branch
+(pointing at commit `c78d45f`) so it remains fully recoverable regardless of
+what this proposal decides. Requires explicit owner acceptance of the
+narrower-vs-broader privilege trade-off above before real implementation
+begins, per this repository's own pre-implementation review convention.
 
 ## Adding or changing a decision
 
@@ -323,6 +519,13 @@ the current resume status.
 on all NetworkManager writes. Teather may temporarily reapply DNS only on the
 active externally owned `teather0` device with preserve-external-IP; persistent
 profiles, direct resolver edits, and mutations to physical links remain forbidden.
+
+**Automatic-failover note (2026-08-29):** D-022 supersedes "the owner manually
+disables or restores it" as the only model. Automatic failover to Teather once
+Wi-Fi's route/resolver actually disappears is now the default, user-togglable
+behavior — see D-022's resolved open question. Wi-Fi/Ethernet remain untouched
+by Teather in either mode; only whether Teather activates itself automatically
+once they're gone is configurable.
 
 ## D-015 — Approve the bounded P1 Linux USB desktop architecture
 
@@ -532,3 +735,11 @@ unchanged, and both probes pass.
   fails closed and fails P1.
 - General UDP, IPv6, private application DoH, and automatic Wi-Fi control remain
   outside P1.
+
+**Disproven in the disposable-VM matrix (2026-08-29):** this mechanism was
+implemented as designed, but `Reapply` does not actually propagate the DNS
+settings to `/etc/resolv.conf` for `teather0`'s externally-assumed connection
+type — see D-022, which proposes and prototypes a replacement. Status remains
+`Accepted` (not `Superseded`) until D-022 itself is accepted, per this log's
+convention of not rewriting history; treat this decision as non-functional in
+its current form regardless of its status label.

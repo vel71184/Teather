@@ -11,8 +11,10 @@ or rebuild the P1 scaffold.
 On the first prompt of a new Codex conversation, follow
 [the repository gate](../AGENTS.md#fresh-codex-session-gate), recommend
 **GPT-5.6 Sol with Ultra**, and stop before analysis, implementation, or live
-operations. D-021 is already accepted and implemented; its current disposable-VM
-gate is separable into real NetworkManager integration, virtual-DNS transport,
+operations. D-021's disposable-VM matrix ran and found its DNS mechanism does not
+work; D-022 proposes and prototypes a replacement, not yet implemented in shipped
+source (see the resume point below). Remaining design/implementation is
+separable into NetworkManager-native TUN ownership, additive DNS priority,
 privilege and cleanup, packaging, validation, and documentation reviews. Continue
 only after the owner selects or confirms Ultra and prompts again. This does not
 authorize a phone connection, active-host resolver change, or physical Phase 3
@@ -23,33 +25,44 @@ Within the same thread, apply the
 The current VM matrix remains Ultra. Reassess again before physical validation;
 changing the reasoning level never supplies the separate operator phone approval.
 
-## Current resume point — D-021 implementation checkpoint
+## Current resume point — D-021 disproven; D-022 proposed and prototyped
 
-The owner approved transient per-device NetworkManager DNS and requested
-implementation. Package `0.1.0-3` now contains the implementation, but it is not
-yet VM- or phone-accepted. Keep the phone disconnected and do not query ADB.
+On 2026-08-29 the phone-free harness finally ran from the guest's real active
+GNOME session (not SSH) as this document's prior resume point required. The
+SSH/remote PolicyKit gate is confirmed resolved: NetworkManager's own audit log
+recorded `op="device-reapply" ... result="success"` from that session. But
+D-021's DNS mechanism itself does not work: `Reapply` accepts the
+`198.19.0.1` sentinel, `-32768` priority, and `ignore-auto-dns` settings without
+error, yet `/etc/resolv.conf` never reflects them, even held for 25 seconds, and
+a manual `Reload(DNS)` call afterward does not fix it either. Root cause:
+`teather0` is an externally-assumed NetworkManager connection (Teather's helper
+creates it with raw `ip` commands, outside NM's connection API), and `Reapply`
+on that kind of connection does not appear to regenerate the live `IP4Config`
+NM's DNS manager reads. This reproduced identically under TCG and KVM, so it is
+not a timing problem. Full trail: E-002 in `docs/EXPERIMENTS.md`.
 
-- NetworkManager 1.42+ `Reapply` uses preserve-external-IP and temporary
-  `198.19.0.1` DNS at priority `-32768`; no persistent profile or direct resolver
-  write is used.
-- `198.18.0.0/15` remains the route, mappings use `198.18.0.0/16`, and the pinned
-  third patch adds bounded RFC 1035 TCP DNS alongside UDP.
-- Linux status API is 2 with DNS readiness/mutation diagnostics. Local tests pass
-  37 cases plus helper and host-session D-Bus smoke. The full Android/Linux
-  aggregate check passes.
-- Two clean tunnel builds and two same-source package builds are byte-identical;
-  current hashes are recorded in `docs/PROJECT_STATUS.md`.
-- A fresh overlay installed `0.1.0-3`, confirmed NetworkManager 1.42.4 and status
-  API 2, then failed safely when the first harness ran from SSH: PolicyKit
-  classified that process as remote and denied NetworkManager `network-control`.
-  The helper-created TUN/routes, process, sentinel, and journal were absent after
-  cleanup. This does not establish the active GNOME authorization result.
+**D-022** (`docs/DECISIONS.md`, Proposed, prototyped but not yet in shipped
+source) replaces the mechanism: a NetworkManager-native `tun` connection that
+NM owns from creation (with `tun.owner` delegation so the unprivileged
+`tun2proxy` process can attach directly, shrinking the privileged helper's
+job), plus an additive/non-exclusive DNS priority instead of D-021's exclusive
+one. Both were validated end-to-end via `nmcli` in the disposable VM. This also
+corrected the product requirement itself: automatic failover to Teather once
+Wi-Fi's route/resolver actually disappears is now the intended default
+behavior (with a user-facing toggle to require manual confirmation instead),
+not manual Wi-Fi toggling as the only model — see D-022's resolved open
+question.
 
-Next: run the phone-free harness from the guest's active GNOME session through
-the real packaged `pkexec` path. Do not add a permissive PolicyKit rule merely to
-make SSH pass. Prove external TUN state preservation, resolver exclusivity,
-UDP/TCP readiness, normal/failure/next-start cleanup, and absence of persistent
-NetworkManager files. Only then request the phone for renewed Phase 3.
+Do not repeat this exact harness run expecting a different DNS result; the
+mechanism needs to change first. The pre-D-022 tree is preserved on branch
+`archive/d021-reapply-dns-approach` (commit `c78d45f`).
+
+Next: get explicit owner acceptance of D-022's privilege trade-off (broader
+NetworkManager permission scope vs. the current narrower single-purpose polkit
+action), design its remaining pieces (routes beyond the base address,
+refusal/collision checks, the automatic-failover toggle setting), implement in
+shipped source, then rerun this phone-free VM matrix against the new mechanism
+before requesting the phone for renewed Phase 3.
 
 ## Evidence already complete
 

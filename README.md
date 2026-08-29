@@ -12,8 +12,10 @@ as little receiver-side software as each platform permits.
 > **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
 > host-only checks, both disposable-VM phases, and debug-APK verification are
 > complete. The first physical P1 run failed safely at the host DNS-retention
-> gate. The bounded replacement is implemented in package `0.1.0-3` and awaits
-> completion of its active-GNOME disposable-VM matrix before another phone run.
+> gate. D-021's bounded replacement (package `0.1.0-3`) ran its active-GNOME
+> disposable-VM matrix and was found not to work against real NetworkManager;
+> D-022 proposes and prototypes a replacement (see `docs/DECISIONS.md`),
+> pending owner acceptance and implementation before another phone run.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -24,27 +26,62 @@ are not current requirements.
 > **High**, explain the scope classification, and stop before work begins. See
 > [AGENTS.md](AGENTS.md#fresh-codex-session-gate). The same stop applies within
 > a thread before a materially new phase that needs a High/Ultra change. The
-> current D-021 disposable-VM DNS, privilege, and cleanup matrix is an **Ultra**
-> task.
+> current D-022 design/implementation work (NetworkManager-native TUN ownership
+> and additive DNS priority, replacing D-021) is an **Ultra** task.
 
 ## Why this exists
 
-Android and desktop operating systems already provide ordinary tethering. That
-works well when the phone, operating system, and mobile plan all permit the same
-path. It becomes less useful when tethering is unavailable, unreliable,
-vendor-modified, or only supported by proprietary desktop software.
+Mobile carriers commonly meter, surcharge, or throttle tethering separately from
+ordinary phone data use — through a paid add-on, a distinct data cap, or
+throttling triggered once a connection is classified as a tethered device rather
+than the phone itself. Stock tethering/hotspot features are easy for a carrier's
+network to classify this way, because a second device's packets are forwarded or
+NAT'd through the phone: they typically carry a different OS/TCP fingerprint, an
+extra TTL decrement, and a distinct DHCP signature that reveal a second device is
+behind the connection.
 
-Teather explores a different arrangement:
+Teather's actual goal is to use the phone as a full, oversized network interface
+for a computer — not a hotspot the computer sits behind, but the computer's
+Internet path itself. The Linux computer's applications reach the Internet by way
+of the phone's currently selected upstream (cellular today; the phone's own Wi-Fi
+is supported by the same upstream-selection code and is a near-term toggle, not a
+redesign) — without engaging the phone's stock tethering/hotspot feature at all.
 
-- Android runs the relay and opens upstream application sockets.
-- A receiver sends its traffic to that relay through a local transport.
-- The transport can change without changing the relay's core behavior.
-- The first receiver is Linux; cross-platform interoperability is the destination.
+This works because Teather is architected as an on-device relay, not a
+NAT/forwarding gateway:
 
-Teather does **not** assume that every carrier handles application-relayed traffic
-the same way. Behavior must be measured on the owner's connection, and the
-project must not promise that usage is unmetered, unclassified, or undetectable.
-Users remain responsible for their service agreements and local law.
+- Android runs the relay and terminates every connection itself, opening its own
+  outbound application socket for each one (D-004).
+- A receiver (Linux today) sends its traffic to that relay over a local
+  transport; the transport can change without changing the relay's core
+  behavior.
+- From the carrier network's point of view, the resulting traffic is
+  indistinguishable from the phone's own app traffic, because it genuinely is
+  the phone's own app traffic — there is no second device's packets being
+  forwarded through the phone's IP stack for the network to fingerprint.
+
+That last property is structural, not a built-in evasion feature: it falls out
+of choosing an application relay over a NAT/hotspot design, and it is the same
+underlying reason earlier tools built for a similar purpose (for example,
+PdaNet+) have generally not been classified as tethering by carrier networks.
+
+Teather will not turn this into a guaranteed promise. Carrier detection methods
+are outside the application's control, vary by carrier and plan, and change over
+time. D-009 records that Teather will not claim universal bypass, unmetered use,
+or undetectability, and will not add carrier-specific stealth or
+traffic-fingerprint-camouflage features to compensate if a carrier's methods
+change — that would make the architecture brittle and the documentation
+misleading. What is actually observed on the owner's own connection is measured
+and recorded as an experiment (see `docs/EXPERIMENTS.md`), not asserted as a
+general property.
+
+This is a personal tool, run on the owner's own device and account, deliberately
+operating at the edge of what a tethering-restricted plan permits rather than
+outside the law. The owner is solely responsible for reviewing their carrier's
+terms of service and applicable law before relying on Teather in place of a paid
+tethering feature. Nothing in this repository is legal advice, and using an
+application relay this way may violate a carrier's terms of service even where
+it is not independently unlawful.
 
 ## Product principles
 
@@ -68,6 +105,12 @@ Users remain responsible for their service agreements and local law.
    system-wide mode must leave NetworkManager-managed Wi-Fi and Ethernet
    connections untouched and preferred. The owner decides when to disable or
    restore them.
+9. **Prefer the lightest mechanism that meets the milestone's requirement.**
+   The phone pays for CPU, battery, and thermal cost, and the desktop client
+   should stay cheap at idle. A heavier design (a new background process, a
+   full userspace TCP/IP stack, continuous polling) needs measured
+   justification recorded as an experiment, not an assumption that it is
+   necessary.
 
 ## Scope
 
@@ -146,9 +189,22 @@ important unknown—whether the Android application relay works reliably on the
 target phone and connection—before investing in discovery, pairing, packaging,
 or a graphical interface.
 
-## Intended long-term path
+## Next major evolution, not the destination
 
-The long-term design uses Android's local-only hotspot as a local link and runs a
+WireGuard compatibility is Teather's next big step after P1-P3, not its final
+form. WireGuard has become the de facto standard tunnel primitive — built into
+the Linux kernel since 2020, with mature first-party clients on every target
+platform, and the foundation later mesh-VPN products (Tailscale and similar)
+were built on top of. Reaching WireGuard-client compatibility means any of
+those standard clients could talk to Teather directly, which removes the need
+to write and maintain a custom receiver for every platform. That is valuable
+specifically because it *opens up* further evolution — richer pairing,
+multi-device support, possibly mesh-style features later — not because it
+closes the project out. What that further evolution looks like is
+intentionally undesigned until this step is proven; see P5 through P7 in
+`docs/ROADMAP.md` for what already follows it.
+
+The design uses Android's local-only hotspot as a local link and runs a
 WireGuard-compatible endpoint plus a userspace TCP/IP stack inside Teather:
 
 ```mermaid
@@ -266,10 +322,13 @@ verified debug signature. D-019 defers a permanent release identity while Teathe
 is privately tested. During physical validation, package `0.1.0-2` corrected the
 user-service PolicyKit launch boundary and connected the bounded tunnel, but
 disabling Wi-Fi removed the host's only usable nameserver. Teather disconnected
-and restored its state as designed. D-021's replacement is now implemented in
-package `0.1.0-3`; the next step is the disposable-VM DNS matrix in [the P1
+and restored its state as designed. D-021's replacement (package `0.1.0-3`) ran
+its disposable-VM DNS matrix and was found not to work against real
+NetworkManager; D-022 proposes and prototypes a replacement in
+[the decision log](docs/DECISIONS.md), pending owner acceptance and
+implementation. The exact resume sequence is in [the P1
 handoff](docs/P1_HANDOFF.md). Do not reconnect the phone or repeat physical
-acceptance until that matrix passes.
+acceptance until a working mechanism passes that matrix.
 
 The deterministic source-level gate remains:
 

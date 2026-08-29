@@ -5,7 +5,11 @@
 - **Active milestone:** P1 — Linux USB Desktop validation
 - **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-3` implements
   D-021 temporary DNS, passes local source/package gates, and installs with API 2
-  in Debian 12. Its active-GNOME DNS matrix remains pending before physical P1.
+  in Debian 12. Its active-GNOME DNS matrix ran on 2026-08-29 and found D-021's
+  `Reapply`-based mechanism does not work against real NetworkManager (see
+  D-022); the replacement is prototyped but not yet implemented in shipped
+  source, and physical P1 remains blocked until a working DNS mechanism passes
+  the VM gate.
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -187,6 +191,59 @@ next handoff/recovery documents, and affected technical guidance agree.
 ```
 
 ## Work log
+
+### 2026-08-29 — D-021 DNS mechanism found broken at the root; D-022 proposed and prototyped
+
+- Completed: resumed the phone-free disposable-VM D-021 matrix from the
+  guest's real active GNOME session (not SSH), as the prior session's next
+  action required. Found and fixed two environment problems first: the
+  launcher used `-accel tcg`, under which GNOME Shell segfaulted on an AVX2
+  instruction roughly every 15-25 seconds (a QEMU TCG bug, not a broken VM
+  image); switching to `-accel kvm -cpu host` fixed it completely
+  (`/dev/kvm` is available on this host, contrary to the stale 2026-08-26
+  note). Separately confirmed `auth_admin_keep` polkit authorizations expire
+  after a few minutes and need a fresh graphical prompt each time.
+- Verified with: `loginctl show-session` confirming `Type=x11 Remote=no
+  Active=yes`; NetworkManager's own audit log recording
+  `op="device-reapply" ... result="success"` from that session (the original
+  SSH/remote gate is genuinely resolved); a step-by-step manual reproduction
+  (bypassing the 5-second auto-cleanup) showing `Reapply()` accepts the DNS
+  sentinel settings without error but `/etc/resolv.conf` never reflects them,
+  even held for 25 seconds, and a manual `Reload(DNS)` afterward does not fix
+  it either. Root-caused to `teather0` being a NetworkManager
+  *externally-assumed* connection, a code path NM does not fully support for
+  DNS regeneration; reproduced identically under both TCG and KVM, ruling out
+  timing.
+- Decisions made: D-022 (Proposed) documents this finding and proposes
+  replacing D-021's Reapply-based mechanism with NetworkManager-native `tun`
+  connection ownership (NM creates and owns the interface from the start
+  instead of discovering it after the fact). Prototyped end-to-end via
+  `nmcli` from the active session: DNS came up as *only* the sentinel, an
+  unprivileged process successfully attached to the owner-delegated
+  persistent TUN device, the connection was never persisted to disk, and
+  teardown left the host byte-for-byte at baseline. This is a real
+  architectural trade (D-022's broader NetworkManager-mediated permission
+  model vs. D-021/D-015's narrower single-purpose custom polkit action), not
+  a drop-in fix, and needs explicit owner acceptance before implementation.
+- Files/areas changed: `docs/DECISIONS.md` (D-022), `docs/EXPERIMENTS.md`
+  (E-002 addendum), this status entry. No shipped source was changed. The
+  pre-D-022 working tree is preserved unmodified on branch
+  `archive/d021-reapply-dns-approach` (commit `c78d45f`) specifically so
+  D-021's implementation remains recoverable regardless of what happens next
+  — nothing was deleted, only superseded.
+- Milestone transition: not applicable; P1 remains active. D-022 is
+  Proposed, not Accepted.
+- Risks or failures: D-022's route configuration beyond the base address,
+  collision/refusal checks equivalent to the current helper's validation
+  matrix, and the actual privileged-helper shrink are not yet designed or
+  implemented — only the core DNS/ownership hypothesis was validated.
+- Next exact action: the owner decides whether to accept D-022's trade-off
+  (broader NetworkManager permission scope vs. a working DNS mechanism). If
+  accepted, design the full replacement (routes, refusal conditions, reduced
+  helper) before writing shipped code. If rejected, D-021 remains the active
+  approach and the assumed-connection DNS gap needs a different fix. Either
+  way, do not reconnect the phone or attempt physical Phase 3 until the VM
+  DNS gate actually passes with whichever mechanism is chosen.
 
 ### 2026-08-28 — D-021 audit hardened; first fresh VM attempt stopped at session authorization
 

@@ -2,10 +2,12 @@
 
 Teather has a physically validated P0 implementation and an implemented P1 Linux
 USB Desktop. D-013's source-implementation approval gate is complete. The original
-package/GUI and privileged TUN phases passed in a disposable VM; D-021's newer
-temporary NetworkManager DNS behavior still requires a fresh VM regression matrix
-before physical P1 acceptance resumes. Follow `docs/P1_HANDOFF.md` rather than
-restarting P0 or the already accepted VM phases.
+package/GUI and privileged TUN phases passed in a disposable VM; D-021's temporary
+NetworkManager DNS mechanism ran its VM regression matrix on 2026-08-29 and was
+found not to work against real NetworkManager. D-022 (`docs/DECISIONS.md`)
+proposes and prototypes a replacement, pending owner acceptance and
+implementation. Follow `docs/P1_HANDOFF.md` rather than restarting P0 or the
+already accepted VM phases.
 
 ## Fresh Codex conversation
 

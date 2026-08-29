@@ -115,9 +115,10 @@ the kernel can then select the remaining `teather0` default. Re-enabling Wi-Fi
 must make the pre-existing physical default preferred again without a Teather
 restart.
 
-Under D-021 the P1 receiver performs one bounded NetworkManager active-device
-DNS update on `teather0`; it creates no persistent profile and never changes an
-existing link. It must never delete or replace an existing default route, edit
+Under D-021 (disproven; see D-022 below) the P1 receiver was to perform one
+bounded NetworkManager active-device DNS update on `teather0`; it creates no
+persistent profile and never changes an existing link. Under either mechanism
+it must never delete or replace an existing default route, edit
 `/etc/resolv.conf` directly, flush firewall state, or persist the TUN. Closing or crashing
 the owner process must remove `teather0` and its attached routes automatically;
 explicit cleanup handles any additional Teather-owned state.
@@ -172,19 +173,41 @@ nameserver is a physical acceptance failure and returns the design to review.
 its only usable non-loopback IPv4 nameserver. The daemon reported
 `resolver-unavailable`, closed the tunnel, and restored owned state. That design
 could not satisfy P1 on the host and is retained here only as failure history.
-D-021's accepted replacement below is implemented and awaiting VM validation.
-The host uses NetworkManager's default DNS mode to write a regular
-`/etc/resolv.conf`; neither `systemd-resolved` nor `resolvconf` is installed.
+D-021's replacement below was implemented and ran its VM validation; see the
+disproof note after it. The host uses NetworkManager's default DNS mode to
+write a regular `/etc/resolv.conf`; neither `systemd-resolved` nor `resolvconf`
+is installed.
 
-**Accepted replacement (D-021):** NetworkManager temporarily advertises the
-dedicated `198.19.0.1` sentinel only on the externally observed `teather0`
-connection with DNS priority `-32768`. `Reapply` uses the preserve-external-IP
-flag, and the daemon verifies the TUN address/routes are unchanged. Virtual DNS
-answers UDP and length-prefixed TCP port 53; mappings use `198.18.0.0/16`, so the
-sentinel cannot collide. Connection fails closed unless resolver state and both
-DNS probes pass. Normal teardown restores the original applied connection and
-next-start recovery performs a bounded NetworkManager DNS regeneration only for
-unambiguous stale sentinel state.
+**Replacement implemented, then disproven (D-021):** NetworkManager was to
+temporarily advertise the dedicated `198.19.0.1` sentinel only on the
+externally observed `teather0` connection with DNS priority `-32768`.
+`Reapply` uses the preserve-external-IP flag, and the daemon verifies the TUN
+address/routes are unchanged. Virtual DNS answers UDP and length-prefixed TCP
+port 53; mappings use `198.18.0.0/16`, so the sentinel cannot collide.
+Connection fails closed unless resolver state and both DNS probes pass. Normal
+teardown restores the original applied connection and next-start recovery
+performs a bounded NetworkManager DNS regeneration only for unambiguous stale
+sentinel state.
+
+**Disproven; replacement proposed (D-022, 2026-08-29):** the disposable-VM
+matrix confirmed the SSH/remote PolicyKit gate is resolved (NetworkManager's
+own audit log recorded a successful `Reapply` from the real active GNOME
+session), but the DNS mechanism above does not work: `Reapply` accepts the
+sentinel/priority/`ignore-auto-dns` settings without error, yet
+`/etc/resolv.conf` never reflects them, because `teather0` is an
+externally-assumed NetworkManager connection and `Reapply` does not appear to
+regenerate the live `IP4Config` NM's DNS manager reads for that kind of
+connection. Reproduced identically under TCG and KVM, ruling out timing. D-022
+proposes NetworkManager owning `teather0` from creation instead (a native
+`tun`-type connection with `tun.owner` delegation, letting the unprivileged
+`tun2proxy` process attach directly and shrinking the privileged helper's job)
+plus an additive, non-exclusive DNS priority instead of the exclusive one
+above — validated end-to-end via `nmcli` in the disposable VM, but not yet
+implemented in shipped source. See D-022 in `docs/DECISIONS.md` and E-002 in
+`docs/EXPERIMENTS.md` for full evidence. This also corrected the product
+requirement: automatic failover once Wi-Fi's route/resolver actually
+disappears is now the intended default (with a user-facing toggle to require
+manual confirmation instead), not manual Wi-Fi toggling as the only model.
 
 P1 implements the route boundary through the fixed helper and per-user daemon
 described above. The graphical application does not manipulate networking
@@ -196,7 +219,18 @@ cannot reach the fixed PolicyKit helper when its parent has `NoNewPrivs: 1`. The
 root-owned helper remains the only privileged implementation surface and applies
 `NoNewPrivs: 1` after permanently dropping privilege for the packet engine.
 
-## Long-term architecture: standard tunnel endpoint
+## Next evolution, not the end state: standard tunnel endpoint
+
+This is Teather's next major step past P1-P3, not its final architecture.
+WireGuard is now the de facto standard tunnel primitive — mainline Linux kernel
+since 2020, mature first-party clients on every target platform, and the base
+that later mesh-VPN products (Tailscale and similar) were built on. Standard
+WireGuard-client compatibility is worth pursuing because it *opens up* further
+evolution (richer pairing, multi-device support, possibly mesh-style features
+later) by removing the need for a custom receiver per platform, not because
+reaching it ends the project's evolution. What comes after is intentionally
+undesigned until this step is proven; P5-P7 in `docs/ROADMAP.md` already
+assume further work follows it.
 
 **Hypothesis:** A userspace WireGuard endpoint plus a userspace TCP/IP stack can
 turn full receiver IP packets into outbound Android sockets without root.

@@ -76,6 +76,17 @@ correctness requirements.
 
 ## P1 network restoration matrix
 
+**2026-08-29 note:** this matrix was written against D-021's DNS mechanism,
+which the disposable-VM run found does not work (see E-002 and D-022 in
+`docs/DECISIONS.md`). D-022's proposed replacement also changes the "owner
+manually disables Wi-Fi" framing below: automatic failover to Teather once
+Wi-Fi's route/resolver actually disappears is now the intended default (with a
+user-facing toggle to require manual confirmation instead). The restoration
+requirements themselves (idempotent stop, signal/crash/cable-removal recovery,
+no unrelated state mutation) remain the right things to test regardless of
+which DNS mechanism or failover mode is active; update the specific
+mechanism-dependent rows once D-022 is implemented.
+
 Capture relevant Linux state before and after each test.
 
 | Failure event | Required recovery |
@@ -116,6 +127,13 @@ receiver crash, and after cable removal. A passed IP-literal request with failed
 hostname lookup is a DNS failure, not a successful Teather connection.
 
 ## Executable P1 checks
+
+**2026-08-29 note:** the NetworkManager-DNS-specific items below (sentinel via
+`Reapply`/preserve-external-IP, exclusive priority) describe D-021, which is
+disproven — see the note above and D-022 in `docs/DECISIONS.md` for the
+NetworkManager-native-`tun`-ownership and additive-DNS-priority replacement.
+The non-DNS items (TUN lifetime, route preference, privilege drop, cleanup on
+signal/death) remain valid checks for whichever mechanism is implemented.
 
 Host-only checks cover configuration permissions, salted device trust, ambiguous
 multi-device selection, manager/CLI state transitions, typed D-Bus responses,
