@@ -18,6 +18,13 @@ Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
 are not current requirements.
 
+> **Codex startup gate:** The first prompt in every new Teather Codex
+> conversation is read-only. Codex must recommend GPT-5.6 Sol with **Ultra** or
+> **High**, explain the scope classification, and stop before work begins. See
+> [AGENTS.md](AGENTS.md#fresh-codex-session-gate). The same stop applies within
+> a thread before a materially new phase that needs a High/Ultra change. The
+> current P1 DNS design review is an **Ultra** task.
+
 ## Why this exists
 
 Android and desktop operating systems already provide ordinary tethering. That
