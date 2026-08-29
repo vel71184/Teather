@@ -39,11 +39,17 @@ yet VM- or phone-accepted. Keep the phone disconnected and do not query ADB.
   aggregate check passes.
 - Two clean tunnel builds and two same-source package builds are byte-identical;
   current hashes are recorded in `docs/PROJECT_STATUS.md`.
+- A fresh overlay installed `0.1.0-3`, confirmed NetworkManager 1.42.4 and status
+  API 2, then failed safely when the first harness ran from SSH: PolicyKit
+  classified that process as remote and denied NetworkManager `network-control`.
+  The helper-created TUN/routes, process, sentinel, and journal were absent after
+  cleanup. This does not establish the active GNOME authorization result.
 
-Next: create a fresh disposable-VM overlay, install `0.1.0-3`, and prove external
-TUN state preservation, resolver exclusivity, UDP/TCP readiness, normal/failure/
-next-start cleanup, and absence of persistent NetworkManager files. Only then
-request the phone for renewed Phase 3.
+Next: run the phone-free harness from the guest's active GNOME session through
+the real packaged `pkexec` path. Do not add a permissive PolicyKit rule merely to
+make SSH pass. Prove external TUN state preservation, resolver exclusivity,
+UDP/TCP readiness, normal/failure/next-start cleanup, and absence of persistent
+NetworkManager files. Only then request the phone for renewed Phase 3.
 
 ## Evidence already complete
 
@@ -54,7 +60,8 @@ request the phone for renewed Phase 3.
 - After isolated validation corrections, two clean patched tun2proxy builds were
   identical at SHA-256
   `ffdd4373cb41401e3f4e8b4d65f84688ed4288966d621580de303b1ca47d15bf`.
-- The current corrected Debian package is SHA-256
+- The historical D-020 Debian package used for the accepted Phase 2/first
+  physical run is SHA-256
   `77b70295a838daf5a85e0ba4a7e33a1f7109b0f049bee4775cb323a00f880804`
   (`teather_0.1.0-2_amd64.deb`). Two clean builds were byte-identical.
 - Root-mapped namespace package tests passed unpack, synthetic upgrade, remove,

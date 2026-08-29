@@ -110,8 +110,14 @@ implemented: temporary per-device NetworkManager DNS, reserved sentinel
 `198.19.0.1`, a non-overlapping `198.18.0.0/16` mapping pool, and virtual DNS over
 UDP and TCP. Local tests, the aggregate build, two clean tunnel builds, and two
 same-source package builds pass reproducibly. The next job is disposable-VM DNS
-integration and cleanup validation; do not mutate the active host or query ADB.
-Request explicit phone connection only after the VM gate passes. P1 remains active;
+integration and cleanup validation. A fresh guest installed `0.1.0-3` and
+reported API 2, but an SSH-launched first case was correctly classified as a
+remote PolicyKit subject and NetworkManager denied `network-control`; owned TUN,
+route, resolver, process, and journal state cleaned successfully. The evidence
+overlay is powered off and healthy. Resume through the guest's active GNOME
+session with the real product `pkexec` path; do not weaken PolicyKit, mutate the
+active host, or query ADB. Request explicit phone connection only after the VM
+gate passes. P1 remains active;
 do not start P2 general UDP, IPv6, broader DNS, WireGuard, wireless transports,
 multi-client support, cross-platform receivers, or P5 polish early.
 

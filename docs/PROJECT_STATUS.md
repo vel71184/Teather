@@ -4,8 +4,8 @@
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
 - **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-3` implements
-  D-021 temporary DNS and passes local source/package gates. Its new DNS behavior
-  still requires disposable-VM validation before physical P1 resumes.
+  D-021 temporary DNS, passes local source/package gates, and installs with API 2
+  in Debian 12. Its active-GNOME DNS matrix remains pending before physical P1.
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
@@ -51,7 +51,10 @@ non-loopback IPv4 nameserver. Teather failed safely and restored owned state. Th
 owner approved D-021's transient per-device NetworkManager design. Its source,
 third pinned tunnel patch, reserved sentinel/mapping split, API-v2 diagnostics,
 and Debian package `0.1.0-3` are implemented. The current objective is isolated
-VM validation; do not repeat the physical run or mutate the active host first.
+VM validation. The first fresh guest attempt proved package/API installation and
+safe cleanup after SSH's remote PolicyKit subject was denied; it did not test the
+actual active-GNOME authorization path. Do not repeat the physical run or mutate
+the active host first.
 
 ## Implemented P0 surface
 
@@ -74,9 +77,10 @@ VM validation; do not repeat the physical run or mutate the active host first.
 ## Next concrete actions
 
 1. Keep P1 active; E-002/E-003 remain incomplete. Do not advance to P2.
-2. Keep the phone disconnected and do not query ADB. Boot a fresh disposable VM
-   overlay and validate package `0.1.0-3`, NetworkManager preserved external
-   IP/routes, UDP/TCP sentinel DNS, failure cleanup, and no persistence.
+2. Keep the phone disconnected and do not query ADB. Run the private harness in
+   the disposable guest's active GNOME session through packaged `pkexec`; do not
+   add a permissive PolicyKit rule to make an SSH subject pass. Validate preserved
+   external IP/routes, UDP/TCP sentinel DNS, failure cleanup, and no persistence.
 3. Preserve the completed reproducibility evidence: two clean tunnel builds were
    identical at `9ad64db8987a7035ab86edae99417506e5cc931bb876cd7736e9ba148f470146`,
    and two same-source package builds were identical at
@@ -118,9 +122,10 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- D-021 should resolve the observed DNS loss, but preservation of externally
-  configured TUN state, resolver exclusion, and cleanup remain unproven in a real
-  NetworkManager guest and on the physical host. General UDP and IPv6 remain P2.
+- D-021 should resolve the observed DNS loss, but its NetworkManager reapply and
+  resolver exclusion remain unproven in the guest's active desktop session and
+  on the physical host. The SSH-denial path cleaned its owned state. General UDP
+  and IPv6 remain P2.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
@@ -182,6 +187,35 @@ next handoff/recovery documents, and affected technical guidance agree.
 ```
 
 ## Work log
+
+### 2026-08-28 — D-021 audit hardened; first fresh VM attempt stopped at session authorization
+
+- Completed: rebased the implementation onto the owner's five reasoning-gate
+  documentation commits; reconciled stale resume points; hardened exact resolver,
+  route, cleanup-error, dependency, and failure-path checks; built reproducibly;
+  installed package `0.1.0-3` in a fresh disposable overlay; and confirmed API 2.
+- Verified with: 37 Python tests, strict helper/D-Bus checks, the full 92-task
+  Android/Linux `make check`, two identical tunnel builds at
+  `9ad64db8987a7035ab86edae99417506e5cc931bb876cd7736e9ba148f470146`,
+  two identical package builds at
+  `f3aa412bf64c3131eeb8f671161392164f5f72df04e404cb9c34cee7dea769d9`,
+  guest NetworkManager 1.42.4, installed API 2, post-denial core cleanup, clean
+  guest poweroff, and a clean QCOW check.
+- Files/areas changed: DNS manager/adapter/preflight tests and package dependency;
+  architecture, decisions, development, experiments, handoff, test, README,
+  project-status, and agent resume documentation.
+- Decisions made: an SSH process is a remote PolicyKit subject, so its
+  `network-control` denial is not accepted as the active GNOME product result.
+  Do not add a wildcard/passwordless rule; rerun through the real desktop and
+  packaged `pkexec` path.
+- Milestone transition: not applicable. P1 remains active.
+- Risks or failures: two `apt-get --no-download` local-file attempts failed before
+  unpack because Debian reduced the pathname to a non-absolute basename; offline
+  `dpkg -i` succeeded. The eight-case DNS matrix did not advance past `normal`.
+  Private evidence remains only in the powered-off disposable overlay.
+- Next exact action: with no phone, use a fresh disposable overlay and run the
+  D-021 matrix from the active GNOME session through product authorization. Only
+  after it passes may the operator phone gate open.
 
 ### 2026-08-28 — add fresh-session Codex reasoning gate
 

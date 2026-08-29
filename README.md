@@ -13,7 +13,7 @@ as little receiver-side software as each platform permits.
 > host-only checks, both disposable-VM phases, and debug-APK verification are
 > complete. The first physical P1 run failed safely at the host DNS-retention
 > gate. The bounded replacement is implemented in package `0.1.0-3` and awaits
-> disposable-VM validation before another phone run.
+> completion of its active-GNOME disposable-VM matrix before another phone run.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support

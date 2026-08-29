@@ -250,6 +250,14 @@ per-device NetworkManager sentinel DNS plus UDP/TCP virtual DNS. E-002 remains
 incomplete until that replacement passes the fresh disposable-VM matrix and the
 physical workload/session gate; the failed 2026-08-27 observation is not erased.
 
+On 2026-08-28 a fresh guest installed the reproducible `0.1.0-3` artifact and
+reported status API 2. The first integration process ran under SSH, which
+PolicyKit classifies as remote; NetworkManager denied `network-control` before
+DNS mutation. Manager cleanup removed its TUN/routes, tunnel process, sentinel,
+and journal. This is useful failure-path evidence, not a verdict on the active
+GNOME product path. The replacement retest must run from the active desktop with
+packaged authorization and no permissive test rule.
+
 ## E-003 — P1 failure-path restoration
 
 **Date:** 2026-08-26 · **Status:** running
