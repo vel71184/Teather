@@ -1,6 +1,6 @@
 # Project status
 
-- **Snapshot date:** 2026-08-27
+- **Snapshot date:** 2026-08-29
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop validation
 - **Runnable build:** Android `0.1.0-p1` and Debian package `0.1.0-2` pass source,
@@ -9,6 +9,15 @@
 
 This is the canonical resume point. Update it at the end of every meaningful work
 session so the next session starts from evidence instead of archaeology.
+
+> **Fresh-session gate:** On the first prompt of a new Codex conversation,
+> complete the mandatory read-only context pass, recommend a reasoning level, and
+> stop before implementation or live operations. The current owner-reviewed P1
+> DNS design is **GPT-5.6 Sol with Ultra** work because networking, security,
+> cleanup, testing, and documentation can be reviewed independently. See
+> [the repository agent instructions](../AGENTS.md#fresh-codex-session-gate).
+> Within the same thread, Codex must also stop before a materially new phase when
+> the recommended level changes in either direction.
 
 ## North star
 
@@ -171,6 +180,29 @@ next handoff/recovery documents, and affected technical guidance agree.
 ```
 
 ## Work log
+
+### 2026-08-29 — add fresh-session Codex reasoning gate
+
+- Completed: documented a mandatory first-prompt, read-only reasoning-level gate
+  plus a symmetric same-thread High-to-Ultra or Ultra-to-High transition gate
+  across the agent instructions, README, current P1 handoff, development guide,
+  and canonical resume point.
+- Verified with: exact cross-document references and scope rules distinguish
+  GPT-5.6 Sol with Ultra for separable repository-wide or cross-subsystem work
+  from High for focused work with an accepted design and bounded verification.
+- Files/areas changed: AGENTS.md, README.md, docs/PROJECT_STATUS.md,
+  docs/P1_HANDOFF.md, and docs/DEVELOPMENT.md.
+- Decisions made: the current P1 DNS design review is classified as Ultra; a
+  later bounded implementation must trigger reassessment and may move to High.
+  The gate selects execution mode only and does not authorize implementation, device
+  use, network mutation, or bypass of another approval stop.
+- Milestone transition: not applicable. P1 remains active.
+- Risks or failures: Codex may not be able to observe its active selector setting,
+  so it must recommend the level and wait for owner confirmation rather than
+  assert that the setting is active.
+- Next exact action: in a new Codex conversation, run the fresh-session gate; once
+  the owner confirms Ultra and prompts again, continue the owner-reviewed P1 DNS
+  design discussion without reconnecting the phone or changing resolver state.
 
 ### 2026-08-27 — physical P1 stopped at DNS gate; cleanup passed
 
