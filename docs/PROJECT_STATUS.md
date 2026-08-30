@@ -138,6 +138,27 @@ See `docs/DECISIONS.md` for rationale and status.
 - App-store packaging
 - Carrier-specific behavior modules
 
+## Deferred / punch list
+
+Small items, not blocking, to fold into the next relevant change:
+
+1. **Launcher icon.** Unify the Android launcher icon to the Linux art
+   (`desktop/linux/resources/icons/teather.svg`) — the owner prefers the Linux
+   logo. Next APK build.
+2. **Zero-gap upstream toggle + phone-side live change.** `teather upstream`
+   currently stops/starts the Android relay (~1 s gap for new connections)
+   because `RelayStartPolicy` refuses a config change on a running relay. Add an
+   `ACTION_RECONFIGURE` to `RelayService` that rebinds
+   `AndroidNetworkConnector`'s preference without tearing down `Socks5Server`.
+   Same path makes the phone's `MainActivity` upstream spinner apply live
+   instead of only at start. One feature; needs an APK build.
+3. **Bare-host auto-revert safety net.** Optional dead-man's-switch for
+   daily-driver host use — a `systemd-run` timer armed at connect that runs a
+   standalone `nmcli con down/delete teather0` revert unless a connectivity
+   heartbeat keeps re-arming it. Sketched 2026-08-29, not built. Only worth it
+   if the owner wants zero-babysit confidence beyond `teather disconnect` /
+   `docs/P1_RECOVERY.md`.
+
 ## P1 authorization and live-test boundary
 
 The owner-approved implementation plan on 2026-08-25 resolves D-013 and authorizes
