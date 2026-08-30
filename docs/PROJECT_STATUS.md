@@ -2,8 +2,9 @@
 
 - **Snapshot date:** 2026-08-30
 - **Lifecycle:** implementation / pre-alpha
-- **Active milestone:** P1 — Linux USB Desktop validation (acceptance essentially
-  passed; closeout pending)
+- **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
+  (`0.1.0-4`) is validated end-to-end and running live on the developer host.
+  Next is the P2 design discussion (D-018).
 - **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-4` (sha256
   `141d542a…`) implements D-022 — NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
@@ -173,6 +174,35 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — D-022 live on the developer host; merged to main
+
+- Completed: after the VM validation below, installed `0.1.0-4` on the actual
+  developer laptop (Debian 12, NM 1.42.4, Wi-Fi `wlo1`) at the owner's request
+  and ran it live. Host baseline snapshotted to `~/teather-host-evidence/`.
+  `teather connect` (phone already approved from the 2026-08-27 run): connected
+  with no polkit prompt, `/etc/resolv.conf` = `8.8.8.8` then `198.19.0.1` (Wi-Fi
+  resolver first), Wi-Fi default (metric 600) still preferred over `teather0`
+  (metric 32000), `teather0` never written to
+  `/etc/NetworkManager/system-connections/`. `curl --interface teather0` exited
+  at the phone's Verizon IP (`203.0.113.10`) vs `198.51.100.20` on Wi-Fi.
+  Then `nmcli device disconnect wlo1` → within 3 s the whole machine (this
+  Claude Code session included) was on cellular through Teather:
+  `resolv.conf` = `198.19.0.1` only, default = `teather0`, real sites
+  (`github.com`, `google`, `claude.ai`, `api.anthropic.com`) all reachable,
+  6/6 and more probe requests OK, teatherd RSS steady ~29 MB. `nmcli device
+  connect wlo1` + `teather disconnect` returned the host to exact baseline.
+- Verified with: the above, plus `~/teather-host-evidence/{routes,resolv,nm}.
+  {before,active}`. The D-022 branch merged fast-forward to `main` and pushed
+  (`9ad8c0d`).
+- Milestone transition: P1's core question is answered on real hardware. The
+  owner will daily-drive `0.1.0-4`; sustained/live-data behaviour and carrier
+  reclassification are that ongoing use, not a synthetic gate.
+- Next exact action: **stop for the P2 design discussion (D-018)** before any
+  general-UDP / IPv6 / broader-DNS / WireGuard / wireless-transport work. P2 =
+  "Protocol Completeness": a documented UDP relay path, explicit IPv6 policy and
+  tests, DNS A/AAAA behaviour, keepalive/backpressure, suspend/resume. Let real
+  daily-use friction inform the P2 priorities.
 
 ### 2026-08-30 — D-022 validated end-to-end with the real phone (VM + USB passthrough)
 
