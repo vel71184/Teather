@@ -2,6 +2,7 @@ APP_ID = "io.github.vel71184.teather"
 SERVICE_COMPONENT = f"{APP_ID}/.service.RelayService"
 ACTION_START = f"{APP_ID}.action.START"
 ACTION_STOP = f"{APP_ID}.action.STOP"
+ACTION_RECONFIGURE = f"{APP_ID}.action.RECONFIGURE"
 STATUS_SCHEMA = 1
 RELAY_PORT = 1080
 

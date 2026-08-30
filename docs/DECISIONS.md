@@ -218,14 +218,21 @@ compatibility check.
 
 ### On-the-fly switching
 
-Changing the upstream while connected restarts **only the phone's relay
-binding**: `teatherd` stops and restarts the Android relay with the new
-transport. `teather0`, `tun2proxy`, the routes, the DNS, and the ADB forward are
-untouched — they are upstream-agnostic. New connections use the new transport;
-in-flight connections on the old one drop (~1 s). This is because
-`RelayRuntime`/`RelayStartPolicy` deliberately refuse a config change on a
-running relay (D-016); a truly zero-blip reconfigure would need a small Android
-`ACTION_RECONFIGURE` and is deferred.
+Changing the upstream while connected rebinds **only the phone's relay
+upstream**, with no teardown of anything. `teather0`, `tun2proxy`, the routes,
+the DNS, and the ADB forward are untouched — they are upstream-agnostic — and so
+is the SOCKS listener. New connections use the new transport; sessions already
+established stay on the transport they opened on (a live TCP socket cannot move
+anyway). No client sees a gap.
+
+This is done by `RelayService`'s `ACTION_RECONFIGURE` (versionCode 3,
+`0.1.0-p1.1`): `RelayRuntime.reconfigure()` swaps the live
+`AndroidNetworkConnector`'s transport preference in place instead of going
+through `RelayStartPolicy`, which still refuses a silent config change on a
+running relay for `ACTION_START` (D-016). The Linux client drives it with
+`adb … -a …RECONFIGURE`; the app's own upstream spinner uses the same path, so
+the transport can also be changed from the phone while the relay runs. A port
+change or a stopped relay still falls back to a full (re)start.
 
 Teather will not change an upstream on a relay it did not start (a manual relay
 is reconfigured on the phone).

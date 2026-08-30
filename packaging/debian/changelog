@@ -1,3 +1,15 @@
+teather (0.1.0-6) unstable; urgency=medium
+
+  * `teather upstream` now rebinds the phone's relay upstream with no teardown,
+    using the Android app's new ACTION_RECONFIGURE (versionCode 3, 0.1.0-p1.1).
+    The SOCKS listener, teather0, the tunnel, routes, and DNS all stay up and
+    established sessions keep their transport, so no connection sees a gap.
+  * The Android launcher icon now matches the Linux client artwork, and the
+    app's on-screen description no longer carries stale "P0 / TCP CONNECT only"
+    wording.
+
+ -- Teather Project <noreply@example.invalid>  Sat, 30 Aug 2026 12:00:00 +0000
+
 teather (0.1.0-5) unstable; urgency=medium
 
   * D-023: `teather upstream auto|cellular|wifi|ethernet` (also SetUpstream on

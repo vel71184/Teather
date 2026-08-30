@@ -30,7 +30,8 @@ class RelayService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.action != ACTION_START) {
+        val reconfigure = intent?.action == ACTION_RECONFIGURE
+        if (intent?.action != ACTION_START && !reconfigure) {
             Log.w(LOG_TAG, "relay.lifecycle.unsupported-action")
             return START_NOT_STICKY
         }
@@ -48,7 +49,11 @@ class RelayService : Service() {
             return START_NOT_STICKY
         }
 
-        val status = RelayRuntime.start(applicationContext, configuration)
+        val status = if (reconfigure) {
+            RelayRuntime.reconfigure(applicationContext, configuration)
+        } else {
+            RelayRuntime.start(applicationContext, configuration)
+        }
         if (status.controlError != null) {
             Log.w(LOG_TAG, "relay.lifecycle.${status.controlError}")
         }
@@ -162,6 +167,9 @@ class RelayService : Service() {
     companion object {
         const val ACTION_START = "io.github.vel71184.teather.action.START"
         const val ACTION_STOP = "io.github.vel71184.teather.action.STOP"
+
+        /** Apply a new upstream (or port) to the running relay; see [RelayRuntime.reconfigure]. */
+        const val ACTION_RECONFIGURE = "io.github.vel71184.teather.action.RECONFIGURE"
         const val EXTRA_PORT = "relay_port"
         const val EXTRA_UPSTREAM = "relay_upstream"
 

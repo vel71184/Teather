@@ -3,14 +3,20 @@
 - **Snapshot date:** 2026-08-30
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
-  is validated end-to-end and running live on the developer host. Next is the P2
-  design discussion (D-018).
-- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-5` (sha256
-  `4a45b934…`). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
-  `tun` connection, no setuid helper or polkit action, additive DNS, automatic
-  failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|ethernet`
-  — switch the phone's transport without reconnecting Teather). 48 host unit
-  tests + D-Bus smoke pass. **Validated end to end on 2026-08-30**: in the
+  is validated end-to-end and running live on the developer host. The owner has
+  since directed a post-P1 track of work (see the 2026-08-30 entries and the
+  punch list) — not P2 as scoped by D-018. UDP/IPv6 "protocol completeness"
+  stays deferred; the owner rejected the roadmap's assumption that all of P2/P4
+  must happen. Next build task: track 2, lightweight UDP.
+- **Runnable build:** Android `0.1.0-p1.1` (`versionCode 3`); Debian package
+  `0.1.0-6` (rebuild pending). `0.1.0-4` = D-022 (NetworkManager owns `teather0`
+  as an in-memory `tun` connection, no setuid helper or polkit action, additive
+  DNS, automatic failover). `0.1.0-5` adds D-023 (`teather upstream
+  auto|cellular|wifi|ethernet`). `0.1.0-6` / `0.1.0-p1.1` makes the upstream
+  switch zero-gap (`ACTION_RECONFIGURE`, also phone-side), matches the Android
+  icon to the Linux artwork, and drops stale "P0" wording. 48 host unit tests +
+  Android unit tests + D-Bus smoke pass; the `0.1.0-p1.1` APK is built but not
+  yet on the phone. **Validated end to end on 2026-08-30**: in the
   disposable VM with the phone on USB passthrough, then installed and run on the
   actual laptop — `teather connect` works, traffic exits on the phone's Verizon
   cellular (`203.0.113.10`), `teather upstream wifi` flips it to the phone's
@@ -142,16 +148,15 @@ See `docs/DECISIONS.md` for rationale and status.
 
 Small items, not blocking, to fold into the next relevant change:
 
-1. **Launcher icon.** Unify the Android launcher icon to the Linux art
-   (`desktop/linux/resources/icons/teather.svg`) — the owner prefers the Linux
-   logo. Next APK build.
-2. **Zero-gap upstream toggle + phone-side live change.** `teather upstream`
-   currently stops/starts the Android relay (~1 s gap for new connections)
-   because `RelayStartPolicy` refuses a config change on a running relay. Add an
-   `ACTION_RECONFIGURE` to `RelayService` that rebinds
-   `AndroidNetworkConnector`'s preference without tearing down `Socks5Server`.
-   Same path makes the phone's `MainActivity` upstream spinner apply live
-   instead of only at start. One feature; needs an APK build.
+1. ~~**Launcher icon.**~~ Done 2026-08-30 (`0.1.0-p1.1`): `ic_teather.xml` now
+   mirrors `desktop/linux/resources/icons/teather.svg`.
+2. ~~**Zero-gap upstream toggle + phone-side live change.**~~ Done 2026-08-30
+   (`0.1.0-p1.1`): `RelayService.ACTION_RECONFIGURE` +
+   `RelayRuntime.reconfigure()` swap the live `AndroidNetworkConnector`'s
+   transport in place — no `Socks5Server` teardown, established sessions keep
+   their transport, no gap. `teather upstream` (via `adb.reconfigure_relay`) and
+   the phone's `MainActivity` spinner both drive it. Not yet exercised on the
+   phone.
 3. **Bare-host auto-revert safety net.** Optional dead-man's-switch for
    daily-driver host use — a `systemd-run` timer armed at connect that runs a
    standalone `nmcli con down/delete teather0` revert unless a connectivity
@@ -193,6 +198,43 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — Zero-gap upstream switch + Linux-matched icon + stale-text cleanup
+
+- Completed (punch-list items 1 and 2; Android `versionCode 3` / `0.1.0-p1.1`,
+  Debian `0.1.0-6`):
+  - `RelayService.ACTION_RECONFIGURE` → `RelayRuntime.reconfigure()` swaps the
+    running `AndroidNetworkConnector`'s transport preference in place (new
+    `@Volatile var preference` + `rebind()`), instead of going through
+    `RelayStartPolicy`. No `Socks5Server` teardown, the SOCKS listener stays
+    bound, and sessions already established keep their transport (a live TCP
+    socket cannot move) — no client sees a gap. A port change or a stopped relay
+    still falls back to a full (re)start.
+  - `desktop` drives it via `adb.reconfigure_relay(serial, upstream)`;
+    `manager.set_upstream` no longer does stop+start. The phone's `MainActivity`
+    upstream spinner now sends `ACTION_RECONFIGURE` while the relay runs, so the
+    transport can be changed phone-side too.
+  - `app/.../drawable/ic_teather.xml` redrawn to mirror
+    `desktop/linux/resources/icons/teather.svg` (owner prefers the Linux logo).
+  - `screen_description` string and the `Socks5Protocol` "Only CONNECT … in P0"
+    message reworded off the stale P0 framing.
+- Verified with: `./gradlew :app:testDebugUnitTest :app:lintDebug
+  :app:assembleDebug` (green; new `Socks5ServerIntegrationTest` case proves a
+  connector rebind steers only new sessions) and 48 Linux host unit tests
+  (`FakeAdb` grew `reconfigure_relay`; the upstream-toggle test now asserts no
+  stop/start). **Not yet exercised on the phone** — needs the APK reinstalled
+  and a live `teather upstream` switch under load.
+- Files/areas changed: `app/.../service/{RelayService,RelayRuntime}.kt`,
+  `app/.../network/AndroidNetworkConnector.kt`, `app/.../relay/Socks5Protocol.kt`,
+  `app/.../MainActivity.kt`, `app/.../res/values/strings.xml`,
+  `app/.../res/drawable/ic_teather.xml`, `app/build.gradle.kts`,
+  `app/src/test/.../Socks5ServerIntegrationTest.kt`; `desktop/linux/teather/
+  {constants,adb,manager}.py`, `desktop/linux/tests/test_core.py`;
+  `packaging/debian/{control,changelog}`, `packaging/scripts/build-deb.sh`,
+  `packaging/man/teather.1`; `docs/DECISIONS.md` (D-023 updated),
+  `docs/DEVELOPMENT.md`.
+- Next: track 2 — lightweight UDP (udpgw-style framed datagrams over a second
+  adb-forwarded TCP port). Phone re-test of this batch folds into that reinstall.
 
 ### 2026-08-30 — D-023: pick the phone's upstream (cellular/wifi/ethernet/auto)
 

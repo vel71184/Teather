@@ -1,16 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors desktop/linux/resources/icons/teather.svg so the launcher icon
+     matches the Linux client. viewport kept at 128 to reuse the SVG geometry. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
     <path
-        android:fillColor="#5B3FD0"
-        android:pathData="M4,4h40v40h-40z" />
+        android:fillColor="#5B3F8C"
+        android:pathData="M28,0 L100,0 A28,28 0 0 1 128,28 L128,100 A28,28 0 0 1 100,128 L28,128 A28,28 0 0 1 0,100 L0,28 A28,28 0 0 1 28,0 Z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M11,11h26v6h-10v20h-6v-20h-10z" />
+        android:pathData="M34,38 h60 v14 H71 v44 H57 V52 H34 z" />
     <path
-        android:fillColor="#87F0D0"
-        android:pathData="M30,24h7v13h-7z" />
+        android:fillColor="#8EE3C1"
+        android:pathData="M35,85.5 H93 V92.5 H35 Z" />
+    <path
+        android:fillColor="#8EE3C1"
+        android:pathData="M27,89 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0 z" />
+    <path
+        android:fillColor="#8EE3C1"
+        android:pathData="M85,89 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0 z" />
 </vector>

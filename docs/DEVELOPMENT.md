@@ -19,7 +19,7 @@ the next gate. Follow `docs/P1_HANDOFF.md` rather than restarting P0.
 | Gradle wrapper | 9.3.1 |
 | JDK | 17 |
 | Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
-| P1 Android version | `versionCode 2` / `0.1.0-p1` |
+| P1 Android version | `versionCode 3` / `0.1.0-p1.1` (adds ACTION_RECONFIGURE, Linux-matched icon) |
 | P1 Linux target | Debian 12 GNOME amd64 |
 | P1 desktop stack | Python 3.11, PyGObject, GTK 3, Ayatana AppIndicator |
 | Packet engine | tun2proxy 0.8.3 plus audited Linux packet-information and TCP virtual-DNS patches with a checked-in Cargo lock; run as `--tun teather0` |

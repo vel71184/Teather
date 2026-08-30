@@ -17,22 +17,29 @@ pick a reasoning mode. Just start. Ask the owner only for the things listed unde
 
 ## Current priority
 
-P0 and E-001 are complete. Milestone: **P1 — Linux USB Desktop validation.**
+P0/E-001 and P1 acceptance are complete. D-022 is implemented and **running live
+on the developer laptop** since 2026-08-30 (`teather connect` works with no
+polkit prompt, traffic exits on the phone, additive DNS keeps the physical
+resolver first, failover/restore are automatic, every teardown returns the host
+to baseline). Debian `0.1.0-6` / Android `0.1.0-p1.1`.
 
-D-022 is accepted, implemented (package `0.1.0-4`), and **validated end to end on
-2026-08-30** in the disposable VM with the phone passed through over USB:
-`teather connect` works, real traffic exits on the phone's cellular, additive
-DNS keeps the physical resolver first while the VM's link is up, failover and
-restore are automatic, and every teardown returns the host to exact baseline. 46
-host unit tests + D-Bus smoke pass. NetworkManager owns `teather0` as an
-in-memory `tun` connection (`tun.owner` so `tun2proxy` runs unprivileged, no
-polkit prompt from the daemon's context); no setuid helper or polkit action.
+The owner has **directed a focused post-P1 track**, and explicitly rejected the
+roadmap's assumption that all of P2 ("protocol completeness") and P4 (WireGuard)
+must follow. Order:
 
-Remaining for P1 sign-off: a two-hour session, the GUI/tray + package
-upgrade/purge lifecycle against `0.1.0-4`, and the milestone closeout (roadmap,
-`docs/PROJECT_STATUS.md`, README, E-002/E-003). Then **stop for the P2 design
-discussion (D-018)** — do not start general UDP, IPv6, broader DNS, WireGuard,
-wireless transports, multi-client, other platforms, or P5 polish.
+1. Android status/text cleanup, Linux-matched icon, zero-gap upstream switch
+   (`ACTION_RECONFIGURE`). **Done** 2026-08-30.
+2. **Lightweight UDP** — udpgw-style framed datagrams over a second
+   adb-forwarded TCP port; a ~200-line Android `UdpRelay` bound to the chosen
+   physical transport plus a small Linux shim; `tun2proxy` keeps TCP + virtual
+   DNS. No `VpnService`, no packet stack on the phone. **Next.**
+3. **P3 wireless** — local Wi-Fi link instead of USB, same relay semantics. Its
+   own design pass.
+4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery.
+
+IPv6 and general "become a VPN" scope stay deferred. Still discuss with the owner
+before starting anything outside this list (multi-client, other platforms, P5
+polish, distribution/release signing).
 
 ## Safety gates — ask the owner first
 

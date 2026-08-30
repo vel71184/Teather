@@ -56,6 +56,9 @@ object RelayRuntime {
     @Volatile
     private var server: Socks5Server? = null
 
+    @Volatile
+    private var connector: AndroidNetworkConnector? = null
+
     @Synchronized
     fun start(context: Context, requested: RelayConfiguration): RelayStatus {
         when (RelayStartPolicy.decide(lifecycle, configuration, requested)) {
@@ -90,6 +93,7 @@ object RelayRuntime {
             )
             val actualPort = newServer.start()
             server = newServer
+            this.connector = connector
             boundPort = actualPort
             lifecycle = RelayLifecycle.RUNNING
             snapshot()
@@ -109,6 +113,33 @@ object RelayRuntime {
         return snapshot()
     }
 
+    /**
+     * Apply [requested] to a running relay without dropping the listener. An
+     * upstream-only change is a live rebind — established sessions stay on their
+     * transport, new ones use the new one, and no client sees a gap. A port
+     * change or a stopped relay falls back to a full (re)start.
+     */
+    @Synchronized
+    fun reconfigure(context: Context, requested: RelayConfiguration): RelayStatus {
+        val current = configuration
+        if (lifecycle != RelayLifecycle.RUNNING || current == null) {
+            return start(context, requested)
+        }
+        if (current.port != requested.port) {
+            stopLocked()
+            return start(context, requested)
+        }
+        if (current == requested) {
+            controlError = null
+            return snapshot()
+        }
+        connector?.rebind(requested.upstream)
+        configuration = requested
+        controlError = null
+        Log.i(LOG_TAG, "relay.lifecycle.reconfigured")
+        return snapshot()
+    }
+
     fun snapshot(): RelayStatus = RelayStatus(
         lifecycle = lifecycle,
         configuration = configuration,
@@ -121,6 +152,7 @@ object RelayRuntime {
     private fun stopLocked() {
         server?.close()
         server = null
+        connector = null
         boundPort = null
         configuration = null
         failureCategory = null

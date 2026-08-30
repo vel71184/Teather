@@ -451,10 +451,11 @@ class Manager:
     def set_upstream(self, upstream: str) -> dict:
         """Choose which Android transport the relay uses.
 
-        While connected, this restarts only the phone's relay binding — the
-        `teather0` interface, the tunnel, routes, and DNS stay up. New
-        connections use the new upstream; in-flight ones on the old transport
-        drop. It cannot change a relay Teather did not start (a manual relay is
+        While connected, this rebinds only the phone's relay upstream with no
+        listener teardown — the `teather0` interface, the tunnel, routes, and DNS
+        stay up, and so does the SOCKS listener. New connections use the new
+        upstream; established sessions stay on the transport they opened on. It
+        cannot change a relay Teather did not start (a manual relay is
         reconfigured on the phone).
         """
 
@@ -471,8 +472,7 @@ class Manager:
                 )
             self._message = f"Switching relay upstream to {upstream}"
             self._emit_status()
-            self.adb.stop_relay(self._active_serial)
-            android = self.adb.start_relay(self._active_serial, upstream)
+            android = self.adb.reconfigure_relay(self._active_serial, upstream)
             if not android.compatible or not android.matches_upstream(upstream):
                 self.disconnect()
                 raise TeatherError("android-not-ready", f"Relay did not come back on '{upstream}'")

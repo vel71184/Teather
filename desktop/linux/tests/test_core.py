@@ -58,6 +58,7 @@ class FakeAdb:
         self.fail_start = fail_start
         self.started = []
         self.stopped = []
+        self.reconfigured = []
         self.removed = []
         self.forwards = []
         self.upstreams = []
@@ -87,6 +88,12 @@ class FakeAdb:
         self.stopped.append(serial)
         if self.fail_stop:
             raise TeatherError("adb-failed", "simulated stop failure")
+
+    def reconfigure_relay(self, serial, upstream):
+        self.reconfigured.append((serial, upstream))
+        self.upstreams.append(upstream)
+        self.states[serial] = compatible_status(configured_upstream=upstream)
+        return self.states[serial]
 
     def add_forward(self, serial):
         self.forwards.append(serial)
@@ -613,7 +620,7 @@ class ManagerTests(unittest.TestCase):
             self.assertFalse(status["dns_ready"])
             self.assertNotIn(DNS_SENTINEL, manager.resolver_path.read_text())
 
-    def test_upstream_default_is_cellular_and_toggle_restarts_only_the_relay(self):
+    def test_upstream_default_is_cellular_and_toggle_rebinds_only_the_relay(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb({SERIAL_ONE: AndroidStatus()})  # relay stopped -> Teather starts it
             manager = self.make_manager(directory, adb)
@@ -624,7 +631,9 @@ class ManagerTests(unittest.TestCase):
             tunnel_before = manager._tunnel
             result = manager.set_upstream("wifi")
             self.assertEqual(result["active_upstream"], "wifi")
-            self.assertEqual(adb.stopped, [SERIAL_ONE])
+            # zero-gap: the relay is rebound live, never stopped/restarted
+            self.assertEqual(adb.stopped, [])
+            self.assertEqual(adb.reconfigured, [(SERIAL_ONE, "wifi")])
             self.assertEqual(adb.upstreams, ["cellular", "wifi"])
             self.assertIs(manager._tunnel, tunnel_before)  # tunnel/teather0 untouched
             self.assertEqual(manager.config.upstream(), "wifi")

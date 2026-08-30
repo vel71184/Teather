@@ -15,11 +15,23 @@ import java.net.UnknownHostException
 
 class AndroidNetworkConnector(
     context: Context,
-    private val preference: UpstreamPreference,
+    preference: UpstreamPreference,
     private val onSelected: (String) -> Unit,
 ) : OutboundConnector {
     private val connectivityManager =
         context.applicationContext.getSystemService(ConnectivityManager::class.java)
+
+    /**
+     * The transport newly opened sockets bind to. Swappable so the upstream can
+     * change on a running relay with no listener teardown: sockets already open
+     * keep their transport, and the next [connect] picks up the new preference.
+     */
+    @Volatile
+    private var preference: UpstreamPreference = preference
+
+    fun rebind(preference: UpstreamPreference) {
+        this.preference = preference
+    }
 
     override fun connect(destination: SocksDestination, timeoutMs: Int): Socket {
         val selected = selectNetwork()

@@ -13,7 +13,9 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -47,6 +49,44 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(buildContent())
         restoreConfiguration()
+        installUpstreamListener()
+    }
+
+    /**
+     * Let the upstream picker take effect on a running relay without a
+     * stop/start: send ACTION_RECONFIGURE, which rebinds the relay's upstream
+     * live. Installed after [restoreConfiguration] so restoring the saved choice
+     * does not fire it, and it only acts when the choice actually differs from
+     * what the relay is on.
+     */
+    private fun installUpstreamListener() {
+        upstreamSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val upstream = UpstreamPreference.entries[position]
+                preferences.edit().putString(PREFERENCE_UPSTREAM, upstream.wireName).apply()
+
+                val status = RelayRuntime.snapshot()
+                if (status.lifecycle != RelayLifecycle.RUNNING) return
+                if (status.configuration?.upstream == upstream) return
+
+                val port = portInput.text.toString().toIntOrNull()
+                    ?: status.configuration?.port
+                    ?: RelayConfiguration.DEFAULT_PORT
+                startForegroundService(
+                    Intent(this@MainActivity, RelayService::class.java)
+                        .setAction(RelayService.ACTION_RECONFIGURE)
+                        .putExtra(RelayService.EXTRA_PORT, port)
+                        .putExtra(RelayService.EXTRA_UPSTREAM, upstream.wireName),
+                )
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.upstream_switched, upstreamDisplayName(upstream)),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
     }
 
     override fun onResume() {
@@ -177,7 +217,7 @@ class MainActivity : Activity() {
             curl --fail --show-error --socks5-hostname 127.0.0.1:$port https://example.com/
         """.trimIndent()
         val clipboard = getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("Teather P0 commands", commands))
+        clipboard.setPrimaryClip(ClipData.newPlainText("Teather relay commands", commands))
         Toast.makeText(this, R.string.commands_copied, Toast.LENGTH_SHORT).show()
     }
 

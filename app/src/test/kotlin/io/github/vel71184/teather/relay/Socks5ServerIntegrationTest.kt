@@ -8,6 +8,7 @@ import java.net.Socket
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -138,6 +139,81 @@ class Socks5ServerIntegrationTest {
             server.close()
             streamListener.close()
         }
+    }
+
+    @Test
+    fun `rebinding the connector only steers new sessions`() {
+        // Models RelayRuntime.reconfigure: the upstream (here, which loopback
+        // service the connector dials) changes on a live server. A session that
+        // is already established keeps its socket; only the next CONNECT follows
+        // the new target.
+        val loopback = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+        val serviceA = taggingEchoService("A")
+        val serviceB = taggingEchoService("B")
+        val target = AtomicInteger(serviceA.localPort)
+
+        val server = Socks5Server(
+            port = 0,
+            connector = OutboundConnector { _, timeoutMs ->
+                Socket().apply { connect(InetSocketAddress(loopback, target.get()), timeoutMs) }
+            },
+        )
+        val relayPort = server.start()
+
+        try {
+            Socket(loopback, relayPort).use { first ->
+                first.soTimeout = 5_000
+                val firstIn = DataInputStream(first.getInputStream())
+                connectThroughSocks(firstIn, first, serviceA.localPort)
+                first.getOutputStream().write("ping".toByteArray())
+                first.getOutputStream().flush()
+                assertArrayEquals("A:ping".toByteArray(), firstIn.readBytes(6))
+
+                // The rebind. The established session above must not move.
+                target.set(serviceB.localPort)
+
+                Socket(loopback, relayPort).use { second ->
+                    second.soTimeout = 5_000
+                    val secondIn = DataInputStream(second.getInputStream())
+                    connectThroughSocks(secondIn, second, serviceB.localPort)
+                    second.getOutputStream().write("ping".toByteArray())
+                    second.getOutputStream().flush()
+                    assertArrayEquals("B:ping".toByteArray(), secondIn.readBytes(6))
+                }
+
+                first.getOutputStream().write("pong".toByteArray())
+                first.getOutputStream().flush()
+                assertArrayEquals("A:pong".toByteArray(), firstIn.readBytes(6))
+            }
+        } finally {
+            server.close()
+            serviceA.close()
+            serviceB.close()
+        }
+    }
+
+    private fun taggingEchoService(tag: String): ServerSocket {
+        val loopback = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+        val listener = ServerSocket(0, 1, loopback)
+        thread(name = "test-echo-$tag", isDaemon = true) {
+            try {
+                listener.accept().use { socket ->
+                    val input = socket.getInputStream()
+                    val output = socket.getOutputStream()
+                    val buffer = ByteArray(64)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write("$tag:".toByteArray())
+                        output.write(buffer, 0, count)
+                        output.flush()
+                    }
+                }
+            } catch (_: IOException) {
+                // Closing the listener at test teardown lands here.
+            }
+        }
+        return listener
     }
 
     private fun DataInputStream.readBytes(length: Int): ByteArray = ByteArray(length).also(::readFully)

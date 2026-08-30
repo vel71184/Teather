@@ -82,7 +82,7 @@ object Socks5Protocol {
             throw SocksProtocolException(
                 REPLY_COMMAND_NOT_SUPPORTED,
                 true,
-                "Only CONNECT is available in P0",
+                "Only the CONNECT command is supported",
             )
         }
 
