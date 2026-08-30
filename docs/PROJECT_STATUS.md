@@ -49,12 +49,12 @@ private P1 testing. The debug APK is verified. On 2026-08-27 the physical run
 connected the bounded tunnel but disabling Wi-Fi removed the only usable
 non-loopback IPv4 nameserver; Teather failed safely and restored owned state.
 D-021's `Reapply` DNS design was then implemented and disproven against real
-NetworkManager (E-002). **D-022 is now accepted and implemented (package
-`0.1.0-4`):** NetworkManager owns `teather0`, there is no privileged helper, DNS
-is additive so a working physical link is never disturbed, and failover is
-automatic by default. The current objective is the disposable-VM Phase 2 matrix
-against `0.1.0-4`. Do not repeat the physical run or mutate the active host
-first.
+NetworkManager (E-002). **D-022 (NetworkManager owns `teather0`, no privileged
+helper, additive DNS, automatic failover) and D-023 (`teather upstream` picks
+the phone's transport) are implemented and validated** — in the disposable VM
+and then live on this laptop (see the 2026-08-30 work log). P1's question is
+answered. The current objective is the P2 design discussion (D-018); the owner
+is daily-driving `0.1.0-5` in the meantime.
 
 ## Implemented P0 surface
 
@@ -76,23 +76,21 @@ first.
 
 ## Next concrete actions
 
-1. Keep P1 active; do not advance to P2 (D-018 — stop for a design discussion
-   first).
-2. Confirm the ~13-minute over-cellular soak result (`/tmp/soak.result` in the
-   VM); if it shows no failures or unbounded growth, that satisfies the P1 soak
-   intent (a full two hours can follow later if wanted).
-3. Run the GUI/tray and package upgrade/purge lifecycle checks against
-   `0.1.0-4` in the VM (Phase 1 items were last run against the helper-based
-   package).
-4. Do the P1 milestone closeout: record E-002 (system-wide TCP/DNS — passed) and
-   E-003 (failure restoration — passed) in `docs/EXPERIMENTS.md`; mark P1 passed
-   in `docs/ROADMAP.md`; reconcile the README. Then stop for the P2 discussion.
-5. Hand the phone back: remove the `usb-host` line from the VM launch script and
-   `adb start-server` on the host.
+1. **Stop for the P2 design discussion (D-018)** before any general-UDP / IPv6 /
+   broader-DNS / WireGuard / wireless-transport work. P2 = "Protocol
+   Completeness": a documented UDP relay path, explicit IPv6 policy and tests,
+   DNS A/AAAA behaviour, keepalive/backpressure, suspend/resume. Let real
+   daily-use friction inform the priorities.
+2. When the APK is next built: unify the Android launcher icon to the Linux
+   `desktop/linux/resources/icons/teather.svg` art (owner preference); update
+   any TCP-only UI strings once P2 adds UDP.
+3. Optional, if the owner wants a belt-and-suspenders safety net for bare-host
+   daily use: the standalone auto-revert / dead-man's-switch sketched in the
+   2026-08-29 conversation (not built).
 
-Preserve the P1 implementation. Generated `__pycache__` files, private VM
-evidence, signing keys, and build credentials are not implementation artifacts
-and must not be staged.
+`~/teather-host-evidence/` holds the host before/after network snapshots.
+Generated `__pycache__`, private VM evidence, and signing keys are not
+implementation artifacts and must not be staged.
 
 ## Confirmed decisions
 
@@ -124,12 +122,9 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- D-022's NetworkManager-native `tun` ownership and additive DNS are implemented
-  and pass host unit tests, but the real-NetworkManager behaviour (no polkit
-  prompt for an active session, unprivileged `tun2proxy` attach to the
-  `tun.owner` device, `resolv.conf` ordering, in-memory teardown, `SIGKILL`
-  recovery) is unproven until the disposable-VM matrix runs. General UDP and
-  IPv6 remain P2.
+- Carrier classification/accounting over sustained tethering-like use is
+  unmeasured — that is the owner's daily use, not a synthetic gate. General UDP
+  and IPv6 remain P2.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
