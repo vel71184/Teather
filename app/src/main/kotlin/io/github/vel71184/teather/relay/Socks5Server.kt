@@ -291,7 +291,11 @@ class Socks5Server(
     }
 
     companion object {
-        const val DEFAULT_MAX_CONNECTIONS = 64
+        // A desktop routed entirely through Teather (failover armed, Wi-Fi lost)
+        // opens well over 64 concurrent flows — a browser alone can. The live
+        // 2026-08-30 test hit the old 64 ceiling repeatedly; long-lived udpgw
+        // streams also hold a slot each. 256 gives daily-driver headroom.
+        const val DEFAULT_MAX_CONNECTIONS = 256
         const val HANDSHAKE_TIMEOUT_MS = 10_000
         const val CONNECT_TIMEOUT_MS = 15_000
         const val RELAY_IDLE_TIMEOUT_MS = 300_000

@@ -323,17 +323,18 @@ directory when its first real file is ready.
 
 ## Getting started today
 
-P1 source work and host-only verification are complete. VersionCode 2 /
-`0.1.0-p1` has a verified debug signature. D-019 defers a permanent release
-identity while Teather is privately tested. During physical validation, disabling
-Wi-Fi removed the host's only usable nameserver and Teather disconnected safely;
-D-021's `Reapply` replacement was then disproven against real NetworkManager.
-**D-022 is implemented (`0.1.0-4`)** — NetworkManager owns `teather0`, the
-privileged helper is gone, DNS is additive, failover is automatic — and is
-recorded in [the decision log](docs/DECISIONS.md). Host tests pass; the next gate
-is the disposable-VM matrix in [the P1 handoff](docs/P1_HANDOFF.md). Do not
-reconnect the phone or repeat physical acceptance until `0.1.0-4` passes that
-matrix.
+P1 is complete and Teather runs live on the developer laptop. D-019 defers a
+permanent release identity while Teather is privately tested (the APK is
+debug-signed). **D-022** — NetworkManager owns an in-memory `teather0`, no
+privileged helper, additive DNS, automatic failover — plus **D-023** (on-the-fly
+`teather upstream` transport switch), an `ACTION_RECONFIGURE` that makes that
+switch zero-gap, and **D-024** (general UDP over tun2proxy's `udpgw` feature,
+terminated by a phone-side `UdpGatewayServer`). Current builds: Debian `0.1.0-7`,
+Android `0.1.0-p1.2`. A 2026-08-30 end-to-end test on the laptop + phone covered
+install, connect, TCP, full Wi-Fi-loss failover, a UDP STUN round-trip through
+the relay, the zero-gap upstream switch, and a clean teardown to byte-identical
+host state. See [the decision log](docs/DECISIONS.md) and
+[project status](docs/PROJECT_STATUS.md).
 
 The deterministic source-level gate remains:
 

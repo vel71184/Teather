@@ -1,3 +1,12 @@
+teather (0.1.0-7) unstable; urgency=medium
+
+  * Raise the relay concurrency ceiling from 64 to 256 flows (tun2proxy
+    --max-sessions and the phone-side SOCKS server). The 2026-08-30 live test
+    hit the old limit repeatedly under a full-desktop failover; long-lived
+    udpgw streams also consume a slot each.
+
+ -- Teather Project <noreply@example.invalid>  Sat, 30 Aug 2026 18:00:00 +0000
+
 teather (0.1.0-6) unstable; urgency=medium
 
   * UDP support (D-024). tun2proxy is now built with its `udpgw` feature and run

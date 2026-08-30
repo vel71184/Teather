@@ -17,32 +17,31 @@ pick a reasoning mode. Just start. Ask the owner only for the things listed unde
 
 ## Current priority
 
-P0/E-001 and P1 acceptance are complete. D-022 is implemented and **running live
-on the developer laptop** since 2026-08-30 (`teather connect` works with no
-polkit prompt, traffic exits on the phone, additive DNS keeps the physical
-resolver first, failover/restore are automatic, every teardown returns the host
-to baseline). Debian `0.1.0-6` / Android `0.1.0-p1.1`.
+P0/E-001 and P1 acceptance are complete. D-022 has run live on the developer
+laptop since 2026-08-30. Debian `0.1.0-7` / Android `0.1.0-p1.2`.
 
-The owner has **directed a focused post-P1 track**, and explicitly rejected the
-roadmap's assumption that all of P2 ("protocol completeness") and P4 (WireGuard)
-must follow. Order:
+The owner **directed a focused post-P1 track** and rejected the roadmap's
+assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
+follow. Status:
 
 1. Android status/text cleanup, Linux-matched icon, zero-gap upstream switch
-   (`ACTION_RECONFIGURE`). **Done** 2026-08-30.
-2. **Lightweight UDP** (D-024). **Done** 2026-08-30, not yet phone-tested:
-   tun2proxy's `udpgw` feature + `--udpgw-server 240.0.0.1:1`; the phone's
-   `UdpGatewayServer` terminates the framed stream over the existing SOCKS
-   connection and forwards datagrams on the selected upstream. No second ADB
-   forward, no `VpnService`, no packet stack. Needs the tun2proxy rebuild with
-   `--features udpgw` at packaging time.
-3. **Primary-goal verification (E-011).** The owner's core aim is that cellular
-   traffic through Teather is not classified as tethered. The re-origination
-   that achieves this is already built — the phone opens every socket itself
-   (`Socks5Server` -> `AndroidNetworkConnector`; `UdpGatewayServer` ->
-   `DatagramSocket`), so outbound TTL/hop limit, IP-stack fingerprint, and DNS
-   origin are the phone's. E-011 confirms it on real hardware. **Next**, folds
-   into the pending phone reinstall.
-4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery.
+   (`ACTION_RECONFIGURE`). **Done + live-tested** 2026-08-30.
+2. **Lightweight UDP** (D-024): tun2proxy's `udpgw` feature +
+   `--udpgw-server 240.0.0.1:1`; the phone's `UdpGatewayServer` terminates the
+   framed stream over the existing SOCKS connection. No second ADB forward, no
+   `VpnService`, no packet stack. **Done + live-tested** 2026-08-30 (STUN
+   round-trip through `teather0`). The Debian build rebuilds tun2proxy with
+   `--features udpgw` automatically.
+3. **Primary-goal verification (E-011).** The re-origination that keeps cellular
+   traffic from looking tethered is already built — the phone opens every socket
+   itself. The 2026-08-30 test confirmed the egress is genuinely the phone's
+   cellular link; the **TTL / JA3 half is still pending** a reflector and a
+   cellular-bound request from the phone (which has no HTTP client). **Next.**
+4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery,
+   plus a soak under real daily use.
+
+The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
+(`0.1.0-7`) after a full-desktop failover exhausted the old limit.
 
 **P3 wireless is deprioritised.** A local Wi-Fi receiver link does not advance
 the not-classified-as-tethered goal — the carrier cannot see the receiver<->phone

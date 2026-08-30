@@ -257,7 +257,9 @@ class Manager:
             "--udpgw-server", UDPGW_SENTINEL,
             "--mtu", "1500",
             "--tcp-timeout", "300",
-            "--max-sessions", "64",
+            # A full-desktop failover easily exceeds 64 concurrent flows; the
+            # phone-side SOCKS server allows 256 to match.
+            "--max-sessions", "256",
             "--verbosity", "off",
             "--exit-on-fatal-error",
         ]

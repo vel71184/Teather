@@ -9,21 +9,23 @@
   scope stay deferred; the owner rejected the roadmap's assumption that all of
   P2/P4 must happen. The owner also clarified the core aim: cellular traffic
   through Teather must not be classified as tethered. P3 wireless is
-  **deprioritised** (it does not serve that aim); next is E-011, the on-hardware
-  verification that the phone-side re-origination holds (TTL, egress IP, DNS
-  origin), folded into the pending phone reinstall — then the robustness pass.
-- **Runnable build:** Android `0.1.0-p1.1` (`versionCode 3`); Debian package
-  `0.1.0-6` (needs a tun2proxy rebuilt with `--features udpgw`). `0.1.0-4` =
-  D-022 (NetworkManager owns `teather0` as an in-memory `tun` connection, no
-  setuid helper or polkit action, additive DNS, automatic failover). `0.1.0-5`
-  adds D-023 (`teather upstream auto|cellular|wifi|ethernet`). `0.1.0-6` /
-  `0.1.0-p1.1` makes the upstream switch zero-gap (`ACTION_RECONFIGURE`, also
-  phone-side), adds general UDP (D-024: tun2proxy `udpgw` + a phone-side
-  `UdpGatewayServer` — no VpnService, no second forward), matches the Android
-  icon to the Linux artwork, and drops stale "P0" wording. 48 host unit tests +
-  Android unit tests (incl. 10 new udpgw tests) + D-Bus smoke pass; the
-  `0.1.0-p1.1` APK is built but not yet on the phone, and UDP has not had a live
-  test. **Validated end to end on 2026-08-30** (pre-UDP): in the
+  **deprioritised** (it does not serve that aim). Remaining: the E-011 TTL/JA3
+  half (needs a reflector) and the robustness pass.
+- **Runnable build:** Android `0.1.0-p1.2` (`versionCode 4`); Debian package
+  `0.1.0-7`. `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
+  `tun` connection, no setuid helper or polkit action, additive DNS, automatic
+  failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|
+  ethernet`). `0.1.0-6` / `0.1.0-p1.1` makes the upstream switch zero-gap
+  (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
+  `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
+  matches the Android icon to the Linux artwork, drops stale "P0" wording.
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 48 host
+  unit tests + Android unit tests (incl. 10 new udpgw tests) + D-Bus smoke pass.
+  **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
+  (see the work-log entry): install, connect, TCP, full Wi-Fi-loss failover,
+  UDP via udpgw (STUN round-trip), zero-gap `teather upstream` switch, and a
+  clean teardown to byte-identical host state. **Earlier** validation (pre-UDP):
+  in the
   disposable VM with the phone on USB passthrough, then installed and run on the
   actual laptop — `teather connect` works, traffic exits on the phone's Verizon
   cellular (`203.0.113.10`), `teather upstream wifi` flips it to the phone's
@@ -205,6 +207,39 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — Live end-to-end test of tracks 1–2 on the laptop + phone
+
+- Built all three artifacts: APK `0.1.0-p1.2`, a tun2proxy rebuilt with
+  `--features udpgw` (installed Rust 1.90.0 for it), Debian `0.1.0-7`. Installed
+  both on the pilot phone (SM S266V, versionCode 2 -> 4) and the developer host
+  (`0.1.0-5` -> `0.1.0-7`).
+- Results (host on Wi-Fi "Banyan Patients"; phone reachable on the same AP and on
+  Verizon cellular; upstream `cellular`):
+  - `teather connect`: `teather0` up, `resolv.conf` = `8.8.8.8` then
+    `198.19.0.1` (additive), backup default `dev teather0 metric 32000`.
+  - TCP: `curl --interface teather0 https://api.ipify.org` -> `203.0.113.13`
+    (Verizon) while both devices sit on the same Wi-Fi — re-origination on
+    cellular confirmed. `example.com` 200 in 0.4 s.
+  - Full failover: `nmcli device disconnect wlo1` -> default becomes `teather0`,
+    `resolv.conf` collapses to `198.19.0.1` only, TCP and DNS keep working.
+  - **UDP via udpgw:** a STUN binding request (`stun.l.google.com:19302`)
+    returned a mapped address `38.0.16.15`; `relay.udpgw.stream-open` appears in
+    logcat. The udpgw path works end to end.
+  - **Zero-gap upstream switch:** `teather upstream wifi` flipped the exit IP
+    `203.0.113.13` -> `198.51.100.20` (the phone's Wi-Fi) with the **same
+    tun2proxy PID** and no error; `teather upstream cellular` switched back.
+  - `teather disconnect`: `teather0` gone; `ip route`, `resolv.conf`, and the
+    NetworkManager connection list are **byte-identical** to the pre-test
+    baseline (`~/teather-host-evidence/wrapup-2026-08-30/`).
+- **Issue found and fixed:** under full-desktop failover the phone-side SOCKS
+  server hit its 64-flow ceiling repeatedly (`relay.socks.connection-limit` x55);
+  long-lived udpgw streams also hold a slot each. Raised the ceiling to 256
+  (`Socks5Server.DEFAULT_MAX_CONNECTIONS`, `tun2proxy --max-sessions`) ->
+  `0.1.0-7` / `0.1.0-p1.2`. Re-tested clean.
+- Still pending: E-011's TTL/JA3 comparison (needs a reflector and a
+  cellular-bound request from the phone, which has no HTTP client — `nc`/`ping`
+  only); a longer soak under real daily use; the robustness pass.
 
 ### 2026-08-30 — Primary goal clarified; P3 wireless deprioritised
 
