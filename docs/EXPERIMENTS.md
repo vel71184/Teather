@@ -407,7 +407,7 @@ the re-origination holds in practice on real hardware.
 | E-002 | Can a non-persistent Teather backup interface provide TCP/DNS after the owner disables Wi-Fi without mutating the Wi-Fi connection? | P1 |
 | E-003 | Does every failure path restore Linux routes and DNS? | P1 |
 | E-011 | Is relayed cellular traffic network-layer equivalent to the phone's own? | primary-goal verification |
-| E-004 | Can the udpgw UDP path carry representative UDP traffic? (D-024; 2026-08-30 live test: a STUN binding round-trip through `teather0` succeeded and `relay.udpgw.stream-open` logged — partial pass; QUIC/voice still untried) | owner-directed track 2 |
+| E-004 | Can the udpgw UDP path carry representative UDP traffic? (D-024; 2026-08-30: a STUN round-trip through `teather0` succeeded, and on `0.1.0-8` Shadow PC — a UDP cloud-gaming stream — launched and was usable with the whole desktop on `teather0`. Pass for functionality; stream bitrate/latency not measured.) | owner-directed track 2 |
 | E-006 | Does Android Doze/screen-off interrupt the relay? | robustness |
 | E-005 | What explicit IPv6 policy is correct for the target environment? | deferred |
 | E-007 | Can local-only Wi-Fi carry the authenticated relay reliably? | P3 (deprioritised — see AGENTS.md) |

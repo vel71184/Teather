@@ -9,10 +9,11 @@
   scope stay deferred; the owner rejected the roadmap's assumption that all of
   P2/P4 must happen. The owner also clarified the core aim: cellular traffic
   through Teather must not be classified as tethered. P3 wireless is
-  **deprioritised** (it does not serve that aim). Remaining: the E-011 TTL/JA3
-  half (needs a reflector) and the robustness pass.
+  **deprioritised** (it does not serve that aim). Shadow PC (cloud gaming, a UDP
+  workload) launched and was usable through Teather on `0.1.0-8`. Remaining: the
+  E-011 TTL/JA3 half (needs a reflector) and the robustness pass.
 - **Runnable build:** Android `0.1.0-p1.2` (`versionCode 4`); Debian package
-  `0.1.0-8`. `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
+  `0.1.0-8` (adds the udpgw tuning; `0.1.0-7` raised the 64->256 flow ceiling). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
   failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|
   ethernet`). `0.1.0-6` / `0.1.0-p1.1` makes the upstream switch zero-gap
@@ -208,21 +209,25 @@ and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
 
-### 2026-08-30 — UDP gateway tuning for cloud gaming (`0.1.0-8`)
+### 2026-08-30 — UDP gateway tuning for cloud gaming (`0.1.0-8`); Shadow PC works
 
 - Shadow PC would not load through Teather on the earlier build (tested during
   the full-desktop failover, when the 64-flow ceiling was also being hit).
 - Added `--udpgw-connections 16` (keep more gateway streams pooled/warm) and
   `--udp-timeout 30` (keep quieter control flows alive) to `_tunnel_command`.
   No APK change — all tun2proxy-side. Package `0.1.0-8`.
-- Honest limit: udpgw frames UDP over one TCP stream *per flow*, so a single
-  high-rate media stream is still subject to that stream's head-of-line
-  blocking; cellular CGNAT and the extra hops add latency/jitter. If `0.1.0-8`
-  still isn't usable for Shadow, the real fix is a native-UDP local link — the
-  deprioritised P3, reconsidered purely for cloud-gaming performance (it is
-  carrier-neutral, so it costs nothing on the primary goal). Not before the
-  retest.
-- Next: owner retests Shadow on `0.1.0-8`.
+- **Retest 2026-08-30: Shadow PC launched and was usable through Teather** with
+  Wi-Fi disconnected (whole desktop on `teather0` -> phone cellular). The owner
+  confirmed it worked. Relay counters during the session: `active_sessions` ~44,
+  `accepted_clients` 88, `rejected_clients` 1 (the 256 ceiling held), traffic
+  flowing both directions through the udpgw path. Stream bitrate / resolution /
+  latency were not measured — "worked", not "measured".
+- Standing limit (unchanged): udpgw frames UDP over one TCP stream per flow, so
+  a single very high-rate media stream is still subject to that stream's
+  head-of-line blocking, and cellular CGNAT + extra hops add latency/jitter. If
+  a future session needs better cloud-gaming quality, the native-UDP path is a
+  wireless local link (the deprioritised P3, which is carrier-neutral). Not
+  needed right now — Shadow works.
 
 ### 2026-08-30 — Live end-to-end test of tracks 1–2 on the laptop + phone
 

@@ -42,11 +42,11 @@ follow. Status:
 
 The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
 (`0.1.0-7`) after a full-desktop failover exhausted the old limit, then tuned the
-UDP gateway (`--udpgw-connections 16`, `--udp-timeout 30`, `0.1.0-8`) toward
-bursty low-latency apps. Shadow PC failed to load on the earlier build; the owner
-wants a retest on `0.1.0-8`, and only if that is still not usable do we
-reconsider P3 wireless — this time purely as the native-UDP path for cloud
-gaming (it is carrier-neutral), not for stealth.
+UDP gateway (`--udpgw-connections 16`, `--udp-timeout 30`, `0.1.0-8`). On
+`0.1.0-8` **Shadow PC launched and was usable** through Teather (Wi-Fi off, whole
+desktop on `teather0`); the owner confirmed it. Bitrate/latency were not
+measured. P3 wireless stays deprioritised — it is the native-UDP path if a
+future session needs better cloud-gaming quality, but Shadow works now.
 
 **P3 wireless is deprioritised.** A local Wi-Fi receiver link does not advance
 the not-classified-as-tethered goal — the carrier cannot see the receiver<->phone
