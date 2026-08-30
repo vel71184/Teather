@@ -18,7 +18,7 @@ pick a reasoning mode. Just start. Ask the owner only for the things listed unde
 ## Current priority
 
 P0/E-001 and P1 acceptance are complete. D-022 has run live on the developer
-laptop since 2026-08-30. Debian `0.1.0-7` / Android `0.1.0-p1.2`.
+laptop since 2026-08-30. Debian `0.1.0-8` / Android `0.1.0-p1.2`.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
@@ -41,7 +41,12 @@ follow. Status:
    plus a soak under real daily use.
 
 The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
-(`0.1.0-7`) after a full-desktop failover exhausted the old limit.
+(`0.1.0-7`) after a full-desktop failover exhausted the old limit, then tuned the
+UDP gateway (`--udpgw-connections 16`, `--udp-timeout 30`, `0.1.0-8`) toward
+bursty low-latency apps. Shadow PC failed to load on the earlier build; the owner
+wants a retest on `0.1.0-8`, and only if that is still not usable do we
+reconsider P3 wireless — this time purely as the native-UDP path for cloud
+gaming (it is carrier-neutral), not for stealth.
 
 **P3 wireless is deprioritised.** A local Wi-Fi receiver link does not advance
 the not-classified-as-tethered goal — the carrier cannot see the receiver<->phone

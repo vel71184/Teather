@@ -253,8 +253,12 @@ class Manager:
             "--virtual-dns-pool", VIRTUAL_DNS_POOL,
             # UDP is carried over the same SOCKS connection as framed datagrams
             # (badvpn "udpgw"); the phone's UdpGatewayServer terminates it. The
-            # sentinel is a CONNECT target, never a route.
+            # sentinel is a CONNECT target, never a route. More pooled gateway
+            # connections keep streams warm for bursty UDP apps (e.g. cloud
+            # gaming); a longer UDP timeout keeps their quieter control flows up.
             "--udpgw-server", UDPGW_SENTINEL,
+            "--udpgw-connections", "16",
+            "--udp-timeout", "30",
             "--mtu", "1500",
             "--tcp-timeout", "300",
             # A full-desktop failover easily exceeds 64 concurrent flows; the

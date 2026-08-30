@@ -1,3 +1,13 @@
+teather (0.1.0-8) unstable; urgency=medium
+
+  * Tune the UDP gateway for bursty low-latency apps such as cloud gaming:
+    --udpgw-connections 16 (keep more gateway streams warm) and --udp-timeout
+    30 (keep quieter control flows alive). udpgw still frames UDP over a TCP
+    stream per flow, so a single high-rate media stream is still subject to
+    that stream's head-of-line blocking.
+
+ -- Teather Project <noreply@example.invalid>  Sat, 30 Aug 2026 20:00:00 +0000
+
 teather (0.1.0-7) unstable; urgency=medium
 
   * Raise the relay concurrency ceiling from 64 to 256 flows (tun2proxy

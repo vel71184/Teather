@@ -9,16 +9,18 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** P0 passed its physical gates. P1 (Linux USB Desktop) is
-> implemented as **D-022** (package `0.1.0-4`): NetworkManager owns the
-> non-persistent `teather0` interface, there is no privileged helper, DNS is
-> additive so a working Wi-Fi/Ethernet link is never disturbed, and failover to
-> the phone is automatic once that link is actually gone. **Validated end to end
-> on 2026-08-30** in a disposable VM with the phone passed through over USB —
-> real traffic exits on the phone's cellular, failover and restore work
-> automatically, teardown returns the host to exact baseline. Remaining before
-> P1 sign-off: a two-hour session, the GUI lifecycle, and milestone closeout.
-> See `docs/DECISIONS.md` and `docs/P1_HANDOFF.md`.
+> **Status:** P0 passed its physical gates; P1 (Linux USB Desktop) is complete
+> and runs live on the developer laptop. NetworkManager owns the non-persistent
+> `teather0` interface (D-022), there is no privileged helper, DNS is additive
+> so a working Wi-Fi/Ethernet link is never disturbed, failover to the phone is
+> automatic once that link is gone (D-022), the phone's upstream transport is
+> switchable on the fly with no gap (D-023 + `ACTION_RECONFIGURE`), and general
+> UDP is carried over tun2proxy's `udpgw` and terminated on the phone (D-024).
+> A 2026-08-30 end-to-end test on the laptop + phone covered connect, TCP on
+> cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap
+> upstream switch, and a clean teardown to byte-identical host state. Builds:
+> Debian `0.1.0-8`, Android `0.1.0-p1.2`. See `docs/PROJECT_STATUS.md` and
+> `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -329,7 +331,7 @@ debug-signed). **D-022** — NetworkManager owns an in-memory `teather0`, no
 privileged helper, additive DNS, automatic failover — plus **D-023** (on-the-fly
 `teather upstream` transport switch), an `ACTION_RECONFIGURE` that makes that
 switch zero-gap, and **D-024** (general UDP over tun2proxy's `udpgw` feature,
-terminated by a phone-side `UdpGatewayServer`). Current builds: Debian `0.1.0-7`,
+terminated by a phone-side `UdpGatewayServer`). Current builds: Debian `0.1.0-8`,
 Android `0.1.0-p1.2`. A 2026-08-30 end-to-end test on the laptop + phone covered
 install, connect, TCP, full Wi-Fi-loss failover, a UDP STUN round-trip through
 the relay, the zero-gap upstream switch, and a clean teardown to byte-identical
