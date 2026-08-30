@@ -367,16 +367,50 @@ daemon/tunnel death, and the rest of the cable/service matrix. D-022 (package
 its disposable-VM cleanup gate — including `SIGKILL`-then-`recover()` and
 byte-for-byte teardown of the in-memory `teather0` connection — passes.
 
+## E-011 — Network-layer equivalence of relayed vs. native phone traffic
+
+**Date:** planned · **Status:** planned
+
+Verifies Teather's primary goal (README "Why this exists", THREAT_MODEL "Carrier
+tethering classification"): that a request through Teather on cellular is
+network-layer equivalent to the same request made by an app on the phone, i.e.
+the re-origination holds in practice on real hardware.
+
+### Preconditions
+
+- Pilot device on cellular, USB/ADB, `0.1.0-p1.1` APK + a tun2proxy built with
+  `--features udpgw`. Wi-Fi may be present; the upstream is `cellular`.
+
+### Procedure
+
+1. From the phone directly (browser or `adb shell`), hit a reflector that echoes
+   the observed IP TTL/hop limit and request headers. Record TTL, egress IP, and
+   the TLS/JA3 fingerprint if the reflector reports one.
+2. From the laptop through `teather connect`, `curl` the same reflector. Record
+   the same fields.
+3. Run a short QUIC or plain-UDP flow from the laptop (exercises the `udpgw`
+   path) against a service that reports the source IP.
+
+### Predetermined success criteria
+
+- Observed TTL/hop limit matches between (1) and (2) — no extra decrement.
+- Egress IP is the same cellular address in (1), (2), and (3).
+- The phone's resolver served the DNS for (2) (virtual DNS mapping present).
+- Application-layer differences (User-Agent, JA3) are recorded as **expected
+  residual**, not failures — this experiment does not try to make them match and
+  a pass is not a claim of undetectability.
+
 ## Planned experiment queue
 
 | ID | Question | Milestone |
 |---|---|---|
 | E-002 | Can a non-persistent Teather backup interface provide TCP/DNS after the owner disables Wi-Fi without mutating the Wi-Fi connection? | P1 |
 | E-003 | Does every failure path restore Linux routes and DNS? | P1 |
-| E-004 | Can UDP relay support representative DNS, QUIC, and voice traffic? | P2 |
-| E-005 | What explicit IPv6 policy is correct for the target environment? | P2 |
-| E-006 | Does Android Doze/screen-off interrupt the relay? | P2 |
-| E-007 | Can local-only Wi-Fi carry the authenticated relay reliably? | P3 |
-| E-008 | How do USB and Wi-Fi compare for throughput, latency, battery, and heat? | P3 |
-| E-009 | Can a userspace WireGuard endpoint relay Linux TCP/UDP correctly? | P4 |
-| E-010 | Can a mobile WireGuard receiver use the Android-hosted relay? | P4 |
+| E-011 | Is relayed cellular traffic network-layer equivalent to the phone's own? | primary-goal verification |
+| E-004 | Can the udpgw UDP path carry representative DNS, QUIC, and voice traffic? (implemented D-024, needs a live run) | owner-directed track 2 |
+| E-006 | Does Android Doze/screen-off interrupt the relay? | robustness |
+| E-005 | What explicit IPv6 policy is correct for the target environment? | deferred |
+| E-007 | Can local-only Wi-Fi carry the authenticated relay reliably? | P3 (deprioritised — see AGENTS.md) |
+| E-008 | How do USB and Wi-Fi compare for throughput, latency, battery, and heat? | P3 (deprioritised) |
+| E-009 | Can a userspace WireGuard endpoint relay Linux TCP/UDP correctly? | deferred |
+| E-010 | Can a mobile WireGuard receiver use the Android-hosted relay? | deferred |

@@ -120,13 +120,25 @@ Exit criteria:
 Exit: record the P1 physical experiment, update `docs/PROJECT_STATUS.md`, then
 stop for a P2 design discussion with the owner before starting P2 work (D-018).
 
+## Post-P1 direction (2026-08-30)
+
+After P1 acceptance the owner redirected work away from completing P2/P3/P4 as
+written. The linear phase plan below is kept for reference, but the active order
+is in `AGENTS.md`: a lightweight UDP path (done, D-024), on-hardware
+verification that relayed cellular traffic is not classifiable as tethered
+(E-011), then a robustness pass. **P3 (Wireless Relay) is deprioritised** — a
+local receiver link is invisible to the carrier and does not serve the
+primary goal. IPv6, WireGuard, and the broader "protocol completeness" scope
+are deferred, not scheduled.
+
 ## P2 — Protocol Completeness
 
 **Question:** Is the relay compatible enough for daily Linux use?
 
 Deliverables:
 
-- UDP ASSOCIATE or another documented UDP relay path.
+- UDP ASSOCIATE or another documented UDP relay path. *(A udpgw path is
+  implemented — D-024 — ahead of this phase.)*
 - Explicit IPv6 policy and tests.
 - DNS A/AAAA behavior tests.
 - Keepalive, timeout, cancellation, and backpressure behavior.

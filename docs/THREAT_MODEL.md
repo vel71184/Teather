@@ -193,6 +193,46 @@ keys, subscriber information, or device identifiers.
 - Test IPv4, IPv6, and DNS independently.
 - Expose the actual active upstream in status.
 
+### Carrier tethering classification
+
+**Context:** Avoiding classification as a tethered/hotspot device — so the
+phone's plan treats the traffic as on-device use — is Teather's primary
+motivation (README "Why this exists", D-009). This entry records what the
+architecture does and does not achieve, so expectations stay calibrated.
+
+**What the design handles structurally.** Teather terminates every receiver
+connection on the phone and re-originates it from Android's own stack: TCP via
+`Socks5Server` opening a fresh socket through `AndroidNetworkConnector` bound to
+the chosen upstream `Network`, UDP via `UdpGatewayServer` opening a
+`DatagramSocket` bound the same way, DNS resolved on the phone (virtual DNS).
+The receiver's packets are never IP-forwarded or NAT'd through the phone.
+Consequently the network-layer signals that cheap tether detection keys on are
+the phone's own: outbound hop limit / TTL (no forwarding decrement), the
+IP/TCP stack fingerprint, the absence of a second-device DHCP exchange, and the
+DNS resolver origin.
+
+**What it does not handle, and will not.** Application-layer fingerprints pass
+through byte-for-byte: TLS ClientHello / JA3, QUIC transport parameters,
+cleartext HTTP `User-Agent`, SNI host names, and traffic volume / timing /
+destination patterns (desktop OS-update endpoints, large sustained downloads).
+A carrier performing deep packet inspection can still infer a desktop client
+behind the phone. Per D-009 Teather does not add fingerprint camouflage, DPI
+evasion, or carrier-specific stealth profiles — that would be brittle and is a
+deliberate non-goal. It also cannot affect volume-based metering or a carrier's
+own out-of-band signalling.
+
+**Mitigations / good practice:**
+
+- Keep re-origination airtight: never forward receiver IP packets, never copy
+  receiver-side TCP options, MSS, or window parameters onto the upstream socket.
+- Verify on real hardware that a relayed request and a native phone request are
+  network-layer equivalent (E-011) rather than assuming it.
+- Do not claim undetectability in code comments, UI, or docs.
+- A local wireless receiver link (P3) is orthogonal to this threat — the carrier
+  cannot see the receiver↔phone link — but enabling any Android AP mode is one
+  extra device-side state change with no benefit here, so USB/ADB is preferred
+  while this goal dominates.
+
 ### Device-integrity compromise
 
 **Threat:** Implementation shortcuts require root, bootloader changes, hidden APIs,

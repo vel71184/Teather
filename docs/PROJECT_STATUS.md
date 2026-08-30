@@ -7,7 +7,11 @@
   since directed a post-P1 track of work (see the 2026-08-30 entries and the
   punch list) — not P2 as scoped by D-018. IPv6 and the broader "become a VPN"
   scope stay deferred; the owner rejected the roadmap's assumption that all of
-  P2/P4 must happen. Next build task: track 3, P3 wireless.
+  P2/P4 must happen. The owner also clarified the core aim: cellular traffic
+  through Teather must not be classified as tethered. P3 wireless is
+  **deprioritised** (it does not serve that aim); next is E-011, the on-hardware
+  verification that the phone-side re-origination holds (TTL, egress IP, DNS
+  origin), folded into the pending phone reinstall — then the robustness pass.
 - **Runnable build:** Android `0.1.0-p1.1` (`versionCode 3`); Debian package
   `0.1.0-6` (needs a tun2proxy rebuilt with `--features udpgw`). `0.1.0-4` =
   D-022 (NetworkManager owns `teather0` as an in-memory `tun` connection, no
@@ -201,6 +205,30 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — Primary goal clarified; P3 wireless deprioritised
+
+- The owner stated the core aim plainly: subvert the carrier classifying the
+  connection as a tethered device, on the pilot phone and generally, and left
+  the approach to the assistant's judgement.
+- Assessment: the mechanism that achieves this is the L4 re-origination already
+  built in P0/P1 — the phone opens every outbound socket itself
+  (`Socks5Server` -> `AndroidNetworkConnector`, `UdpGatewayServer` ->
+  `DatagramSocket`, DNS resolved on the phone), so no receiver packet is
+  forwarded/NAT'd and the network-layer signals (TTL/hop limit, IP-stack
+  fingerprint, DNS origin, no second-device DHCP) are the phone's own. A code
+  read of the relay path found no place a receiver-side characteristic reaches
+  the upstream socket.
+- Residual, and left alone by policy (D-009): application-layer fingerprints —
+  TLS/JA3, QUIC parameters, cleartext User-Agent, SNI, volume/destination
+  patterns — pass through unchanged. No camouflage / DPI-evasion work.
+- Decision: **P3 wireless is deprioritised.** A local Wi-Fi receiver link is
+  invisible to the carrier either way and any AP mode adds a device-side signal
+  with no benefit to this goal; USB/ADB stays the transport. Next is **E-011**
+  (on-hardware verification of the re-origination), then the robustness pass.
+- Files: `docs/THREAT_MODEL.md` (new "Carrier tethering classification"
+  section), `docs/EXPERIMENTS.md` (E-011, queue reprioritised), `AGENTS.md`.
+  No code change.
 
 ### 2026-08-30 — Lightweight UDP over tun2proxy udpgw (D-024)
 

@@ -35,13 +35,25 @@ must follow. Order:
    connection and forwards datagrams on the selected upstream. No second ADB
    forward, no `VpnService`, no packet stack. Needs the tun2proxy rebuild with
    `--features udpgw` at packaging time.
-3. **P3 wireless** — local Wi-Fi link instead of USB, same relay semantics. Its
-   own design pass. **Next.**
+3. **Primary-goal verification (E-011).** The owner's core aim is that cellular
+   traffic through Teather is not classified as tethered. The re-origination
+   that achieves this is already built — the phone opens every socket itself
+   (`Socks5Server` -> `AndroidNetworkConnector`; `UdpGatewayServer` ->
+   `DatagramSocket`), so outbound TTL/hop limit, IP-stack fingerprint, and DNS
+   origin are the phone's. E-011 confirms it on real hardware. **Next**, folds
+   into the pending phone reinstall.
 4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery.
 
-IPv6 and general "become a VPN" scope stay deferred. Still discuss with the owner
-before starting anything outside this list (multi-client, other platforms, P5
-polish, distribution/release signing).
+**P3 wireless is deprioritised.** A local Wi-Fi receiver link does not advance
+the not-classified-as-tethered goal — the carrier cannot see the receiver<->phone
+link — and enabling any Android AP mode is one more device-side state change with
+no benefit here. USB/ADB stays the transport while that goal dominates; revisit
+P3 only as a cable-free convenience if the owner asks.
+
+IPv6 and the broader "become a VPN" scope stay deferred. Do not add fingerprint
+camouflage, DPI evasion, or carrier-stealth profiles (D-009) — deliberate
+non-goal. Still discuss with the owner before starting anything outside this list
+(multi-client, other platforms, P5 polish, release signing).
 
 ## Safety gates — ask the owner first
 
