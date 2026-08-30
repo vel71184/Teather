@@ -61,6 +61,17 @@ class TeatherWindow:
         self.failover.connect("toggled", self._set_failover)
         box.pack_start(self.failover, False, False, 0)
 
+        upstream_row = Gtk.Box(spacing=8)
+        upstream_row.pack_start(Gtk.Label(label="Phone upstream:", xalign=0), False, False, 0)
+        self._upstreams = ["auto", "cellular", "wifi", "ethernet"]
+        self.upstream = Gtk.ComboBoxText()
+        for name in self._upstreams:
+            self.upstream.append_text(name)
+        self._upstream_guard = False
+        self.upstream.connect("changed", self._set_upstream)
+        upstream_row.pack_start(self.upstream, False, False, 0)
+        box.pack_start(upstream_row, False, False, 0)
+
         self.metrics = Gtk.Label(xalign=0, selectable=True)
         box.pack_start(self.metrics, False, False, 0)
         diagnostics = Gtk.Button(label="Diagnostics")
@@ -175,6 +186,13 @@ class TeatherWindow:
             return
         self._call("SetAutoFailover", "(b)", (widget.get_active(),))
 
+    def _set_upstream(self, widget):
+        if self._upstream_guard:
+            return
+        name = widget.get_active_text()
+        if name:
+            self._call("SetUpstream", "(s)", (name,))
+
     def refresh(self):
         try:
             status = self.client.call("GetStatus")
@@ -199,12 +217,18 @@ class TeatherWindow:
             self._failover_guard = True
             self.failover.set_active(bool(status.get("auto_failover", True)))
             self._failover_guard = False
+            self._upstream_guard = True
+            want = status.get("upstream", "cellular")
+            if want in self._upstreams:
+                self.upstream.set_active(self._upstreams.index(want))
+            self._upstream_guard = False
             armed = "armed" if status.get("failover_armed") else "dormant"
+            active_up = status.get("active_upstream") or status.get("upstream", "cellular")
             self.metrics.set_text(
                 f"Active sessions: {status['active_sessions']}\n"
                 f"Phone → Internet: {status['bytes_client_to_internet']} bytes\n"
                 f"Internet → Phone: {status['bytes_internet_to_client']} bytes\n"
-                f"Failover: {armed}\n"
+                f"Upstream: {active_up}   Failover: {armed}\n"
                 "P1 coverage: TCP + virtual DNS; general UDP and IPv6 unsupported"
             )
         except Exception as error:

@@ -1,3 +1,12 @@
+teather (0.1.0-5) unstable; urgency=medium
+
+  * D-023: `teather upstream auto|cellular|wifi|ethernet` (also SetUpstream on
+    D-Bus and a GUI dropdown) picks which of the phone's transports the relay
+    uses. Switching while connected restarts only the phone's relay binding;
+    teather0, the tunnel, routes, and DNS are untouched.
+
+ -- Teather Project <noreply@example.invalid>  Sat, 30 Aug 2026 00:00:00 +0000
+
 teather (0.1.0-4) unstable; urgency=medium
 
   * D-022: NetworkManager owns the non-persistent teather0 tun connection from

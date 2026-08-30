@@ -36,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="arm (on) or hold dormant (off) automatic failover to Teather when Wi-Fi is lost",
     )
     failover.add_argument("setting", choices=("on", "off"))
+    upstream = commands.add_parser(
+        "upstream",
+        help="pick which of the phone's transports the relay uses (restarts only the phone's relay binding)",
+    )
+    upstream.add_argument("transport", choices=("auto", "cellular", "wifi", "ethernet"))
     _json_flag(commands.add_parser("diagnose", help="run read-only diagnostics"))
     _json_flag(commands.add_parser("recover", help="clean journaled resources and diagnose"))
     return parser
@@ -94,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif arguments.command == "failover":
             result = client.call("SetAutoFailover", "(b)", (arguments.setting == "on",))
+        elif arguments.command == "upstream":
+            result = client.call("SetUpstream", "(s)", (arguments.transport,))
         elif arguments.device_command == "approve":
             if not arguments.yes:
                 answer = input("Approve this locally connected phone for Teather? [y/N] ")

@@ -41,9 +41,10 @@ behind the connection.
 Teather's actual goal is to use the phone as a full, oversized network interface
 for a computer — not a hotspot the computer sits behind, but the computer's
 Internet path itself. The Linux computer's applications reach the Internet by way
-of the phone's currently selected upstream (cellular today; the phone's own Wi-Fi
-is supported by the same upstream-selection code and is a near-term toggle, not a
-redesign) — without engaging the phone's stock tethering/hotspot feature at all.
+of the phone's chosen upstream — `teather upstream cellular|wifi|ethernet|auto`
+picks which of the phone's transports carries the traffic, switchable without
+reconnecting (D-023) — without engaging the phone's stock tethering/hotspot
+feature at all.
 
 This works because Teather is architected as an on-device relay, not a
 NAT/forwarding gateway:

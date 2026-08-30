@@ -44,6 +44,11 @@ worse-metric backup default route and an additive DNS entry so traffic moves to
 the phone automatically once Wi-Fi or Ethernet is lost. When off, Teather still
 connects but stays dormant until this is set back on.
 .TP
+.B upstream auto|cellular|wifi|ethernet
+Choose which of the phone's transports the relay binds outbound sockets to
+(default cellular). Changing this while connected restarts only the phone's relay
+binding; the teather0 interface, tunnel, routes, and DNS are untouched.
+.TP
 .B diagnose [--json]
 Run read-only diagnostics.
 .TP

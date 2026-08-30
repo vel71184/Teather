@@ -56,6 +56,7 @@ class Manager:
         self._message = "No active connection"
         self._active_id = ""
         self._active_serial: str | None = None
+        self._active_upstream = ""
         self._tunnel: subprocess.Popen | None = None
         self._armed = False
         self._dns_ready = False
@@ -136,6 +137,8 @@ class Manager:
             "dns_ready": self._dns_ready,
             "auto_failover": self.config.auto_failover(),
             "failover_armed": self._armed,
+            "upstream": self.config.upstream(),
+            "active_upstream": self._active_upstream,
             "udp_supported": False,
             "ipv6_supported": False,
             **metrics,
@@ -297,6 +300,7 @@ class Manager:
             serial: str | None = None
             selected_id = ""
             armed = self.config.auto_failover()
+            upstream = self.config.upstream()
             try:
                 self.preflight()
                 selected_id, device = self._select(device_id)
@@ -309,9 +313,15 @@ class Manager:
                         "android-incompatible",
                         f"Android relay is running with incompatible schema or port; expected port {RELAY_PORT}",
                     )
+                if android.running and not android.matches_upstream(upstream):
+                    raise TeatherError(
+                        "android-incompatible",
+                        f"Android relay is already running on '{android.configured_upstream}'; "
+                        f"stop it on the phone or run 'teather upstream {android.configured_upstream}'",
+                    )
                 if not android.running:
                     android_started = True
-                    android = self.adb.start_relay(serial)
+                    android = self.adb.start_relay(serial, upstream)
                 if not android.compatible:
                     raise TeatherError("android-not-ready", "Android relay did not report compatible ready status")
                 local_port = self.adb.add_forward(serial)
@@ -343,6 +353,7 @@ class Manager:
                     self._message = "Connected; failover is disabled, so Teather stays dormant until armed"
                 self._active_id = selected_id
                 self._active_serial = serial
+                self._active_upstream = upstream
                 self._state = "connected"
                 return self._emit_status()
             except Exception as error:
@@ -431,9 +442,42 @@ class Manager:
                 return self._emit_status()
             self._active_id = ""
             self._active_serial = None
+            self._active_upstream = ""
             self._state = "disconnected"
             self._error_category = "none"
             self._message = "Disconnected; Wi-Fi and Ethernet were never touched"
+            return self._emit_status()
+
+    def set_upstream(self, upstream: str) -> dict:
+        """Choose which Android transport the relay uses.
+
+        While connected, this restarts only the phone's relay binding — the
+        `teather0` interface, the tunnel, routes, and DNS stay up. New
+        connections use the new upstream; in-flight ones on the old transport
+        drop. It cannot change a relay Teather did not start (a manual relay is
+        reconfigured on the phone).
+        """
+
+        with self._lock:
+            self.config.set_upstream(upstream)
+            if self._state != "connected" or self._active_upstream == upstream:
+                return self.get_status()
+            if not self._active_serial:
+                raise TeatherError("upstream-unavailable", "No active phone to reconfigure")
+            if self.journal.load() is None or not self.journal.load().android_started:
+                raise TeatherError(
+                    "manual-relay",
+                    "Teather did not start this relay; change the upstream on the phone",
+                )
+            self._message = f"Switching relay upstream to {upstream}"
+            self._emit_status()
+            self.adb.stop_relay(self._active_serial)
+            android = self.adb.start_relay(self._active_serial, upstream)
+            if not android.compatible or not android.matches_upstream(upstream):
+                self.disconnect()
+                raise TeatherError("android-not-ready", f"Relay did not come back on '{upstream}'")
+            self._active_upstream = upstream
+            self._message = f"Connected; relay upstream is {upstream}"
             return self._emit_status()
 
     def recover(self) -> dict:
@@ -561,6 +605,7 @@ class Manager:
             "dns_ready": self._dns_ready,
             "auto_failover": self.config.auto_failover(),
             "failover_armed": self._armed,
+            "upstream": self.config.upstream(),
             "recovery_guide": "/usr/share/doc/teather/RECOVERY.md.gz",
             "networkmanager_mutation": self._state == "connected",
             "persistent_networkmanager_mutation": False,

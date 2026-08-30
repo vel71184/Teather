@@ -60,6 +60,7 @@ class FakeAdb:
         self.stopped = []
         self.removed = []
         self.forwards = []
+        self.upstreams = []
 
     def devices(self):
         result = [AdbDevice(SERIAL_ONE, "Phone one")]
@@ -74,11 +75,12 @@ class FakeAdb:
     def package_installed(self, _serial):
         return True
 
-    def start_relay(self, serial):
+    def start_relay(self, serial, upstream="cellular"):
         self.started.append(serial)
+        self.upstreams.append(upstream)
         if self.fail_start:
             raise TeatherError("adb-failed", "simulated start uncertainty")
-        self.states[serial] = compatible_status()
+        self.states[serial] = compatible_status(configured_upstream=upstream)
         return self.states[serial]
 
     def stop_relay(self, serial):
@@ -611,6 +613,33 @@ class ManagerTests(unittest.TestCase):
             self.assertFalse(status["dns_ready"])
             self.assertNotIn(DNS_SENTINEL, manager.resolver_path.read_text())
 
+    def test_upstream_default_is_cellular_and_toggle_restarts_only_the_relay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb({SERIAL_ONE: AndroidStatus()})  # relay stopped -> Teather starts it
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            self.assertEqual(adb.upstreams, ["cellular"])
+            self.assertEqual(manager.get_status()["active_upstream"], "cellular")
+            tunnel_before = manager._tunnel
+            result = manager.set_upstream("wifi")
+            self.assertEqual(result["active_upstream"], "wifi")
+            self.assertEqual(adb.stopped, [SERIAL_ONE])
+            self.assertEqual(adb.upstreams, ["cellular", "wifi"])
+            self.assertIs(manager._tunnel, tunnel_before)  # tunnel/teather0 untouched
+            self.assertEqual(manager.config.upstream(), "wifi")
+
+    def test_set_upstream_refuses_a_manual_relay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()  # relay already running -> Teather attaches, did not start it
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            self.assertEqual(adb.started, [])
+            with self.assertRaises(TeatherError) as caught:
+                manager.set_upstream("wifi")
+            self.assertEqual(caught.exception.category, "manual-relay")
+
     def test_toggling_failover_while_connected_reestablishes_armed(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
@@ -791,17 +820,20 @@ class InterfaceParityTests(unittest.TestCase):
     def test_dbus_methods_match_cli_surface(self):
         for method in (
             "GetStatus", "ListDevices", "Connect", "Disconnect", "ApproveDevice",
-            "RenameDevice", "ForgetDevice", "SetAutoConnect", "SetAutoFailover", "Diagnose",
+            "RenameDevice", "ForgetDevice", "SetAutoConnect", "SetAutoFailover",
+            "SetUpstream", "Diagnose",
         ):
             self.assertIn(f'name="{method}"', INTROSPECTION_XML)
         parser = build_parser()
-        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "failover", "diagnose", "recover"):
+        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "failover", "upstream", "diagnose", "recover"):
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "autoconnect":
                     arguments += ["on", "a" * 64]
                 elif command == "failover":
                     arguments += ["on"]
+                elif command == "upstream":
+                    arguments += ["wifi"]
                 parser.parse_args(arguments)
 
 

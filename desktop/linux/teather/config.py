@@ -160,6 +160,29 @@ class ConfigStore:
         self.save()
         return self.devices()[device_id]
 
+    def upstream(self) -> str:
+        """Which Android transport the relay binds outbound sockets to.
+
+        The Android app already supports auto/cellular/wifi/ethernet; this is
+        just Teather's remembered default. Changing it while connected restarts
+        only the phone's relay binding — teather0, the tunnel, routes, and DNS
+        are untouched.
+        """
+
+        from .android_status import DEFAULT_UPSTREAM, KNOWN_UPSTREAMS
+
+        value = str(self._data.get("upstream", DEFAULT_UPSTREAM))
+        return value if value in KNOWN_UPSTREAMS else DEFAULT_UPSTREAM
+
+    def set_upstream(self, upstream: str) -> str:
+        from .android_status import KNOWN_UPSTREAMS
+
+        if upstream not in KNOWN_UPSTREAMS:
+            raise TeatherError("invalid-upstream", f"Unknown upstream '{upstream}'")
+        self._data["upstream"] = upstream
+        self.save()
+        return upstream
+
     def auto_failover(self) -> bool:
         """Whether Teather arms itself as an automatic backup path (D-022).
 

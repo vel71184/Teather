@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 from .constants import RELAY_PORT, STATUS_SCHEMA
 
+# Android upstream transports Teather can bind the relay to. The Android app
+# (UpstreamPreference) already supports all four; "auto" lets Android pick.
+KNOWN_UPSTREAMS = ("auto", "cellular", "wifi", "ethernet")
+DEFAULT_UPSTREAM = "cellular"
+
 
 @dataclass(frozen=True)
 class AndroidStatus:
@@ -36,8 +41,11 @@ class AndroidStatus:
             and self.running
             and self.bound_port == RELAY_PORT
             and self.configured_port == RELAY_PORT
-            and self.configured_upstream == "cellular"
+            and self.configured_upstream in KNOWN_UPSTREAMS
         )
+
+    def matches_upstream(self, upstream: str) -> bool:
+        return self.configured_upstream == upstream
 
 
 def parse_android_status(output: str) -> AndroidStatus:

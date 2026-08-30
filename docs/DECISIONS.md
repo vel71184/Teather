@@ -201,6 +201,45 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-023 — Let the Linux client choose the phone's upstream transport
+
+**Status:** Accepted · **Date:** 2026-08-30
+
+### Decision
+
+P1 no longer hard-codes `cellular`. `teather upstream <auto|cellular|wifi|
+ethernet>` (also `SetUpstream` on D-Bus and a GUI dropdown) picks which of the
+phone's networks the relay binds outbound sockets to. Default stays `cellular`.
+
+The Android app already supported all four (`UpstreamPreference`,
+`AndroidNetworkConnector`); only the Linux side needed to stop hard-coding
+`cellular` and to accept a non-cellular `configured_upstream` in the relay
+compatibility check.
+
+### On-the-fly switching
+
+Changing the upstream while connected restarts **only the phone's relay
+binding**: `teatherd` stops and restarts the Android relay with the new
+transport. `teather0`, `tun2proxy`, the routes, the DNS, and the ADB forward are
+untouched — they are upstream-agnostic. New connections use the new transport;
+in-flight connections on the old one drop (~1 s). This is because
+`RelayRuntime`/`RelayStartPolicy` deliberately refuse a config change on a
+running relay (D-016); a truly zero-blip reconfigure would need a small Android
+`ACTION_RECONFIGURE` and is deferred.
+
+Teather will not change an upstream on a relay it did not start (a manual relay
+is reconfigured on the phone).
+
+### Consequences
+
+- Using the phone's Wi-Fi is useful when the laptop cannot join that network
+  directly (device caps, captive portal already cleared on the phone) or to
+  avoid cellular data when the phone has Wi-Fi.
+- `auto` delegates the choice to Android's own network scoring.
+- This does not add UDP, IPv6, or any protocol behaviour — it is transport
+  selection on the existing TCP + virtual-DNS relay, so it is not gated by
+  D-018's P2 stop.
+
 ## D-022 — NetworkManager-native `tun` ownership replaces D-021's Reapply DNS mechanism
 
 **Status:** Accepted · **Date:** 2026-08-29 (accepted 2026-08-29 after owner

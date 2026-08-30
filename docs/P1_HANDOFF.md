@@ -196,15 +196,15 @@ touched.
 
 ## Phase 1 — package, D-Bus, GUI, and watcher in the VM
 
-1. Build `teather_0.1.0-4_amd64.deb` with
+1. Build `teather_0.1.0-5_amd64.deb` with
    `./packaging/scripts/build-deb.sh` (record two clean builds and confirm they
    are byte-identical). Copy it, this handoff, `docs/P1_RECOVERY.md`, and
    `docs/TEST_PLAN.md` into the VM. Verify the artifact before installing it:
 
    ```bash
-   sha256sum teather_0.1.0-4_amd64.deb
-   dpkg-deb --info teather_0.1.0-4_amd64.deb
-   dpkg-deb --contents teather_0.1.0-4_amd64.deb
+   sha256sum teather_0.1.0-5_amd64.deb
+   dpkg-deb --info teather_0.1.0-5_amd64.deb
+   dpkg-deb --contents teather_0.1.0-5_amd64.deb
    ```
 
    The contents must NOT include `/usr/libexec/teather-helper` or
@@ -226,7 +226,7 @@ touched.
 
    ```bash
    sudo apt-get update
-   sudo apt-get install ./teather_0.1.0-4_amd64.deb
+   sudo apt-get install ./teather_0.1.0-5_amd64.deb
    ```
 
    If `sudo` fails, stop and preserve its exact output.
@@ -357,7 +357,7 @@ package upgrade/purge lifecycle against `0.1.0-4`, and the repo-wide P1 closeout
 One physical step: after passthrough, tap "Allow USB debugging" on the phone for
 the VM's new ADB key. Confirm the phone has a working data upstream.
 
-1. Install `teather_0.1.0-4_amd64.deb` and its deps in the VM; run the Phase 1
+1. Install `teather_0.1.0-5_amd64.deb` and its deps in the VM; run the Phase 1
    package/D-Bus/GUI/watcher lifecycle checks against it (last run was against
    the helper-based package).
 2. Verify the installed debug-signed APK reports versionCode 2 / `0.1.0-p1`;

@@ -3,18 +3,21 @@
 - **Snapshot date:** 2026-08-30
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
-  (`0.1.0-4`) is validated end-to-end and running live on the developer host.
-  Next is the P2 design discussion (D-018).
-- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-4` (sha256
-  `141d542a…`) implements D-022 — NetworkManager owns `teather0` as an in-memory
+  is validated end-to-end and running live on the developer host. Next is the P2
+  design discussion (D-018).
+- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-5` (sha256
+  `5cb16e0b…`). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
-  failover by default. 46 host unit tests + D-Bus smoke pass. **Validated end to
-  end on 2026-08-30** in the disposable VM with the owner's phone passed through
-  over USB: `teather connect` works, real traffic exits on the phone's Verizon
-  cellular, DNS + routing fail over automatically when the VM's link drops and
-  restore cleanly, and every teardown path returns the host to exact baseline.
-  See the 2026-08-30 work-log entry. Remaining before P1 sign-off: two-hour
-  soak, GUI/tray lifecycle against `0.1.0-4`, and the repo-wide closeout.
+  failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|ethernet`
+  — switch the phone's transport without reconnecting Teather). 48 host unit
+  tests + D-Bus smoke pass. **Validated end to end on 2026-08-30**: in the
+  disposable VM with the phone on USB passthrough, then installed and run on the
+  actual laptop — `teather connect` works, traffic exits on the phone's Verizon
+  cellular (`203.0.113.10`), `teather upstream wifi` flips it to the phone's
+  Wi-Fi exit (`198.51.100.20`) with `teather0`/tunnel/DNS/forward untouched, DNS +
+  routing fail over automatically when the physical link drops and restore
+  cleanly, and every teardown returns the host to exact baseline. GUI and
+  package lifecycle pass. See the 2026-08-30 work-log entries.
 
 This is the resume point. Update it at the end of a meaningful work session so
 the next one starts from evidence instead of archaeology.
@@ -174,6 +177,37 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — D-023: pick the phone's upstream (cellular/wifi/ethernet/auto)
+
+- Completed: `teather upstream <auto|cellular|wifi|ethernet>` (also `SetUpstream`
+  on D-Bus, a GUI dropdown, a `config.json` `upstream` key). The Android app
+  already supported all four (`UpstreamPreference`); the Linux side stopped
+  hard-coding `cellular` and now accepts a non-cellular relay. Switching while
+  connected restarts **only** the Android relay binding — `manager.set_upstream`
+  does `adb.stop_relay` + `adb.start_relay(serial, new)`; `teather0`, the tunnel,
+  routes, DNS, and the ADB forward are untouched. Teather refuses to change a
+  relay it did not start (`manual-relay`). Package bumped to `0.1.0-5`.
+  Decision: D-023.
+- Verified with: 48 host unit tests + D-Bus smoke; then live on the laptop with
+  the phone (which had both Verizon cellular and the "Banyan Patients" Wi-Fi):
+  `teather connect` → exit IP `203.0.113.10` (Verizon); `teather upstream
+  wifi` → exit IP `198.51.100.20` (the AP), same `tun2proxy` PID, same ADB
+  forward, `teather0` still UP, `/etc/resolv.conf` unchanged, Android reported
+  `selected_upstream=wifi_(validated)`; `teather upstream cellular` → back to
+  Verizon; `teather disconnect` → exact baseline.
+- Files/areas changed: `android_status.py`, `config.py`, `adb` call sites in
+  `manager.py` (+ `set_upstream`, status/diagnose fields), `dbus_service.py`,
+  `cli.py`, `gui.py`, `tests/test_core.py`, `packaging/debian/{control,changelog}`,
+  `packaging/scripts/build-deb.sh`, `docs/DECISIONS.md` (D-023).
+- Milestone transition: not applicable; D-023 is transport selection on the
+  existing TCP+virtual-DNS relay, so it is not gated by D-018's P2 stop.
+- Punch list for the next APK build (not done, no APK change was needed for
+  D-023): (a) update Android UI strings that imply TCP-only once P2 adds UDP;
+  (b) replace the Android launcher icon with the Linux
+  `desktop/linux/resources/icons/teather.svg` art — the owner prefers the Linux
+  logo and wants them unified.
+- Next exact action: unchanged — stop for the P2 design discussion (D-018).
 
 ### 2026-08-30 — D-022 live on the developer host; merged to main
 
