@@ -6,7 +6,7 @@
   is validated end-to-end and running live on the developer host. Next is the P2
   design discussion (D-018).
 - **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-5` (sha256
-  `5cb16e0b…`). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
+  `4a45b934…`). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
   failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|ethernet`
   — switch the phone's transport without reconnecting Teather). 48 host unit
