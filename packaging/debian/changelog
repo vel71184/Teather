@@ -1,3 +1,16 @@
+teather (0.1.0-4) unstable; urgency=medium
+
+  * D-022: NetworkManager owns the non-persistent teather0 tun connection from
+    creation (tun.owner delegation), replacing D-021's externally-assumed
+    interface and its non-functional Reapply DNS.
+  * DNS is now additive and non-exclusive: the physical link's resolver stays
+    first while it is present; the Teather sentinel is only used once it is gone.
+  * Remove the setuid-root helper and its polkit action; the packet engine runs
+    unprivileged. Restore NoNewPrivileges=yes on the user unit.
+  * Add the auto-failover setting (teather failover on|off), default on.
+
+ -- Teather Project <noreply@example.invalid>  Sat, 29 Aug 2026 00:00:00 +0000
+
 teather (0.1.0-3) unstable; urgency=medium
 
   * Provide temporary NetworkManager DNS and virtual DNS over UDP and TCP.

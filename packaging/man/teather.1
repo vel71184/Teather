@@ -38,6 +38,12 @@ Remove a remembered phone and its preferences.
 .B autoconnect on|off DEVICE_ID
 Set safe auto-connect for an approved phone. Auto-connect never starts a stopped Android relay.
 .TP
+.B failover on|off
+Arm or hold dormant automatic failover. When on (the default), Teather installs a
+worse-metric backup default route and an additive DNS entry so traffic moves to
+the phone automatically once Wi-Fi or Ethernet is lost. When off, Teather still
+connects but stays dormant until this is set back on.
+.TP
 .B diagnose [--json]
 Run read-only diagnostics.
 .TP
@@ -45,13 +51,15 @@ Run read-only diagnostics.
 Clean only journaled resources, then report diagnostics.
 .SH LIMITATIONS
 P1 supports TCP and virtual DNS over UDP and TCP for IPv4. General UDP and IPv6
-are unsupported. Teather does not change Wi-Fi, persistent NetworkManager
-profiles, firewall rules, or physical-interface state. While connected it applies
-temporary DNS only to teather0 through NetworkManager.
+are unsupported. Teather does not change Wi-Fi, Ethernet, persistent
+NetworkManager profiles, firewall rules, or physical-interface state. It creates
+one in-memory, non-persistent NetworkManager connection for teather0 whose DNS is
+additive: the physical link's resolver stays first while it is present.
 .SH FILES
 .TP
 .I ~/.config/teather/config.json
-Mode-0600 preferences and locally salted device identifiers.
+Mode-0600 preferences, the auto-failover setting, and locally salted device
+identifiers.
 .TP
 .I /usr/share/doc/teather/RECOVERY.md.gz
 Offline recovery instructions.

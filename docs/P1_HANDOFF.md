@@ -1,68 +1,47 @@
 # P1 Linux USB Desktop validation handoff
 
 This is the current execution contract. P0 and E-001 are complete. The P1 Android
-control surface, Linux daemon/CLI/GTK client, privileged helper, package, recovery
-guide, and pinned tunnel build are implemented in the working tree. Host-only
-checks and partial Android control tests passed on 2026-08-25. Do not restart P0
-or rebuild the P1 scaffold.
+control surface, Linux daemon/CLI/GTK client, NetworkManager connection module,
+package, recovery guide, and pinned tunnel build are implemented in the working
+tree (D-022, package `0.1.0-4`; there is no longer a privileged helper). Host
+checks passed on 2026-08-29. Do not restart P0 or rebuild the P1 scaffold.
 
-## Fresh-session reasoning gate
+The VM and phone steps below need the owner (see `AGENTS.md` "Safety gates").
+Everything up to them — building the package, updating code and docs — does not.
 
-On the first prompt of a new Codex conversation, follow
-[the repository gate](../AGENTS.md#fresh-codex-session-gate), recommend
-**GPT-5.6 Sol with Ultra**, and stop before analysis, implementation, or live
-operations. D-021's disposable-VM matrix ran and found its DNS mechanism does not
-work; D-022 proposes and prototypes a replacement, not yet implemented in shipped
-source (see the resume point below). Remaining design/implementation is
-separable into NetworkManager-native TUN ownership, additive DNS priority,
-privilege and cleanup, packaging, validation, and documentation reviews. Continue
-only after the owner selects or confirms Ultra and prompts again. This does not
-authorize a phone connection, active-host resolver change, or physical Phase 3
-retry.
+## Current resume point — D-022 implemented; phone-free VM matrix passed
 
-Within the same thread, apply the
-[same-thread transition gate](../AGENTS.md#same-thread-reasoning-transition-gate).
-The current VM matrix remains Ultra. Reassess again before physical validation;
-changing the reasoning level never supplies the separate operator phone approval.
+On 2026-08-29 the owner delegated the D-022 decision. D-021's `Reapply`
+mechanism was disproven (E-002: `teather0` was an externally-assumed
+NetworkManager connection, so `Reapply` never propagated the sentinel to
+`/etc/resolv.conf`). **D-022 is Accepted, implemented in shipped source
+(package `0.1.0-4`), and its phone-free parts passed the disposable-VM matrix
+on 2026-08-29/30 (see "Phase 2 (D-022) — VM results" below and D-022 in
+`docs/DECISIONS.md`).**
 
-## Current resume point — D-021 disproven; D-022 proposed and prototyped
+What changed:
 
-On 2026-08-29 the phone-free harness finally ran from the guest's real active
-GNOME session (not SSH) as this document's prior resume point required. The
-SSH/remote PolicyKit gate is confirmed resolved: NetworkManager's own audit log
-recorded `op="device-reapply" ... result="success"` from that session. But
-D-021's DNS mechanism itself does not work: `Reapply` accepts the
-`198.19.0.1` sentinel, `-32768` priority, and `ignore-auto-dns` settings without
-error, yet `/etc/resolv.conf` never reflects them, even held for 25 seconds, and
-a manual `Reload(DNS)` call afterward does not fix it either. Root cause:
-`teather0` is an externally-assumed NetworkManager connection (Teather's helper
-creates it with raw `ip` commands, outside NM's connection API), and `Reapply`
-on that kind of connection does not appear to regenerate the live `IP4Config`
-NM's DNS manager reads. This reproduced identically under TCG and KVM, so it is
-not a timing problem. Full trail: E-002 in `docs/EXPERIMENTS.md`.
+- NetworkManager creates and owns `teather0` from the start — an in-memory connection of type `tun`, with `tun.owner` delegation so
+  `tun2proxy` (spawned by `teatherd` as the desktop user, `--tun teather0`) attaches directly. **The setuid-root helper, its polkit
+  action, its route/rule parser, and its man page are deleted.**
+- DNS is additive: `ipv4.dns-priority` is now a positive, non-exclusive `32050`
+  with `ignore-auto-dns=false`, so `/etc/resolv.conf` keeps the physical
+  resolver first while it is present. `_verify_additive()` fails the connection
+  closed if arming ever leaves the sentinel as the only resolver.
+- Automatic failover is the default (config `auto_failover`, on). `teather
+  failover off` leaves Teather connected but dormant (no default route, no DNS)
+  until armed. Exposed as `SetAutoFailover` on D-Bus and a GTK checkbox.
+- `packaging/systemd/teather.service` restores `NoNewPrivileges=yes` and adds
+  `RestrictSUIDSGID`/`ProtectControlGroups`/etc.; `packaging/debian/control`
+  drops the `pkexec` dependency.
 
-**D-022** (`docs/DECISIONS.md`, Proposed, prototyped but not yet in shipped
-source) replaces the mechanism: a NetworkManager-native `tun` connection that
-NM owns from creation (with `tun.owner` delegation so the unprivileged
-`tun2proxy` process can attach directly, shrinking the privileged helper's
-job), plus an additive/non-exclusive DNS priority instead of D-021's exclusive
-one. Both were validated end-to-end via `nmcli` in the disposable VM. This also
-corrected the product requirement itself: automatic failover to Teather once
-Wi-Fi's route/resolver actually disappears is now the intended default
-behavior (with a user-facing toggle to require manual confirmation instead),
-not manual Wi-Fi toggling as the only model — see D-022's resolved open
-question.
-
-Do not repeat this exact harness run expecting a different DNS result; the
-mechanism needs to change first. The pre-D-022 tree is preserved on branch
+Verification done: 46 host unit tests + the D-Bus smoke test pass; the
+phone-free VM matrix passed (below). The pre-D-022 tree is on branch
 `archive/d021-reapply-dns-approach` (commit `c78d45f`).
 
-Next: get explicit owner acceptance of D-022's privilege trade-off (broader
-NetworkManager permission scope vs. the current narrower single-purpose polkit
-action), design its remaining pieces (routes beyond the base address,
-refusal/collision checks, the automatic-failover toggle setting), implement in
-shipped source, then rerun this phone-free VM matrix against the new mechanism
-before requesting the phone for renewed Phase 3.
+**Next: the phone.** Everything that can be validated without it is done. Phase
+3 needs the owner to connect the phone (USB passthrough into the VM is the
+low-risk way — the VM already has its own network to lose). See "Phase 3".
 
 ## Evidence already complete
 
@@ -92,6 +71,13 @@ before requesting the phone for renewed Phase 3.
   `8dbf92b8137533127e1a7e20e199586ccb276e995cb58ad354e8ed968a9ed586`.
 
 ## Phase 1 evidence complete — 2026-08-26
+
+> **Superseded by D-022 (2026-08-29):** the Phase 1 and Phase 2 evidence below
+> was collected against packages `0.1.0-1`/`0.1.0-2`/`0.1.0-3`, which used the
+> now-deleted setuid-root helper and D-021's `Reapply` DNS. It must be re-run
+> against `0.1.0-4` (helper removed, NetworkManager-owned `teather0`). The
+> package-lifecycle and GUI/watcher structure is unchanged; the privileged-TUN
+> and DNS portions are entirely replaced.
 
 - The verified Debian artifact installed in a disposable Debian 12.15 amd64 GNOME
   VM with all hard dependencies. Root-owned helper, tunnel engine, and polkit
@@ -175,9 +161,10 @@ physical cable/service failure recovery.
   byte counters; no rule changed. Raw private evidence remains under `/tmp`, not
   in the repository.
 
-**Historical stop resolved by D-021:** do not repeat Phase 3 until the replacement
-passes its fresh disposable-VM matrix. The active next action is the phone-free VM
-gate above.
+**Historical stop, now under D-022:** do not repeat Phase 3 until `0.1.0-4`
+passes the phone-free Phase 2 VM matrix above. The 2026-08-27 DNS-gate failure
+is the reason D-021 existed; D-022's additive DNS is designed so that disabling
+the physical link no longer leaves the host with no resolver.
 
 ## Safety boundary
 
@@ -194,31 +181,34 @@ phone is connected. Do not infer phone availability from ADB state.
 
 Teather must create only:
 
-- non-persistent `teather0` with `192.0.2.1/32`, MTU 1500;
-- `198.18.0.0/15 dev teather0`;
-- `default dev teather0 metric 32000`;
+- one in-memory NetworkManager `tun` connection for `teather0` with
+  `192.0.2.1/32`, MTU 1500, `198.18.0.0/15`, a metric-32000 backup default
+  (present only when failover is armed), and `198.19.0.1` DNS at a positive
+  non-exclusive priority;
 - one dynamically allocated loopback ADB forward;
 - mode-0600 per-user configuration and runtime journal files.
 
-It may change only temporary DNS on NetworkManager's active `teather0`
-connection. It must not create persistent profiles, directly edit resolver
-files, or change firewall rules, policy rules, physical interfaces, existing
-routes, or persistent state. The owner alone disables or restores Wi-Fi.
+It must not write a persistent NetworkManager profile, edit `/etc/resolv.conf`
+directly, or change firewall rules, policy rules, physical interfaces, existing
+routes, or any physical link's connection or DNS. Automatic failover once the
+physical link is gone is the default; Wi-Fi and Ethernet themselves are never
+touched.
 
 ## Phase 1 — package, D-Bus, GUI, and watcher in the VM
 
-1. Copy `build/p1/teather_0.1.0-3_amd64.deb`, this handoff,
-   `docs/P1_RECOVERY.md`, and `docs/TEST_PLAN.md` into the VM. Verify the artifact
-   before installing it:
+1. Build `teather_0.1.0-4_amd64.deb` with
+   `./packaging/scripts/build-deb.sh` (record two clean builds and confirm they
+   are byte-identical). Copy it, this handoff, `docs/P1_RECOVERY.md`, and
+   `docs/TEST_PLAN.md` into the VM. Verify the artifact before installing it:
 
    ```bash
-   sha256sum teather_0.1.0-3_amd64.deb
-   dpkg-deb --info teather_0.1.0-3_amd64.deb
-   dpkg-deb --contents teather_0.1.0-3_amd64.deb
+   sha256sum teather_0.1.0-4_amd64.deb
+   dpkg-deb --info teather_0.1.0-4_amd64.deb
+   dpkg-deb --contents teather_0.1.0-4_amd64.deb
    ```
 
-   The SHA-256 must be
-   `f3aa412bf64c3131eeb8f671161392164f5f72df04e404cb9c34cee7dea769d9`.
+   The contents must NOT include `/usr/libexec/teather-helper` or
+   `/usr/share/polkit-1/actions/…`.
 
 2. Capture a private baseline outside the repository. Do not commit raw host or
    device identifiers:
@@ -236,18 +226,18 @@ routes, or persistent state. The owner alone disables or restores Wi-Fi.
 
    ```bash
    sudo apt-get update
-   sudo apt-get install ./teather_0.1.0-3_amd64.deb
+   sudo apt-get install ./teather_0.1.0-4_amd64.deb
    ```
 
-   If `sudo` fails, stop and preserve its exact output. Do not improvise a broad
-   sudo or polkit rule.
+   If `sudo` fails, stop and preserve its exact output.
 
-   Confirm privileged files are root-owned and not group/world-writable:
+   Confirm the packaged files and that no helper/polkit action was installed:
 
    ```bash
-   stat -c '%U %G %a %n' /usr/libexec/teather-helper
    stat -c '%U %G %a %n' /usr/lib/teather/tun2proxy
-   stat -c '%U %G %a %n' /usr/share/polkit-1/actions/io.github.vel71184.teather.policy
+   test ! -e /usr/libexec/teather-helper && echo "no helper (expected)"
+   test ! -e /usr/share/polkit-1/actions/io.github.vel71184.teather.policy && echo "no polkit action (expected)"
+   grep -c NoNewPrivileges=yes /usr/lib/systemd/user/teather.service
    ```
 
 4. With no phone connected, verify D-Bus activation and read-only behavior:
@@ -279,78 +269,117 @@ routes, or persistent state. The owner alone disables or restores Wi-Fi.
 
 7. Exercise install, same-version reinstall or controlled synthetic upgrade,
    remove, and purge. Confirm `~/.config/teather/config.json` is mode 0600,
-   survives remove/upgrade, and is deleted only by purge. Reinstall the verified
-   artifact before Phase 2. Record exact commands and outcomes.
+   holds `auto_failover`, survives remove/upgrade, and is deleted only by purge.
+   Reinstall the verified artifact before Phase 2. Record exact commands and
+   outcomes.
 
-## Phase 2 — privileged helper and TUN gate in the VM
+## Phase 2 (D-022) — VM results, 2026-08-29/30
 
-Use a controlled loopback SOCKS endpoint for this phone-free D-021 matrix. Do not
-pass through a phone or disable the VM's existing network.
+Run in the disposable Debian 12 GNOME VM against the real
+`NetworkManagerConnection` code, driving it from `teatherd`'s actual context (a
+`systemd --user` transient service), with a controlled loopback SOCKS endpoint
+and the QEMU NIC as "the physical link". **Passed:**
 
-Before every case, capture routes, rules, resolver, NetworkManager, firewall, and
-`teather0` state. Prove all items in the `Executable P1 checks` section of
-`docs/TEST_PLAN.md`, including:
+- **No polkit prompt.** From the user-manager context, `network-control` and
+  `settings.modify.own` are authorized with no challenge (polkit's "implicit
+  inactive: yes"). D-021's `pkexec`/`auth_admin_keep`/active-GNOME requirement
+  is gone. (An SSH session is *not* authorized — correctly — but `teatherd` is
+  not an SSH session.)
+- **Mechanism.** `AddAndActivateConnection`/`…2` return `UnknownDevice` for a
+  tun that does not exist yet, so the code adds the connection with
+  `AddConnection2` (in-memory flag) then `ActivateConnection` — NM creates
+  `teather0` on activation.
+- **Additive DNS.** Armed, NIC up: `/etc/resolv.conf` = physical resolver first,
+  `198.19.0.1` last.
+- **Automatic failover.** `nmcli device disconnect eth0` → `resolv.conf` =
+  `198.19.0.1` only, default route = `teather0` only; DNS keeps resolving
+  through the sentinel (≈1 s blip during NM route teardown). Reconnecting the
+  NIC restores the physical resolver/route on top.
+- **Unprivileged engine.** `tun2proxy --tun teather0` (no `--setup`) attaches as
+  uid 1000 with `CapEff: 0` and no supplementary groups; `teather0` carrier
+  comes up; virtual DNS returns `198.18.0.0/16` addresses; a TCP connection to
+  one reaches the loopback SOCKS server.
+- **In-memory / teardown.** `/etc/NetworkManager/system-connections/` stays
+  empty; deactivate + delete returns routes, `resolv.conf`, and the `nmcli`
+  inventory to exact baseline.
+- **Crash recovery.** A leaked `teather0` (handles dropped) is removed by a
+  fresh instance's `recover()`; idempotent; `recover()` refuses a `teather0` it
+  does not own.
+- **Dormant mode.** `auto_failover` off → active connection, no default route,
+  no DNS entry.
 
-- `teather0` and both routes exist only while the inherited TUN descriptor lives;
-- the existing physical default remains preferred over metric 32000;
-- virtual DNS produces SOCKS domain requests;
-- temporary per-device NetworkManager DNS installs only `198.19.0.1`, answers
-  both UDP and TCP probes, and leaves the externally owned `teather0` address
-  and routes byte-for-byte equivalent;
-- normal disconnect restores the prior resolver state before `teather0` is
-  removed, while crash recovery regenerates DNS only after the interface is
-  gone and never creates a persistent NetworkManager profile;
-- interface/address/route collisions, nonstandard IPv4 rules, VPN/split-default
-  ambiguity, invalid helper input, and an unsafe tunnel path fail before mutation;
-- the helper drops capabilities, supplementary groups, GID, and UID before the
-  packet engine handles traffic;
-- SIGINT, SIGTERM, daemon death, helper death, and tunnel death remove all owned
-  state;
-- repeated disconnect and `teather recover` are idempotent and never delete
-  ambiguous state.
+Not covered here (needs the phone): the ADB transport, the full
+`manager.connect()` orchestration, real cellular upstream carrying traffic, the
+two-hour session, and the package-install/GUI/watcher lifecycle against
+`0.1.0-4` (Phase 1 was last run against the helper-based package).
 
-After each case, verify that only `teather0` and its two routes appeared and then
-disappeared. Use `docs/P1_RECOVERY.md` if cleanup is uncertain. Restore the VM
-snapshot after the matrix passes.
+## Phase 3 — end-to-end with the phone — 2026-08-30, passed
 
-## Phase 3 — physical P1 acceptance
+Done via USB passthrough of the owner's phone (Samsung `SM S266V`, Verizon LTE)
+into the disposable VM: `start-dns-phase-usb.sh` adds
+`-device qemu-xhci -device usb-host,vendorid=0x04e8,productid=0x6860`
+(`adb kill-server` on the host first; the owner tapped "Allow USB debugging"
+once). The VM has its own NAT'd `eth0` as "the physical link", so the host
+connection was never at risk.
 
-**Blocked after the 2026-08-27 step-5 failure. D-021 is approved and implemented,
-but do not rerun this sequence until package `0.1.0-3` passes the new VM DNS and
-cleanup matrix.**
+Results (package `0.1.0-4`, `teather.service` running):
 
-Start this phase only after Phases 1 and 2 pass and the explicit operator phone
-gate above is satisfied.
+- `teather device approve` + `teather connect` → `state: connected`,
+  `dns_ready: true`, `failover_armed: true`, no polkit prompt. It started the
+  Android relay, allocated ADB forward `tcp:45621 -> tcp:1080`, had
+  NetworkManager create `teather0`, and spawned unprivileged
+  `tun2proxy --tun teather0`.
+- Real traffic: `curl --interface teather0 https://cloudflare.com/cdn-cgi/trace`
+  → HTTP 200, world IP `203.0.113.10` (Verizon) vs `198.51.100.20` via
+  `eth0`. `warp=off`.
+- Additive DNS with `eth0` up: `resolv.conf` = `10.0.2.3` then `198.19.0.1`;
+  ordinary traffic used `eth0`.
+- Failover: `nmcli device disconnect eth0` → within 3 s `resolv.conf` =
+  `198.19.0.1` only, default = `teather0`; `getent hosts example.com` →
+  `198.18.0.2`; `curl https://example.com` and `https://github.com` → HTTP 200
+  over cellular. Reconnect → physical resolver/route back on top, Teather still
+  connected.
+- Stability: ~12 min connected over cellular carrying traffic, then 18/18
+  forced requests through `teather0`; teatherd RSS steady at ~25 MB, tun2proxy
+  ~7.5 MB — no unbounded growth.
+- `teather disconnect` → `resolv.conf`/routes/`nmcli` at exact baseline, ADB
+  forward removed, Android relay stopped, `system-connections/` empty, no
+  runtime journal.
+- `kill -9 tun2proxy` → daemon's 3 s health poll auto-disconnected
+  (`tunnel-exited`), same clean baseline. `teather recover` idempotent.
 
-1. Build and cryptographically verify versionCode 2 / `0.1.0-p1` as a debug APK.
-   Gradle's local debug certificate is accepted for this private P1 experiment
-   under D-019; do not treat it as a distributable release identity. Connect one
-   authorized phone through ADB. Do not record its raw serial.
-2. Capture the complete Linux baseline from Phase 1 plus interface state. Confirm
-   no existing VPN, split default, nonstandard IPv4 rule, or `teather0` exists.
-3. Verify the installed debug-signed APK reports versionCode 2 / `0.1.0-p1`.
-   Prove ADB shell start/query/stop and effective ordinary-app denial. Repeat
-   compatible attach, incompatible-setting refusal, and Linux-start ownership
-   behavior.
-4. Approve the detected hashed device locally, connect through the GUI or CLI,
-   and confirm the existing Wi-Fi/Ethernet default remains preferred. Confirm the
-   Android relay and dynamic ADB forward are ready before changing Wi-Fi.
-5. Manually disable Wi-Fi. Immediately verify the resolver contains only the
-   Teather sentinel `198.19.0.1`, `dns_ready` remains true, and controlled UDP
-   and TCP DNS probes return addresses from `198.18.0.0/16`. If any check fails,
-   run `teather disconnect`, manually restore Wi-Fi, record the failure, and
-   return the design to review. Do not edit resolver configuration.
-6. With the resolver gate satisfied, exercise a browser, hostname and IP-literal
-   HTTPS, Git over HTTPS, SSH to a controlled endpoint, package metadata lookup,
-   and DNS TCP fallback. Treat unsupported general UDP/QUIC as a documented P1
-   limitation, not a success.
-7. Run the two-hour session while observing Android/Linux memory, CPU, counters,
-   errors, and destination-redacted logs.
-8. Independently exercise normal disconnect, repeated disconnect, SIGINT,
-   SIGTERM, Android service stop, USB removal, daemon death, helper/tunnel death,
-   and manual Wi-Fi restoration. Capture before/after state for every case.
-9. Restore Wi-Fi manually, disconnect Teather, and verify no relay service, ADB
-   forward, `teather0`, route, resolver, NetworkManager, policy-rule, or firewall
+Not yet done for full P1 sign-off: a literal two-hour session, the GUI/tray and
+package upgrade/purge lifecycle against `0.1.0-4`, and the repo-wide P1 closeout
+(then stop for the P2 discussion, D-018).
+
+### Historical Phase 3 procedure (D-021, superseded)
+
+One physical step: after passthrough, tap "Allow USB debugging" on the phone for
+the VM's new ADB key. Confirm the phone has a working data upstream.
+
+1. Install `teather_0.1.0-4_amd64.deb` and its deps in the VM; run the Phase 1
+   package/D-Bus/GUI/watcher lifecycle checks against it (last run was against
+   the helper-based package).
+2. Verify the installed debug-signed APK reports versionCode 2 / `0.1.0-p1`;
+   prove ADB shell start/query/stop and ordinary-app denial; repeat compatible
+   attach, incompatible-setting refusal, and Linux-start ownership behaviour.
+3. Approve the hashed device locally, connect via GUI or CLI with `auto_failover`
+   on, and confirm the existing default + resolver stay preferred and browsing
+   still uses them.
+4. Confirm `/etc/resolv.conf` lists the physical resolver **first**, `198.19.0.1`
+   second. Then disconnect the physical link. Verify the resolver becomes only
+   `198.19.0.1`, `dns_ready` is true, and UDP + TCP DNS probes return
+   `198.18.0.0/16` addresses.
+5. Exercise a browser, hostname and IP-literal HTTPS, Git over HTTPS, SSH to a
+   controlled endpoint, and package-metadata lookup. General UDP/QUIC is a
+   documented P1 limitation, not a failure.
+6. Run the two-hour session watching Android/Linux memory, CPU, counters, and
+   redacted logs.
+7. Exercise normal disconnect, repeated disconnect, SIGINT, SIGTERM, Android
+   service stop, USB removal, daemon death, tunnel death, `teather failover
+   off/on`, and link restoration. Capture before/after state each time.
+8. Restore the physical link, disconnect Teather, and verify no relay service,
+   ADB forward, `teather0` connection, route, resolver, or NetworkManager
    residue remains.
 
 ## Closeout

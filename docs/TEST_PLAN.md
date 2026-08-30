@@ -76,16 +76,12 @@ correctness requirements.
 
 ## P1 network restoration matrix
 
-**2026-08-29 note:** this matrix was written against D-021's DNS mechanism,
-which the disposable-VM run found does not work (see E-002 and D-022 in
-`docs/DECISIONS.md`). D-022's proposed replacement also changes the "owner
-manually disables Wi-Fi" framing below: automatic failover to Teather once
-Wi-Fi's route/resolver actually disappears is now the intended default (with a
-user-facing toggle to require manual confirmation instead). The restoration
-requirements themselves (idempotent stop, signal/crash/cable-removal recovery,
-no unrelated state mutation) remain the right things to test regardless of
-which DNS mechanism or failover mode is active; update the specific
-mechanism-dependent rows once D-022 is implemented.
+**2026-08-29 (D-022 implemented, `0.1.0-4`):** the mechanism-specific rows below
+now describe NetworkManager owning `teather0` as an in-memory `tun` connection
+and additive DNS. Failover is automatic once the physical link's route and
+resolver disappear; the `auto_failover` setting can hold Teather dormant
+instead. The restoration requirements (idempotent stop, signal/crash/cable
+recovery, no unrelated state mutation) are unchanged.
 
 Capture relevant Linux state before and after each test.
 
@@ -100,73 +96,78 @@ Capture relevant Linux state before and after each test.
 | Cable removal | Relay route is withdrawn without deleting unrelated state |
 | Linux suspend/resume | Reconnects or fails closed with recoverable state |
 | Existing VPN active | Refuses unsafe route plan or follows documented coexistence |
-| Teather starts while Wi-Fi is active | Existing Wi-Fi route remains preferred and its NetworkManager state is unchanged |
-| Owner manually disables Wi-Fi | Teather becomes the remaining default without a Teather-initiated Wi-Fi mutation |
-| Owner manually restores Wi-Fi | Existing Wi-Fi route becomes preferred again without restarting Teather |
-| Receiver process is killed | Non-persistent `teather0` and its attached routes disappear automatically |
-| NetworkManager missing or older than 1.42 | Refuse before tunnel mutation |
-| Temporary DNS reapply changes TUN routes/address | Disconnect and restore owned state |
-| UDP or TCP DNS readiness fails | Never report connected; restore resolver and tunnel |
-| Daemon dies with temporary DNS active | Interface state disappears and next start removes any stale sentinel |
+| Teather starts while Wi-Fi is active | Wi-Fi route and resolver stay preferred and fully working; its NetworkManager state is unchanged |
+| Wi-Fi is lost with failover armed | Traffic and DNS fail over to Teather automatically; no Teather-initiated change to any physical link |
+| Wi-Fi is restored | Wi-Fi route and resolver become preferred again without restarting Teather |
+| Wi-Fi is lost with failover off | Teather stays dormant (no default route, no DNS) until armed |
+| `teatherd` process is killed | Next `teatherd` start's `recover()` deletes the stale in-memory `teather0` connection |
+| NetworkManager missing or older than 1.42 | Refuse before any connection is created |
+| NetworkManager creates `teather0` with unexpected address/routes | Parity check fails; disconnect and restore owned state |
+| UDP or TCP DNS readiness fails | Never report connected; deactivate the connection |
+| Armed `resolv.conf` ends up sentinel-only while a physical link is up | `_verify_additive` fails closed; disconnect |
 
 Do not automate a destructive route test on the developer's main session until it
 passes in a network namespace or disposable VM where the scenario permits.
 
 For P1, snapshot NetworkManager connection profiles and runtime state as well as
-routes, rules, DNS, and firewall state. Only the temporary `teather0` applied
-connection may differ while active; no persistent profile may appear. Test the exact manual sequence:
-Teather ready, owner disables Wi-Fi, Teather traffic succeeds, owner restores
-Wi-Fi, and the original path becomes preferred. Recovery must not depend on the
-ongoing Internet connection or chat session.
+routes, rules, DNS, and firewall state. Only the in-memory `teather0` connection
+may appear while active, and `/etc/NetworkManager/system-connections/` must stay
+unchanged. Test the sequence: Teather ready, physical link lost, Teather traffic
+and DNS succeed automatically, physical link restored, original path preferred
+again. Recovery must not depend on the ongoing Internet connection or chat
+session.
 
 P1 DNS testing must distinguish IP reachability from hostname resolution. P0
 `socks5h` proves remote resolution only for explicit proxy clients; it is not
 evidence that applications captured transparently by a TUN can resolve names.
-Record resolver state with Wi-Fi present, manually disabled, restored, after
-receiver crash, and after cable removal. A passed IP-literal request with failed
-hostname lookup is a DNS failure, not a successful Teather connection.
+Record resolver state with the physical link present, lost, restored, after
+receiver crash, and after cable removal. With the physical link present, its
+resolver must be listed first. A passed IP-literal request with failed hostname
+lookup is a DNS failure, not a successful Teather connection.
 
 ## Executable P1 checks
 
-**2026-08-29 note:** the NetworkManager-DNS-specific items below (sentinel via
-`Reapply`/preserve-external-IP, exclusive priority) describe D-021, which is
-disproven — see the note above and D-022 in `docs/DECISIONS.md` for the
-NetworkManager-native-`tun`-ownership and additive-DNS-priority replacement.
-The non-DNS items (TUN lifetime, route preference, privilege drop, cleanup on
-signal/death) remain valid checks for whichever mechanism is implemented.
+**2026-08-29 (D-022 implemented, `0.1.0-4`):** the items below describe the
+NetworkManager-native `tun` ownership and additive DNS mechanism.
 
-Host-only checks cover configuration permissions, salted device trust, ambiguous
-multi-device selection, manager/CLI state transitions, typed D-Bus responses,
-route preflight, ownership journaling, redaction, helper request validation, and
-idempotent cleanup. Android JVM tests cover relay state and schema-versioned
-status serialization.
+Host-only checks cover configuration permissions (including the `auto_failover`
+setting), salted device trust, ambiguous multi-device selection, manager/CLI
+state transitions, typed D-Bus responses, route/rule/collision preflight,
+ownership journaling, redaction, the built connection dictionary, additive-vs-
+exclusive DNS, stale-connection recovery, and idempotent cleanup. Android JVM
+tests cover relay state and schema-versioned status serialization.
 
 In a network namespace or disposable Debian 12 VM, prove:
 
-- `teather0` and both routes exist only while the non-persistent TUN fd is open;
-- the physical default remains preferred over metric 32000;
-- virtual DNS converts host queries into SOCKS domain requests;
-- NetworkManager 1.42+ temporarily installs only `198.19.0.1` on active
-  `teather0` using preserve-external-IP, without changing its address or routes;
+- an active local session creates and activates the in-memory `tun` connection
+  with no polkit prompt;
+- `teather0`, its routes, and its DNS entry exist only while the connection is
+  active;
+- the physical default remains preferred over the metric-32000 backup;
+- `tun2proxy --tun teather0` attaches unprivileged and converts
+  host queries into SOCKS domain requests;
+- with failover armed, `/etc/resolv.conf` lists the physical resolver first and
+  `198.19.0.1` second — never the sentinel alone while a physical link is up;
 - sentinel DNS answers controlled readiness queries over both UDP and RFC 1035
   TCP, with returned mappings restricted to `198.18.0.0/16`;
-- normal stop restores the prior applied DNS before TUN removal; forced loss and
-  next-start recovery remove an unambiguous stale sentinel without touching
-  unrelated state;
-- no persistent NetworkManager profile or direct resolver edit appears;
+- normal disconnect deactivates and deletes the connection; `SIGKILL` of
+  `teatherd` leaves it and the next start's `recover()` removes it, refusing a
+  `teather0` it does not own;
+- `/etc/NetworkManager/system-connections/` is unchanged and no direct resolver
+  edit appears;
 - pre-existing interface, overlapping route/address collision, nonstandard IPv4
-  policy rules, VPN/split-default ambiguity, and invalid helper input all fail
-  before mutation;
-- the helper drops capabilities, groups, GID, and UID before tunnel execution;
-- SIGINT, SIGTERM, daemon death, helper death, and tunnel death remove all owned
-  state;
-- the patched tun2proxy 0.8.3 `--tun-fd` path works without `--tun`.
+  policy rules, VPN/split-default ambiguity, and an invalid loopback proxy port
+  all fail in `preflight` before any NetworkManager call;
+- `teatherd` and `tun2proxy` run with no capabilities, no supplementary groups,
+  and `NoNewPrivs: 1`;
+- SIGINT, SIGTERM, daemon death, and tunnel death remove all owned state.
 
 Package tests install, upgrade, uninstall, and purge the amd64 Debian artifact.
-They verify desktop/icon/D-Bus/systemd/polkit/helper/recovery-guide placement,
-mode and ownership, GUI operation without AppIndicator, tray operation when
-available, optional login watching, preference preservation on uninstall, and
-preference removal on purge.
+They verify desktop/icon/D-Bus/systemd/recovery-guide placement, that no
+`/usr/libexec/teather-helper` or polkit action is installed, that the user unit
+sets `NoNewPrivileges=yes`, GUI operation without AppIndicator, tray operation
+when available, optional login watching, preference preservation on uninstall,
+and preference removal on purge.
 
 Release Android device tests must show that ADB shell can start, query, and stop
 the protected service while an ordinary test application receives a permission
@@ -226,7 +227,9 @@ inventing impressive-looking targets before measuring the devices.
 - No private key or destination leakage in normal logs.
 - Dependency vulnerability scanning once manifests exist.
 - Android exported-component review.
-- Linux privileged-helper API validation when introduced.
+- Confirmation that `teatherd` requests nothing from NetworkManager beyond
+  creating/activating/deleting the one in-memory `teather0` connection, and that
+  no new polkit action or privileged helper has been introduced.
 
 ## Provider-behavior tests
 

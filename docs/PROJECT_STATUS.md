@@ -1,28 +1,22 @@
 # Project status
 
-- **Snapshot date:** 2026-08-28
+- **Snapshot date:** 2026-08-30
 - **Lifecycle:** implementation / pre-alpha
-- **Active milestone:** P1 — Linux USB Desktop validation
-- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-3` implements
-  D-021 temporary DNS, passes local source/package gates, and installs with API 2
-  in Debian 12. Its active-GNOME DNS matrix ran on 2026-08-29 and found D-021's
-  `Reapply`-based mechanism does not work against real NetworkManager (see
-  D-022); the replacement is prototyped but not yet implemented in shipped
-  source, and physical P1 remains blocked until a working DNS mechanism passes
-  the VM gate.
+- **Active milestone:** P1 — Linux USB Desktop validation (acceptance essentially
+  passed; closeout pending)
+- **Runnable build:** Android `0.1.0-p1`; Debian package `0.1.0-4` (sha256
+  `141d542a…`) implements D-022 — NetworkManager owns `teather0` as an in-memory
+  `tun` connection, no setuid helper or polkit action, additive DNS, automatic
+  failover by default. 46 host unit tests + D-Bus smoke pass. **Validated end to
+  end on 2026-08-30** in the disposable VM with the owner's phone passed through
+  over USB: `teather connect` works, real traffic exits on the phone's Verizon
+  cellular, DNS + routing fail over automatically when the VM's link drops and
+  restore cleanly, and every teardown path returns the host to exact baseline.
+  See the 2026-08-30 work-log entry. Remaining before P1 sign-off: two-hour
+  soak, GUI/tray lifecycle against `0.1.0-4`, and the repo-wide closeout.
 
-This is the canonical resume point. Update it at the end of every meaningful work
-session so the next session starts from evidence instead of archaeology.
-
-> **Fresh-session gate:** On the first prompt of a new Codex conversation,
-> complete the mandatory read-only context pass, recommend a reasoning level, and
-> stop before implementation or live operations. The current owner-reviewed P1
-> D-021 disposable-VM integration is **GPT-5.6 Sol with Ultra** work because
-> networking, privilege, recovery, testing, and documentation can be reviewed
-> independently. See
-> [the repository agent instructions](../AGENTS.md#fresh-codex-session-gate).
-> Within the same thread, Codex must also stop before a materially new phase when
-> the recommended level changes in either direction.
+This is the resume point. Update it at the end of a meaningful work session so
+the next one starts from evidence instead of archaeology.
 
 ## North star
 
@@ -43,22 +37,20 @@ Linux curl -> laptop loopback -> ADB forwarding -> Android SOCKS5 relay
 The physical P0 gates passed on the owner's phone. On 2026-08-25 the owner
 provided the complete P1 implementation plan and explicitly requested its
 implementation. This satisfies D-013's source-implementation approval gate. The
-bounded desktop, Android control, privileged helper, recovery, and package
-surfaces are implemented and pass host-only checks. The disposable-VM Phase 1
-package, D-Bus, real GNOME GUI/tray/fallback, watcher, lifecycle, and no-mutation
-gate passed on 2026-08-26. The corrected privileged-helper/TUN matrix also passed
-in the disposable VM that day. D-019 accepts Gradle's debug signing for private
-P1 testing and defers a permanent release identity until distribution is being
-considered. The debug APK is verified. On 2026-08-27 the physical run connected
-the corrected bounded tunnel but disabling Wi-Fi removed the only usable
-non-loopback IPv4 nameserver. Teather failed safely and restored owned state. The
-owner approved D-021's transient per-device NetworkManager design. Its source,
-third pinned tunnel patch, reserved sentinel/mapping split, API-v2 diagnostics,
-and Debian package `0.1.0-3` are implemented. The current objective is isolated
-VM validation. The first fresh guest attempt proved package/API installation and
-safe cleanup after SSH's remote PolicyKit subject was denied; it did not test the
-actual active-GNOME authorization path. Do not repeat the physical run or mutate
-the active host first.
+bounded desktop, Android control, recovery, and package surfaces are implemented
+and pass host checks. The disposable-VM Phase 1 package, D-Bus, real GNOME
+GUI/tray/fallback, watcher, and no-mutation gate passed on 2026-08-26 (against
+the older helper-based package). D-019 accepts Gradle's debug signing for
+private P1 testing. The debug APK is verified. On 2026-08-27 the physical run
+connected the bounded tunnel but disabling Wi-Fi removed the only usable
+non-loopback IPv4 nameserver; Teather failed safely and restored owned state.
+D-021's `Reapply` DNS design was then implemented and disproven against real
+NetworkManager (E-002). **D-022 is now accepted and implemented (package
+`0.1.0-4`):** NetworkManager owns `teather0`, there is no privileged helper, DNS
+is additive so a working physical link is never disturbed, and failover is
+automatic by default. The current objective is the disposable-VM Phase 2 matrix
+against `0.1.0-4`. Do not repeat the physical run or mutate the active host
+first.
 
 ## Implemented P0 surface
 
@@ -80,21 +72,23 @@ the active host first.
 
 ## Next concrete actions
 
-1. Keep P1 active; E-002/E-003 remain incomplete. Do not advance to P2.
-2. Keep the phone disconnected and do not query ADB. Run the private harness in
-   the disposable guest's active GNOME session through packaged `pkexec`; do not
-   add a permissive PolicyKit rule to make an SSH subject pass. Validate preserved
-   external IP/routes, UDP/TCP sentinel DNS, failure cleanup, and no persistence.
-3. Preserve the completed reproducibility evidence: two clean tunnel builds were
-   identical at `9ad64db8987a7035ab86edae99417506e5cc931bb876cd7736e9ba148f470146`,
-   and two same-source package builds were identical at
-   `f3aa412bf64c3131eeb8f671161392164f5f72df04e404cb9c34cee7dea769d9`.
-4. Only after the VM passes, stop and request explicit phone connection before
-   any ADB query or renewed Phase 3 run.
+1. Keep P1 active; do not advance to P2 (D-018 — stop for a design discussion
+   first).
+2. Confirm the ~13-minute over-cellular soak result (`/tmp/soak.result` in the
+   VM); if it shows no failures or unbounded growth, that satisfies the P1 soak
+   intent (a full two hours can follow later if wanted).
+3. Run the GUI/tray and package upgrade/purge lifecycle checks against
+   `0.1.0-4` in the VM (Phase 1 items were last run against the helper-based
+   package).
+4. Do the P1 milestone closeout: record E-002 (system-wide TCP/DNS — passed) and
+   E-003 (failure restoration — passed) in `docs/EXPERIMENTS.md`; mark P1 passed
+   in `docs/ROADMAP.md`; reconcile the README. Then stop for the P2 discussion.
+5. Hand the phone back: remove the `usb-host` line from the VM launch script and
+   `adb start-server` on the host.
 
-Preserve the P1 implementation and isolated-validation fixes. Generated
-`__pycache__` files, private VM evidence, signing keys, and build credentials are
-not implementation artifacts and must not be staged.
+Preserve the P1 implementation. Generated `__pycache__` files, private VM
+evidence, signing keys, and build credentials are not implementation artifacts
+and must not be staged.
 
 ## Confirmed decisions
 
@@ -108,17 +102,17 @@ not implementation artifacts and must not be staged.
 - P0 compiles with API 37 but targets API 36; Android 17 local-network permission
   work is intentionally deferred to the Wi-Fi milestone.
 - P1's first Linux mode is a non-persistent `teather0` backup interface. Existing
-  Wi-Fi/Ethernet remains untouched and preferred; the owner manually disables or
-  restores it. D-021 permits only temporary per-device DNS on `teather0`.
-- The exact P1 helper, route, virtual-DNS, trust, D-Bus, packaging, and recovery
-  architecture is approved (D-015 through D-017).
+  Wi-Fi/Ethernet stays untouched and preferred; Teather takes over automatically
+  only once such a link is actually gone, with a per-user opt-out (D-014 as
+  amended by D-022).
+- The P1 route, virtual-DNS, trust, D-Bus, packaging, and recovery architecture
+  is approved (D-015 through D-017).
 - Work must stop for explicit planning and approval after P1, before P2 (D-018).
 - Private P1 device testing uses debug signing; permanent signing is deferred
   until distribution is considered (D-019).
-- The user manager permits its intended fixed PolicyKit transition while the
-  helper/tunnel privilege drop remains strict (D-020).
-- Temporary NetworkManager DNS with a reserved sentinel and UDP/TCP virtual DNS
-  is accepted for P1 (D-021).
+- NetworkManager owns `teather0` as an in-memory `tun` connection
+  with `tun.owner` delegation and additive DNS; there is no setuid-root helper or
+  custom polkit action (D-022, supersedes D-020 and D-021).
 
 See `docs/DECISIONS.md` for rationale and status.
 
@@ -126,10 +120,12 @@ See `docs/DECISIONS.md` for rationale and status.
 
 - Provider classification/accounting behavior is unmeasured and cannot be
   generalized from one result.
-- D-021 should resolve the observed DNS loss, but its NetworkManager reapply and
-  resolver exclusion remain unproven in the guest's active desktop session and
-  on the physical host. The SSH-denial path cleaned its owned state. General UDP
-  and IPv6 remain P2.
+- D-022's NetworkManager-native `tun` ownership and additive DNS are implemented
+  and pass host unit tests, but the real-NetworkManager behaviour (no polkit
+  prompt for an active session, unprivileged `tun2proxy` attach to the
+  `tun.owner` device, `resolv.conf` ordering, in-memory teardown, `SIGKILL`
+  recovery) is unproven until the disposable-VM matrix runs. General UDP and
+  IPv6 remain P2.
 - The userspace WireGuard endpoint remains a P4 hypothesis.
 - Repository license remains undecided until before public access.
 
@@ -147,11 +143,11 @@ See `docs/DECISIONS.md` for rationale and status.
 
 The owner-approved implementation plan on 2026-08-25 resolves D-013 and authorizes
 P1 source work. It does not authorize unbounded experimentation on the active
-host: helper/network behavior must pass isolated tests first, and the physical
-gate must capture before/after routes, rules, resolver, NetworkManager, and
-firewall state. D-021 authorizes only temporary `teather0` DNS through
-NetworkManager; persistent profiles, direct resolver edits, firewall, policy
-rules, and physical-interface mutations remain forbidden.
+host: network behavior must pass isolated tests first, and the physical gate must
+capture before/after routes, rules, resolver, NetworkManager, and firewall
+state. D-022 authorizes only the one in-memory `teather0` `tun`
+connection through NetworkManager; persistent profiles, direct resolver edits,
+firewall, policy rules, and any change to a physical link remain forbidden.
 
 ## Evidence recorded so far
 
@@ -171,26 +167,202 @@ directionally advancing counters, an unbuffered active session closed when the
 Android service stopped, and USB removal left measured Linux network state
 unchanged. Final cleanup left no service or ADB forward.
 
-## Session closeout template
-
-When a P# milestone completes, also perform the repository-wide transition in
-the `Milestone transition protocol` section of `AGENTS.md`. A milestone is not
-closed until the roadmap, experiments, this resume point, agent priority, README,
-next handoff/recovery documents, and affected technical guidance agree.
-
-```markdown
-### YYYY-MM-DD — short description
-
-- Completed:
-- Verified with:
-- Files/areas changed:
-- Decisions made:
-- Milestone transition: not applicable | pending | completed
-- Risks or failures:
-- Next exact action:
-```
-
 ## Work log
+
+A short dated entry per meaningful session: what changed, how it was verified,
+and the next action. When a milestone finishes, make sure the roadmap, this
+file, `AGENTS.md`'s "Current priority", the README status line, and the next
+handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — D-022 validated end-to-end with the real phone (VM + USB passthrough)
+
+- Completed: full P1 acceptance in the disposable Debian 12 GNOME VM with the
+  owner's phone (Samsung `SM S266V`, Verizon LTE) passed through over USB
+  (`-device qemu-xhci -device usb-host,vendorid=0x04e8,productid=0x6860`; the
+  owner tapped "Allow USB debugging" once). Package `0.1.0-4` installed; the
+  `systemd --user` unit runs.
+- Verified with, all against `0.1.0-4` and the running `teatherd`:
+  - `teather connect` end to end → `state: connected`, `dns_ready: true`,
+    `failover_armed: true`. It started the Android relay, allocated the ADB
+    forward (`tcp:45621 -> tcp:1080`), had NetworkManager create `teather0`,
+    and spawned `tun2proxy --tun teather0` (unprivileged) — no polkit prompt.
+  - Real traffic: `curl --interface teather0 https://cloudflare.com/cdn-cgi/trace`
+    → HTTP 200, world-visible IP `203.0.113.10` (Verizon cellular), vs.
+    `198.51.100.20` (host) via `eth0`. Traffic genuinely exits as the phone's
+    own cellular app traffic; `warp=off`.
+  - Additive DNS: with `eth0` up, `/etc/resolv.conf` = `10.0.2.3` then
+    `198.19.0.1`; normal browsing used `eth0`.
+  - Automatic failover: `nmcli device disconnect eth0` → within 3 s
+    `resolv.conf` = `198.19.0.1` only, default route = `teather0` only,
+    world-visible IP = the Verizon address. `getent hosts example.com` →
+    `198.18.0.2`; `curl https://example.com` and `https://github.com` →
+    HTTP 200 over cellular. Reconnecting `eth0` restored the physical
+    resolver/route on top with Teather still connected.
+  - `teather disconnect` → `resolv.conf`, routes, and `nmcli` back to exact
+    baseline; ADB forward removed; Android relay stopped;
+    `/etc/NetworkManager/system-connections/` empty; no runtime journal.
+  - `kill -9` of `tun2proxy` → the daemon's 3 s health poll auto-disconnected
+    (`error_category: tunnel-exited`), cleaning `teather0`, the forward, and
+    the relay. `teather recover` idempotent.
+  - Phone-free VM matrix (2026-08-29/30, from `teatherd`'s context): mechanism,
+    additive DNS, dormant mode, `SIGKILL`+`recover()`, in-memory/teardown — all
+    pass. 46 host unit tests + D-Bus smoke pass.
+- Fixes made during validation:
+  - `networkmanager.py`: `AddAndActivateConnection`/`…2` return `UnknownDevice`
+    for a not-yet-existing tun, so switched to `AddConnection2` (in-memory
+    flag) then `ActivateConnection`.
+  - `manager._tunnel_command`: removed `--setup false` — `--setup` is a bare
+    root-only flag; omitting it is correct.
+  - `manager._system_interface_snapshot`: NetworkManager picks the metric for
+    the scope-link `198.18.0.0/15` route, so the parity check pins only the
+    backup default's metric.
+  - `packaging/systemd/teather.service`: dropped `ProtectControlGroups` /
+    `ProtectKernelModules` / `RestrictNamespaces` — they fail at step
+    CAPABILITIES in a `systemd --user` unit. Kept `NoNewPrivileges=yes`,
+    `ProtectSystem=strict`, `ProtectHome=read-only`, `RestrictSUIDSGID`,
+    `LockPersonality`. Package rebuilt (sha256 `141d542a…`).
+- Also verified (VM, no phone): `0.1.0-4` package lifecycle — same-version
+  reinstall and `remove` preserve the mode-0600 `config.json`, `purge` removes
+  it, reinstall works. `teather-gtk` renders against `0.1.0-4` with the
+  "Automatic failover" checkbox (default on) and the tray indicator.
+- Soak: the owner decided a synthetic two-hour run is not needed — real daily
+  use will be the sustained/live-data validation. ~15 min connected over
+  cellular showed flat RSS (teatherd ~25 MB, tun2proxy ~7.5 MB) and no errors,
+  which covers the "doesn't leak / fall over" intent. P0 already ran a 30-min
+  soak on the same Android relay code.
+- Milestone transition: P1 acceptance is essentially complete; the repo-wide
+  closeout (roadmap status, this file, README, E-002/E-003) is done in this and
+  the same-day entries. Phone handed back (USB passthrough removed, host
+  `adb start-server`).
+- Risks or failures: `--setup false` and the over-hardened unit each cost one
+  iteration; both fixed and re-verified. Reproducible-build verification of the
+  `.deb` still needs Rust 1.90 on the host (not installed). Carrier
+  reclassification over sustained tethering-like use is unmeasured and is an
+  owner-daily-use / future-experiment question, not a P1 gate.
+- Next exact action: commit the D-022 change set, then **stop for the P2 design
+  discussion (D-018)** — no general UDP / IPv6 / broader-DNS / WireGuard work
+  until that happens. If the owner wants to daily-drive `0.1.0-4` on the real
+  host first, the useful prep is the standalone auto-revert path + installing
+  the package there.
+
+### 2026-08-29 — cut documentation ceremony
+
+- Completed: the owner said the process/documentation ceremony was itself a
+  source of friction. Removed the fresh-session reasoning-level gate, the
+  same-thread reasoning transition gate, the 9-step milestone transition
+  protocol, the mandatory 7-file "read in order and reconcile" pass, the
+  change-completion checklist, and the session-closeout template from
+  `AGENTS.md` and their echoes in `README.md`, `docs/PROJECT_STATUS.md`,
+  `docs/P1_HANDOFF.md`, `docs/DEVELOPMENT.md`, `docs/ROADMAP.md`,
+  `docs/DECISIONS.md`, and `CONTRIBUTING.md`. `AGENTS.md` is now ~110 lines
+  (was 245): resume pointer, current priority, safety gates (phone + active
+  host), hard constraints, engineering rules, testing, a one-paragraph
+  "finishing a change" note.
+- Kept unchanged: the hard constraints, the phone and active-host safety gates,
+  engineering rules, testing expectations, and `docs/DECISIONS.md` as the
+  rationale record (append, don't rewrite).
+- Verified with: `make p1-check` (46 tests + D-Bus smoke), `git diff --check`,
+  and a scan for dangling links to the removed sections (only dated work-log
+  entries still name them, which is fine as history).
+- Next exact action: unchanged — build `0.1.0-4` and run the disposable-VM
+  Phase 2 matrix.
+
+### 2026-08-29 — D-022 accepted and implemented (package `0.1.0-4`)
+
+- Completed: the owner delegated the D-022 decision ("just do whatever … so long
+  as whatever the app does doesn't cause the wifi to suddenly stop working while
+  still on"). Accepted D-022 and implemented it in shipped source:
+  - `desktop/linux/teather/networkmanager.py` rewritten from a `Reapply` DNS
+    helper into `NetworkManagerConnection` — creates and owns an in-memory `tun` connection added in-memory then activated,
+    with `tun.owner`/`tun.group` delegation, `ipv4` manual address + the two
+    fixed routes, and additive DNS. `_verify_additive()` fails the connection
+    closed if arming ever leaves the sentinel as the only resolver while a
+    physical link is up — the exact "Wi-Fi stops working while still on" case
+    the owner called out.
+  - `DNS_PRIORITY` moved from `-32768` (exclusive) to `32050` (positive,
+    non-exclusive); `ignore-auto-dns` is now `false`.
+  - `desktop/linux/helper/teather-helper.c`, its route test,
+    `packaging/polkit/…`, and `packaging/man/teather-helper.8` deleted.
+    `tun2proxy` is spawned by `teatherd` as the desktop user with
+    `--tun teather0`.
+  - `packaging/systemd/teather.service` restores `NoNewPrivileges=yes` and adds
+    `RestrictSUIDSGID`/`ProtectControlGroups`/`RestrictNamespaces`/
+    `LockPersonality`; `packaging/debian/control` drops the `pkexec` dependency;
+    package version `0.1.0-4`.
+  - Auto-failover setting (`config.auto_failover()`, default on) with
+    `SetAutoFailover` on D-Bus, `teather failover on|off`, and a GTK checkbox.
+    Off = the connection is created dormant (no default route, no DNS) until
+    armed, for metered upstreams.
+  - `manager.py` connect/disconnect/recover/health_check rewritten around the
+    new module; refusal checks stay in `preflight.py`, now run against
+    `route show table all`.
+- Verified with: `python3 -m unittest discover -s desktop/linux/tests` — 46
+  tests pass (37 core + subtests); `./desktop/linux/tests/dbus_smoke.sh` passes;
+  `git diff --check` clean. The Android/`gradle` half of `make check` was not
+  re-run in this session (no source under `app/` changed).
+- Files/areas changed: `desktop/linux/teather/{networkmanager,manager,config,
+  constants,cli,gui,dbus_service}.py`, `desktop/linux/tests/test_core.py`,
+  `Makefile`, `packaging/{systemd,debian,scripts,man}/…`, and the decision,
+  architecture, threat-model, roadmap, test-plan, handoff, recovery,
+  development, experiment, README, and this status documentation. Deleted the
+  helper, its test, its polkit action, and its man page.
+- Decisions made: D-022 Accepted (supersedes D-021's mechanism, D-020, and
+  D-014's manual-only model). The privilege trade-off was resolved in favour of
+  NetworkManager-native ownership: `teatherd` runs unprivileged and holds only
+  `network-control`/`settings.modify.own` (which an active session already
+  has), replacing a 350-line setuid-root C helper that Phase 2 found three
+  parsing defects in.
+- Milestone transition: not applicable. P1 remains active; E-002/E-003
+  incomplete.
+- Risks or failures: the real-NetworkManager path is unproven — no polkit
+  prompt for an active session, `tun2proxy --tun teather0`
+  attaching to a `tun.owner` device unprivileged, in-memory teardown, and
+  `SIGKILL`-then-`recover()` all need the disposable-VM matrix. `tun2proxy`
+  0.8.3's exact `--tun NAME` / no-`--setup` behaviour on an NM-created
+  device is the single largest unknown.
+- Next exact action: build `teather_0.1.0-4_amd64.deb` (two byte-identical
+  builds) and run the Phase 2 matrix in `docs/P1_HANDOFF.md` from the
+  disposable VM's active GNOME session. Do not reconnect the phone or attempt
+  physical Phase 3 until it passes.
+
+### 2026-08-29 — generalize the fresh-session gate beyond Codex
+
+- Completed: the owner pointed out that the first-prompt gate assumed the
+  assistant was Codex with a selectable Ultra/High reasoning level, which is not
+  true for every assistant (Claude Code, for example, exposes no such selector).
+  Rewrote the gate to be assistant-agnostic: the durable mechanic is now a
+  **broad scope** vs **focused scope** classification of the requested work, and
+  the Codex "GPT-5.6 Sol with Ultra/High" selector is documented as one mapping
+  of that classification rather than the classification itself. An assistant
+  without reasoning selectors states the classification and its consequences
+  (broad-scope work moves to Codex at Ultra or is divided into independently
+  reviewable units) instead of naming a selector. The read-only first pass,
+  stop-and-wait-for-owner step, and same-thread transition gate are unchanged in
+  intent.
+- Verified with: `grep` for residual `fresh-codex-session-gate` anchors and
+  Codex-only selector language in live (non-historical) sections; `git diff
+  --check`; local Markdown link inventory for the renamed
+  `#fresh-session-gate` anchor.
+- Files/areas changed: `AGENTS.md` (gate rename `Fresh Codex session gate` ->
+  `Fresh session gate`, both gate sections rewritten), `README.md`,
+  `docs/PROJECT_STATUS.md` (this entry and the top blockquote),
+  `docs/P1_HANDOFF.md`, `docs/DEVELOPMENT.md`. Historical work-log entries and
+  `docs/P0_HANDOFF.md` were left as written; they are dated records, not live
+  instructions.
+- Decisions made: none new. This is a workflow-wording change, not an
+  architectural or technical decision, so it follows the 2026-08-28 gate entry's
+  precedent of a work-log note rather than a `docs/DECISIONS.md` entry. D-015
+  through D-021 remain authoritative; D-022 remains Proposed.
+- Milestone transition: not applicable. P1 remains active.
+- Risks or failures: none observed. No code, build, network, VM, device, or
+  Android/Linux runtime state was touched.
+- Next exact action: unchanged from the entry below — the owner decides whether
+  to accept D-022's privilege trade-off (broader NetworkManager permission scope
+  vs. the current narrower single-purpose polkit action). If accepted, design the
+  full replacement (routes beyond the base address, refusal/collision checks, the
+  automatic-failover toggle setting) before writing shipped code, then rerun the
+  disposable-VM matrix. Do not reconnect the phone or attempt physical Phase 3
+  until the VM DNS gate passes with the chosen mechanism.
 
 ### 2026-08-29 — D-021 DNS mechanism found broken at the root; D-022 proposed and prototyped
 

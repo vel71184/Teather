@@ -1,12 +1,13 @@
 Package: teather
-Version: 0.1.0-3
+Version: 0.1.0-4
 Section: net
 Priority: optional
 Architecture: amd64
 Maintainer: Teather Project <noreply@example.invalid>
-Depends: adb, iproute2, libc6, python3 (>= 3.11), python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, network-manager (>= 1.42), pkexec
+Depends: adb, iproute2, libc6, python3 (>= 3.11), python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, network-manager (>= 1.42)
 Recommends: gnome-shell-extension-appindicator
 Description: Android-hosted Internet relay desktop client
  Teather provides a focused GTK window, tray indicator, CLI, and per-user daemon
  for a temporary TCP and virtual-DNS connection through an authorized Android
- phone over USB/ADB.
+ phone over USB/ADB. NetworkManager owns the non-persistent teather0 interface;
+ the packet engine runs as the desktop user with no privileged helper.

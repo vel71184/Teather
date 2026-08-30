@@ -54,6 +54,13 @@ class TeatherWindow:
         device_actions.pack_start(self.autoconnect, True, True, 0)
         box.pack_start(device_actions, False, False, 0)
 
+        self.failover = Gtk.CheckButton(
+            label="Automatic failover: carry traffic once Wi-Fi/Ethernet is lost"
+        )
+        self._failover_guard = False
+        self.failover.connect("toggled", self._set_failover)
+        box.pack_start(self.failover, False, False, 0)
+
         self.metrics = Gtk.Label(xalign=0, selectable=True)
         box.pack_start(self.metrics, False, False, 0)
         diagnostics = Gtk.Button(label="Diagnostics")
@@ -163,6 +170,11 @@ class TeatherWindow:
     def _diagnose(self, *_args):
         self._call("Diagnose")
 
+    def _set_failover(self, widget):
+        if self._failover_guard:
+            return
+        self._call("SetAutoFailover", "(b)", (widget.get_active(),))
+
     def refresh(self):
         try:
             status = self.client.call("GetStatus")
@@ -184,10 +196,15 @@ class TeatherWindow:
             self.state.set_text(f"State: {status['state']} — {status['message']}")
             if self.tray_status is not None:
                 self.tray_status.set_label(f"Status: {status['state']}")
+            self._failover_guard = True
+            self.failover.set_active(bool(status.get("auto_failover", True)))
+            self._failover_guard = False
+            armed = "armed" if status.get("failover_armed") else "dormant"
             self.metrics.set_text(
                 f"Active sessions: {status['active_sessions']}\n"
                 f"Phone → Internet: {status['bytes_client_to_internet']} bytes\n"
                 f"Internet → Phone: {status['bytes_internet_to_client']} bytes\n"
+                f"Failover: {armed}\n"
                 "P1 coverage: TCP + virtual DNS; general UDP and IPv6 unsupported"
             )
         except Exception as error:

@@ -1,247 +1,103 @@
 # Teather agent instructions
 
-These instructions apply to the entire repository. They exist so a future coding
-session can resume without rebuilding the project context from chat history.
+These exist so a new session can resume without rebuilding context from chat
+history. Keep them short.
 
-## Read before changing anything
+## Resuming
 
-Read, in order:
+Read `docs/PROJECT_STATUS.md` — it is the resume point (current state, what
+changed last, next action). For P1 work also read `docs/P1_HANDOFF.md` and
+`docs/P1_RECOVERY.md`. `docs/DECISIONS.md` records *why* past technical choices
+were made, so a rejected approach is not rediscovered. If a doc contradicts the
+code, the code wins for what *is*; fix the doc.
 
-1. `README.md`
-2. `docs/PROJECT_STATUS.md`
-3. `docs/DECISIONS.md`
-4. `docs/ARCHITECTURE.md`
-5. The milestone-specific section of `docs/ROADMAP.md`
-6. For P0 device work, `docs/P0_HANDOFF.md`
-7. For current P1 validation, `docs/P1_HANDOFF.md` and
-   `docs/P1_RECOVERY.md`
-
-If those files disagree, stop and reconcile them. `docs/PROJECT_STATUS.md` is the
-resume point, while accepted entries in `docs/DECISIONS.md` are authoritative for
-technical choices.
-
-## Fresh Codex session gate
-
-On the first prompt of every new Codex conversation about Teather, including a
-prompt that says only "continue" or "resume," perform the read order above and
-then stop after advising the owner which reasoning level should be used. Treat a
-context reset or imported conversation as a new conversation when it is not clear
-that this gate already ran.
-
-On that first prompt:
-
-1. Use read-only inspection only. Do not edit files, run tests or builds, operate
-   a phone or VM, change networking, or begin implementation.
-2. Classify the requested work and recommend **GPT-5.6 Sol with Ultra** or
-   **GPT-5.6 Sol with High**.
-3. State the recommendation, the task boundaries that caused it, and whether the
-   scope must be narrowed or divided.
-4. Stop and wait for the owner to select or confirm that level and prompt again.
-   Do not claim to know the active selector setting unless the environment
-   actually exposes it.
-
-Recommend **Ultra** for whole-repository processing, the first broad pass in a
-new milestone, live-network/DNS design review, architecture or threat-model work,
-security/privilege/recovery audits, milestone transitions, and changes spanning
-several independently reviewable subsystems. Ultra is appropriate when useful
-work can be delegated across Android, Linux networking, packaging, security,
-testing, or documentation.
-
-Recommend **High** for a focused task with an accepted design and a narrow
-completion test: one component implementation, one bug, one test group, one
-packaging fix, or a bounded documentation update. If a High task expands into
-several independent workstreams or crosses an approval boundary, stop again and
-recommend Ultra or ask the owner to narrow the task.
-
-## Same-thread reasoning transition gate
-
-Within an existing conversation, reassess the appropriate level when work reaches
-a materially different phase, not at every file, command, or ordinary subtask.
-Examples include design moving to implementation, a focused fix expanding into a
-repository-wide audit, a broad review narrowing to one approved change,
-implementation reaching live device or network validation, or a milestone
-transition beginning.
-
-If the best level changes in either direction, **High to Ultra or Ultra to High**:
-
-1. Finish only the current safe unit of work; do not enter the new phase.
-2. Tell the owner what phase finished, what phase is next, which level the next
-   phase needs, and why.
-3. Stop and wait for the owner to select or confirm the new level and prompt
-   again.
-
-If the next phase still fits the active recommendation, continue normally. Do not
-interrupt merely because a different file or component is next. A level change
-does not grant implementation, device, privilege, or live-test approval.
-
-For the current P1 work, D-021's VM matrix ran and found its DNS mechanism does
-not work (see above); D-022 proposes and prototypes a replacement but is not
-yet implemented in shipped source. Design and implementation of D-022's
-remaining pieces, NetworkManager/DNS/privilege/recovery/packaging work, and
-documentation remain Ultra because those workstreams are independently
-reviewable. Reassess again before physical phone validation; a reasoning-level
-choice never satisfies the separate operator phone gate.
-
-These labels follow the current Codex distinction: High increases reasoning depth
-for complex work; Ultra adds automatic task delegation for separable complex
-work. Re-check the official Codex model guidance if those product definitions
-change. This gate chooses an execution mode only. It does not grant approval,
-weaken any safety constraint, or supersede a stop condition elsewhere in this
-repository.
+You do not need to stop and ask permission to begin work, classify the task, or
+pick a reasoning mode. Just start. Ask the owner only for the things listed under
+**Safety gates**, or when a real decision genuinely can't be made from the repo.
 
 ## Current priority
 
-P0 and experiment E-001 are complete. The current milestone is P1 — Linux USB
-Desktop validation. The Android control changes, focused Linux GUI/CLI/daemon,
-privileged helper, recovery guide, Debian package, and pinned tunnel build are
-implemented. Host checks and both disposable Debian 12 GNOME VM phases passed;
-the VM is powered off. Do not rebuild the scaffold, rerun P0, or repeat the VM
-matrix unless a regression requires isolated reproduction.
+P0 and E-001 are complete. Milestone: **P1 — Linux USB Desktop validation.**
 
-The owner accepted the local debug certificate for private P1 testing and deferred
-a permanent release identity until distribution is being considered (D-019).
-VersionCode 2 / `0.1.0-p1` and its debug signature are verified. The first
-physical Phase 3 attempt on 2026-08-27 found and fixed the user-service
-`NoNewPrivileges`/`pkexec` packaging conflict in Debian package `0.1.0-2`, then
-failed safely at the required DNS gate: disabling Wi-Fi removed the only usable
-non-loopback IPv4 nameserver. Cleanup restored routes, rules, resolver,
-NetworkManager inventory, and firewall structure to baseline.
+D-022 is accepted, implemented (package `0.1.0-4`), and **validated end to end on
+2026-08-30** in the disposable VM with the phone passed through over USB:
+`teather connect` works, real traffic exits on the phone's cellular, additive
+DNS keeps the physical resolver first while the VM's link is up, failover and
+restore are automatic, and every teardown returns the host to exact baseline. 46
+host unit tests + D-Bus smoke pass. NetworkManager owns `teather0` as an
+in-memory `tun` connection (`tun.owner` so `tun2proxy` runs unprivileged, no
+polkit prompt from the daemon's context); no setuid helper or polkit action.
 
-**D-021 is superseded in practice, not accepted.** On 2026-08-29 the disposable-VM
-DNS matrix finally ran from the guest's real active GNOME session (the SSH/remote
-PolicyKit gate is confirmed resolved), but D-021's `Reapply`-based DNS mechanism
-itself failed: NetworkManager accepts the sentinel DNS settings on `teather0`
-without error, but `/etc/resolv.conf` never reflects them, because `teather0` is
-an externally-assumed connection and `Reapply` does not regenerate the live
-`IP4Config` NetworkManager's DNS manager reads for that kind of connection. This
-reproduced identically under both TCG and KVM acceleration, so it is not a
-timing or VM-speed problem. See E-002 in `docs/EXPERIMENTS.md` for the full
-diagnostic trail.
+Remaining for P1 sign-off: a two-hour session, the GUI/tray + package
+upgrade/purge lifecycle against `0.1.0-4`, and the milestone closeout (roadmap,
+`docs/PROJECT_STATUS.md`, README, E-002/E-003). Then **stop for the P2 design
+discussion (D-018)** — do not start general UDP, IPv6, broader DNS, WireGuard,
+wireless transports, multi-client, other platforms, or P5 polish.
 
-**D-022 (Proposed, prototyped, not yet implemented in shipped source)** replaces
-D-021's mechanism: NetworkManager owns the `teather0` connection from creation
-(a native `tun`-type connection with `tun.owner` delegation) instead of
-discovering it after the fact, and DNS uses an additive, non-exclusive priority
-(worse than the physical link's) instead of D-021's exclusive negative priority.
-Both pieces were validated end-to-end via `nmcli` in the disposable VM: DNS came
-up as only the sentinel while active, an unprivileged process successfully
-attached to the owner-delegated TUN device, and teardown left the host at exact
-baseline. This also corrected the actual product requirement: the default
-behavior is now automatic failover to Teather once Wi-Fi's route/resolver truly
-disappears (with a user-facing toggle to require manual confirmation instead,
-given the phone's upstream may be metered cellular) — not D-014's original
-"the owner manually disables/restores" as the only model. See D-022 in
-`docs/DECISIONS.md` for the full trade-off (a broader NetworkManager permission
-scope vs. the current narrower single-purpose polkit action) and evidence.
+## Safety gates — ask the owner first
 
-The pre-D-022 working tree is preserved unmodified on branch
-`archive/d021-reapply-dns-approach` (commit `c78d45f`); nothing was deleted.
-
-Next job: get explicit owner acceptance of D-022's privilege trade-off, then
-design the remaining pieces (routes beyond the base address, refusal/collision
-checks equivalent to the current helper's, the actual helper-shrink, and the
-automatic-failover toggle setting), implement in shipped source, and rerun the
-full disposable-VM gate matrix before any physical phone reconnection. Do not
-mutate the active host, query ADB, or request the phone until that passes. P1
-remains active; do not start P2 general UDP, IPv6, broader DNS, WireGuard,
-wireless transports, multi-client support, cross-platform receivers, or P5
-polish early.
+- **The phone.** Do not connect, pass through USB, or run any ADB command
+  against it without the owner saying to. Do not infer it is available from ADB
+  state.
+- **The active developer host.** Do not create `teather0`, change routes/DNS/
+  firewall, or install the package on the machine this session runs on. Network
+  changes get tested in a disposable VM first — the dev connection depends on
+  this host staying up.
+- Publishing anything outside the repo, or other hard-to-reverse outward actions.
 
 ## Hard constraints
 
-- The baseline must remain unrooted.
-- Do not require an unlocked bootloader, Magisk, a system application, hidden API
-  access, or device-integrity workarounds.
-- Do not make or document a promise that carrier accounting or classification is
-  bypassed. Record observed behavior as an experiment.
-- Do not add traffic-obfuscation, DPI-evasion, carrier fingerprint camouflage, or
-  carrier-specific stealth presets.
-- Do not commit secrets, ADB keys, WireGuard private keys, device serial numbers,
-  phone numbers, subscriber data, packet captures, or provider account details.
-- Linux route, DNS, and firewall changes must be bounded, reversible, and restored
-  on normal exit, error, signal, and next-start recovery.
-- Do not install wildcard or passwordless sudo rules.
-- Android owns control state. Receiver implementations remain thin.
+- Baseline stays unrooted: no unlocked bootloader, Magisk, system app, hidden
+  APIs, or device-integrity workarounds.
+- No wildcard or passwordless sudo; no new setuid helper or polkit action; no
+  NetworkManager scope beyond creating/activating/deleting the one `teather0`
+  connection.
+- Linux route/DNS/firewall changes must be bounded, reversible, and restored on
+  normal exit, error, signal, and next-start recovery. Treat a cleanup mismatch
+  as a failure even if traffic worked.
+- Do not commit secrets, ADB keys, private keys, device serials, phone numbers,
+  subscriber data, packet captures, or provider account details.
+- Do not claim carrier accounting/classification is bypassed; record observed
+  behaviour as an experiment. No stealth/DPI-evasion/fingerprint-camouflage
+  features.
+- Android owns control state; receiver implementations stay thin.
 
 ## Engineering rules
 
-- Prefer a working vertical experiment over a large speculative abstraction.
+- Prefer a working vertical slice over a speculative abstraction, and the
+  lightest mechanism that meets the requirement — the phone pays for CPU,
+  battery, and heat. Justify a heavier design in `docs/EXPERIMENTS.md`.
 - Keep transport, relay protocol, flow handling, routing, and UI as separate
-  modules even in the prototype.
-- Bind test services to loopback unless a test explicitly requires a local-link
-  listener. Never expose an unauthenticated relay to arbitrary interfaces.
-- Add timeouts, cancellation, and useful error categories at every I/O boundary.
-- Logs should identify the failing layer without logging browsing destinations by
+  modules.
+- Bind test services to loopback unless a test needs a local-link listener;
+  never expose an unauthenticated relay to arbitrary interfaces.
+- Timeouts, cancellation, and useful error categories at every I/O boundary.
+- Logs identify the failing layer without recording browsing destinations by
   default.
-- Pin or record dependency versions once build files exist.
-- New privileged behavior requires an update to `docs/THREAT_MODEL.md`.
-- A changed architectural choice requires an update to `docs/DECISIONS.md`.
-- A completed experiment requires an entry in `docs/EXPERIMENTS.md`.
-- End each meaningful work session by updating `docs/PROJECT_STATUS.md`.
-- Prefer the lightest mechanism that meets the milestone's requirement. The
-  phone pays for CPU, battery, and thermal cost; a heavier design (a new
-  background process, continuous polling, a full userspace TCP/IP stack)
-  needs measured justification in `docs/EXPERIMENTS.md`, not an assumption
-  that it is necessary.
+- Pin or record dependency versions.
 
-## Testing expectations
+## Testing
 
-- Unit-test framing, state transitions, configuration parsing, and cleanup logic.
-- Integration-test Android relay and Linux connector independently before the
-  end-to-end test.
-- Capture the receiver's routes and DNS state before and after integration tests.
-- Treat cleanup failure as a test failure, even if Internet access worked.
-- Do not use real credentials or identifying production captures as fixtures.
-- Follow `docs/TEST_PLAN.md` for milestone exit criteria.
+- Unit-test framing, state transitions, config parsing, and cleanup logic.
+- Test the Android relay and Linux connector independently before end-to-end.
+- Capture receiver routes and DNS before and after integration tests.
+- Don't use real credentials or production captures as fixtures.
+- `docs/TEST_PLAN.md` has the milestone exit criteria.
+
+## Finishing a change
+
+Run the relevant tests and say the command and result. Check nothing sensitive
+is staged. Update `docs/PROJECT_STATUS.md` (what changed, next action) and,
+where affected, `docs/DECISIONS.md` (a changed technical choice),
+`docs/THREAT_MODEL.md` (new privileged behaviour), and `docs/EXPERIMENTS.md` (a
+finished experiment). Name unresolved risks instead of quietly working around
+them. That's the whole checklist — one status file is the thing that must stay
+current; the rest is "touch it if this change touched it."
 
 ## Documentation style
 
-- Use plain language and explain why a constraint exists.
-- Mark unverified designs as **proposed** or **hypothesis**.
-- Use exact dates for status snapshots and experiments.
-- Preserve rejected alternatives in the decision log so they are not repeatedly
-  rediscovered.
-- Avoid claiming a feature exists until a runnable test demonstrates it.
-
-## Change completion checklist
-
-Before declaring work complete:
-
-- Run the relevant tests and record the exact command and outcome.
-- Verify no sensitive files are staged.
-- Verify failure paths restore network state.
-- Update documentation affected by the change.
-- Update `docs/PROJECT_STATUS.md` with what changed and the next concrete action.
-- Summarize unresolved risks rather than silently choosing around them.
-
-## Milestone transition protocol
-
-Completing any P# milestone requires a repository-wide resume-point transition,
-not only an experiment entry. Before declaring a milestone complete or beginning
-the next one:
-
-1. Confirm every exit criterion in `docs/ROADMAP.md` and `docs/TEST_PLAN.md` has
-   recorded evidence. A partial pass does not advance the active milestone.
-2. Record the completed experiment(s) in `docs/EXPERIMENTS.md` with the exact date,
-   commands, observations, failures, cleanup result, and inference limits.
-3. Update `docs/ROADMAP.md` with the completed status/date and activate only the
-   next approved milestone.
-4. Update the header, objective, evidence, risks, and next exact action in
-   `docs/PROJECT_STATUS.md`, then add a session closeout entry.
-5. Update this file's read order and Current priority so a fresh thread cannot
-   resume the completed milestone. Update README status and documentation links.
-6. Create or refresh the next milestone's handoff and offline recovery document
-   before it becomes the resume point. The handoff must separate completed
-   evidence from pending gates and state whether a phone, VM, privilege, network
-   mutation, or owner action is required.
-7. Reconcile affected architecture, decisions, threat model, development, and test
-   guidance. Preserve historical decisions and experiments, but label superseded
-   instructions or add dated resolution notes.
-8. Search the full documentation set for stale milestone names, blockers, service
-   boundaries, and next-action language; run local-link validation and
-   `git diff --check`.
-9. Respect explicit approval stops. If the next milestone requires owner approval,
-   leave it as the next discussion—not as authorized implementation work.
-
-If these resume points disagree, the milestone is not complete even when its code
-or device test passed.
+Plain language; say why a constraint exists. Mark unverified designs
+**proposed** or **hypothesis** and don't claim a feature works before a test
+shows it. Use exact dates in status and experiment entries. Keep rejected
+alternatives in `docs/DECISIONS.md` (append, don't rewrite) so they aren't
+rediscovered.

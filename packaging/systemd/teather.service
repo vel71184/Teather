@@ -8,12 +8,18 @@ BusName=io.github.vel71184.Teather1
 ExecStart=/usr/bin/teatherd
 Restart=on-failure
 RestartSec=2
-# The manager invokes the fixed polkit helper through setuid-root pkexec.
-# NoNewPrivileges=yes would make that approved elevation path impossible.
-NoNewPrivileges=no
+# D-022: the manager no longer invokes a setuid-root helper. NetworkManager owns
+# the teather0 connection and tun2proxy attaches to the tun.owner-delegated
+# device as the desktop user, so the daemon needs no elevation of its own.
+# (Keep the directive set to what a `systemd --user` manager can actually apply
+# without capabilities — heavier Protect*/Restrict* options fail at step
+# CAPABILITIES in a user unit.)
+NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
+RestrictSUIDSGID=yes
+LockPersonality=yes
 ReadWritePaths=-%h/.config/teather -%t/teather
 
 [Install]

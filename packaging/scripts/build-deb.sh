@@ -2,7 +2,7 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.1.0-3
+version=0.1.0-4
 source_date_epoch=1787788800
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT HUP INT TERM
@@ -20,10 +20,10 @@ if [ ! -x "$tunnel" ]; then
 fi
 
 install -d "$root/DEBIAN" "$root/usr/bin" "$root/usr/lib/python3/dist-packages" \
-  "$root/usr/lib/teather" "$root/usr/libexec" "$root/usr/share/applications" \
+  "$root/usr/lib/teather" "$root/usr/share/applications" \
   "$root/usr/share/icons/hicolor/scalable/apps" "$root/usr/share/dbus-1/services" \
-  "$root/usr/lib/systemd/user" "$root/usr/share/polkit-1/actions" \
-  "$root/usr/share/doc/teather" "$root/usr/share/man/man1" "$root/usr/share/man/man8"
+  "$root/usr/lib/systemd/user" \
+  "$root/usr/share/doc/teather" "$root/usr/share/man/man1"
 install -m 0644 "$repo/packaging/debian/control" "$root/DEBIAN/control"
 install -m 0755 "$repo/packaging/debian/postrm" "$root/DEBIAN/postrm"
 install -d "$root/usr/lib/python3/dist-packages/teather"
@@ -35,26 +35,17 @@ install -m 0755 "$repo/desktop/linux/bin/teatherd" "$root/usr/bin/teatherd"
 install -m 0755 "$repo/desktop/linux/bin/teather-gtk" "$root/usr/bin/teather-gtk"
 install -m 0755 "$tunnel" "$root/usr/lib/teather/tun2proxy"
 strip --remove-section=.comment "$root/usr/lib/teather/tun2proxy"
-gcc -std=c11 -O2 -Wall -Wextra -Werror -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wformat -Werror=format-security \
-  -Wl,-z,relro,-z,now -o "$root/usr/libexec/teather-helper" \
-  "$repo/desktop/linux/helper/teather-helper.c"
-strip --strip-unneeded --remove-section=.comment "$root/usr/libexec/teather-helper"
 install -m 0644 "$repo/packaging/teather.desktop" "$root/usr/share/applications/teather.desktop"
 install -m 0644 "$repo/desktop/linux/resources/icons/teather.svg" \
   "$root/usr/share/icons/hicolor/scalable/apps/teather.svg"
 install -m 0644 "$repo/packaging/dbus/io.github.vel71184.Teather1.service" \
   "$root/usr/share/dbus-1/services/io.github.vel71184.Teather1.service"
 install -m 0644 "$repo/packaging/systemd/teather.service" "$root/usr/lib/systemd/user/teather.service"
-install -m 0644 "$repo/packaging/polkit/io.github.vel71184.teather.policy" \
-  "$root/usr/share/polkit-1/actions/io.github.vel71184.teather.policy"
 install -m 0644 "$repo/packaging/debian/copyright" "$root/usr/share/doc/teather/copyright"
 gzip -n -9 -c "$repo/packaging/debian/changelog" > "$root/usr/share/doc/teather/changelog.Debian.gz"
 gzip -n -9 -c "$repo/docs/P1_RECOVERY.md" > "$root/usr/share/doc/teather/RECOVERY.md.gz"
 for manual in "$repo"/packaging/man/*.1; do
   gzip -n -9 -c "$manual" > "$root/usr/share/man/man1/$(basename "$manual").gz"
-done
-for manual in "$repo"/packaging/man/*.8; do
-  gzip -n -9 -c "$manual" > "$root/usr/share/man/man8/$(basename "$manual").gz"
 done
 find "$root" -type d -exec chmod 0755 {} +
 (

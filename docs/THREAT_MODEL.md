@@ -9,7 +9,7 @@ Even as a personal project, it must be designed as security-sensitive software.
 - Android host identity and authorized-receiver records.
 - Receiver identity and tunnel keys.
 - Availability of the phone's upstream connection.
-- Integrity of Linux routes, DNS, firewall state, and privileged helper.
+- Integrity of Linux routes, DNS, and firewall state.
 - User privacy, including destinations and usage patterns.
 - Android device integrity required by Google Wallet/Pay and other applications.
 
@@ -96,39 +96,51 @@ offline or leaking traffic through an unintended path.
 - Emergency diagnostic and restoration command.
 - Never delete unrelated routes or firewall rules.
 - Keep existing NetworkManager-managed Wi-Fi/Ethernet connections, profiles,
-  routes, and DNS untouched. D-021 permits only a temporary active-device DNS
-  update on `teather0`, using the preserve-external-IP reapply flag.
-- Use a non-persistent Teather TUN whose interface-bound routes disappear when its
-  owner exits. Give its default lower preference than every existing physical
-  default so restoring Wi-Fi independently restores Internet access.
+  routes, and DNS untouched. D-022 permits exactly one in-memory, non-persistent
+  NetworkManager `tun` connection for `teather0` and nothing else.
+- That connection is created in memory only (never written to
+  `/etc/NetworkManager/system-connections`) and is deleted when it deactivates,
+  so process death and `SIGKILL` recovery both remove it. Its default route
+  (present only when failover is armed) has a worse metric than every physical
+  default, so restoring Wi-Fi independently restores Internet access.
 - Do not write `/etc/resolv.conf` directly or create persistent resolver state.
-  Reserve a sentinel outside the virtual mapping pool, exclude competing DNS with
-  negative priority, verify UDP/TCP readiness, and treat any residue or external
-  route/address change as cleanup failure.
+  Reserve a sentinel outside the virtual mapping pool, use a *positive*
+  (non-exclusive) `ipv4.dns-priority` so the physical resolver stays ahead of
+  it while present, verify UDP/TCP readiness, fail closed if the sentinel ever
+  becomes the only resolver while a physical link is up, and treat any residue
+  or physical-link change as cleanup failure.
 
 ### Privilege escalation on Linux
 
-**Threat:** A parser, GUI, or receiver-controlled value reaches a privileged shell
-or network-management operation.
+**Threat:** A parser, GUI, or receiver-controlled value reaches a privileged
+network-management operation.
 
-**Mitigations:**
+**Mitigations (D-022):**
 
 - Keep UI and protocol parsing unprivileged.
-- Introduce a minimal helper with a fixed typed API.
-- Validate interface names, addresses, table IDs, and operations against strict
-  allowlists.
-- Never interpolate untrusted values into shell commands.
-- No wildcard passwordless sudo policy.
-- Invoke the root-owned helper only through a fixed polkit action.
-- Do not set `NoNewPrivileges=yes` on `teatherd`; it would block the intended
-  setuid-root `pkexec` transition. Retain the user unit's filesystem/private-temp
-  hardening and bind PolicyKit authorization to the fixed root-owned helper path.
-- Validate `PKEXEC_UID`, clear the environment, accept only the fixed operation
-  and a numeric loopback proxy port, and refuse conflicting host network state.
-- Open only a non-persistent `teather0`, then drop capabilities, supplementary
-  groups, GID, and UID before execing the tunnel engine with an inherited TUN fd.
-- Use parent-death handling so loss of daemon/helper ownership closes the fd and
-  removes interface-bound routes.
+- Ship **no setuid-root helper and no custom polkit action.** D-021's helper was
+  a 350-line setuid-root C program; Phase 2 found three argument-parsing defects
+  in it. D-022 deletes it, its route/rule parser, and its man page.
+- `teatherd` and `tun2proxy` run entirely as the desktop user. `teatherd` asks
+  NetworkManager — already root, already running, already managing every other
+  interface — to create the `teather0` connection over D-Bus. This uses
+  `settings.modify.own` and `network-control`, which an active local session
+  already holds, so `teatherd` gains nothing the user could not already do with
+  `nmcli`, and the normal path needs no authentication prompt.
+- The connection is a fixed, code-built dictionary: type `tun`, name `teather0`,
+  `192.0.2.1/32`, the two fixed routes, the sentinel, `tun.owner` = the running
+  uid. The only receiver-influenced value is the numeric loopback proxy port,
+  which is range-checked.
+- `tun2proxy` opens the `tun.owner`-delegated device by name with `--setup
+  false`; it never configures addresses or routes and needs no capability.
+- `teatherd` runs with `NoNewPrivileges=yes`, `ProtectSystem=strict`,
+  `ProtectHome=read-only`, `RestrictSUIDSGID=yes`, and `PrivateTmp=yes`.
+- Refuse conflicting host network state (existing `teather0`, address/route
+  collisions, nonstandard IPv4 policy rules, VPN/split-default ambiguity, an
+  existing default that cannot stay preferred) before creating the connection —
+  enforced in `desktop/linux/teather/preflight.py`, never by deleting anything.
+- The connection is in-memory only: the next `teatherd` start's `recover()` removes a stale one left by `SIGKILL`,
+  refusing to touch a `teather0` it does not own.
 
 ### Device identity disclosure
 
@@ -226,7 +238,8 @@ Update this threat model before adding:
 - persistent identity keys;
 - a custom binary protocol;
 - native packet-processing code;
-- a Linux privileged helper;
+- a Linux privileged helper, a new polkit action, or a broader NetworkManager
+  permission scope than `settings.modify.own` / `network-control`;
 - multiple receivers;
 - remote access or cloud services;
 - diagnostic packet capture;

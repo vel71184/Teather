@@ -1,25 +1,13 @@
 # Development guide
 
 Teather has a physically validated P0 implementation and an implemented P1 Linux
-USB Desktop. D-013's source-implementation approval gate is complete. The original
-package/GUI and privileged TUN phases passed in a disposable VM; D-021's temporary
-NetworkManager DNS mechanism ran its VM regression matrix on 2026-08-29 and was
-found not to work against real NetworkManager. D-022 (`docs/DECISIONS.md`)
-proposes and prototypes a replacement, pending owner acceptance and
-implementation. Follow `docs/P1_HANDOFF.md` rather than restarting P0 or the
-already accepted VM phases.
-
-## Fresh Codex conversation
-
-Before development begins in a new Codex conversation, follow the mandatory
-[first-prompt reasoning gate](../AGENTS.md#fresh-codex-session-gate). The first
-prompt is read-only and ends after Codex recommends GPT-5.6 Sol with Ultra or
-High. The owner must select or confirm that level and prompt again before edits,
-builds, tests, devices, VMs, or network operations begin. Reasoning-level
-selection does not satisfy a separate implementation or live-test approval gate.
-During the same thread, also follow the
-[same-thread transition gate](../AGENTS.md#same-thread-reasoning-transition-gate)
-before entering a materially different phase that needs a different level.
+USB Desktop. D-013's source-implementation approval gate is complete. D-021's
+`Reapply` DNS mechanism was disproven against real NetworkManager on 2026-08-29;
+**D-022 (`docs/DECISIONS.md`) is now accepted and implemented (package
+`0.1.0-4`)** — NetworkManager owns `teather0` as an in-memory `tun` connection,
+the setuid-root helper is deleted, DNS is additive, and failover is automatic by
+default. Host tests pass; the disposable-VM Phase 2 matrix against `0.1.0-4` is
+the next gate. Follow `docs/P1_HANDOFF.md` rather than restarting P0.
 
 ## Pinned Android and P1 toolchain
 
@@ -34,7 +22,7 @@ before entering a materially different phase that needs a different level.
 | P1 Android version | `versionCode 2` / `0.1.0-p1` |
 | P1 Linux target | Debian 12 GNOME amd64 |
 | P1 desktop stack | Python 3.11, PyGObject, GTK 3, Ayatana AppIndicator |
-| Packet engine | tun2proxy 0.8.3 plus audited inherited-fd, Linux packet-information, and TCP virtual-DNS patches with a checked-in Cargo lock |
+| Packet engine | tun2proxy 0.8.3 plus audited Linux packet-information and TCP virtual-DNS patches with a checked-in Cargo lock; run as `--tun teather0` |
 | Rust toolchain | 1.90.0 |
 
 The wrapper distribution checksum and wrapper JAR checksum are both enforced.
@@ -87,18 +75,18 @@ The repository exposes these commands through the checked-in `Makefile` and
 ```text
 make check             Android tests/lint/APKs plus all host-only P1 checks
 make android-build     build the debug APK
-make p1-check          Linux unit, helper, and private D-Bus checks
+make p1-check          Linux unit tests and the private D-Bus smoke test
 make p1-dbus-smoke     isolated D-Bus daemon/CLI smoke test
-make p1-helper-check   strict helper compilation and argument rejection
 make p1-package        build the amd64 Debian package
 make p0-doctor         historical redacted P0 discovery
 make p0-run/test/stop  historical P0 device workflow
 ```
 
-`make check` is the source-level gate and does not create a live TUN or change
-host routes. P1 privileged, GUI, package-lifecycle, and physical validation is
-separate and must follow `docs/P1_HANDOFF.md`. The P0 helper additionally provides
-`status`, `logs`, and the historical 30-minute `soak` gate.
+`make check` is the source-level gate and does not create a live TUN, contact
+NetworkManager, or change host routes. P1 GUI, package-lifecycle, and physical
+validation is separate and must follow `docs/P1_HANDOFF.md`. The P0 helper
+additionally provides `status`, `logs`, and the historical 30-minute `soak`
+gate.
 
 ## Branches and commits
 

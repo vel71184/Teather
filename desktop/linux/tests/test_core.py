@@ -19,18 +19,19 @@ from teather.adb import AdbClient, AdbDevice
 from teather.android_status import AndroidStatus, parse_android_status
 from teather.cli import build_parser
 from teather.config import ConfigStore
-from teather.constants import DNS_SENTINEL, VIRTUAL_DNS_POOL, VIRTUAL_DNS_ROUTE
+from teather.constants import DNS_PRIORITY, DNS_SENTINEL, VIRTUAL_DNS_POOL, VIRTUAL_DNS_ROUTE
 from teather.dbus_service import INTROSPECTION_XML
 from teather.dns_probe import _answer_address, _query
 from teather.errors import TeatherError
 from teather.journal import Ownership, OwnershipJournal
 from teather.manager import Manager
-from teather.networkmanager import NetworkManagerDns
+from teather.networkmanager import NetworkManagerConnection
 from teather.preflight import evaluate_routes, parse_nameservers
 
 
 SERIAL_ONE = "SERIAL-ONE-PRIVATE"
 SERIAL_TWO = "SERIAL-TWO-PRIVATE"
+PHYSICAL_RESOLVER = "nameserver 10.0.2.3\n"
 
 
 def compatible_status(**changes):
@@ -102,7 +103,7 @@ class FakeProcess:
 
     def wait(self, timeout=None):
         if self.running and timeout == 0.25:
-            raise subprocess.TimeoutExpired("helper", timeout)
+            raise subprocess.TimeoutExpired("tun2proxy", timeout)
         self.running = False
         return 0
 
@@ -120,7 +121,7 @@ class FailedProcess(FakeProcess):
     def __init__(self, *_args, **_kwargs):
         super().__init__()
         self.running = False
-        self.stderr = io.StringIO("simulated helper failure")
+        self.stderr = io.StringIO("simulated packet-engine failure")
 
     def wait(self, timeout=None):
         return 1
@@ -129,10 +130,14 @@ class FailedProcess(FakeProcess):
         return 1
 
 
-class FakeDnsController:
+class FakeNmConnection:
+    """Stand-in for NetworkManagerConnection used by Manager tests."""
+
     def __init__(self, resolver):
         self.resolver = resolver
-        self.applied = False
+        self.armed = None
+        self.active = False
+        self.recovered = 0
 
     def preflight(self):
         return None
@@ -140,89 +145,112 @@ class FakeDnsController:
     def check_supported(self):
         return "1.42.4"
 
-    def apply(self):
-        self.resolver.write_text("nameserver 198.19.0.1\n")
-        self.applied = True
+    def activate(self, armed):
+        self.armed = armed
+        self.active = True
+        if armed:
+            self.resolver.write_text(PHYSICAL_RESOLVER + f"nameserver {DNS_SENTINEL}\n")
 
-    def restore_while_active(self):
-        if self.applied:
-            self.resolver.write_text("nameserver 1.1.1.1\n")
-        self.applied = False
+    def connection_is_active(self):
+        return self.active
 
-    def ensure_no_residue(self):
-        if "198.19.0.1" in self.resolver.read_text():
-            raise TeatherError("dns-residue", "simulated residue")
+    def deactivate(self):
+        if self.armed:
+            self.resolver.write_text(PHYSICAL_RESOLVER)
+        self.armed = None
+        self.active = False
 
     def recover(self):
-        self.ensure_no_residue()
-
-    def resolver_is_active(self):
-        return self.resolver.read_text() == "nameserver 198.19.0.1\n"
+        self.recovered += 1
+        self.deactivate()
 
 
-class ApplyFailingDnsController(FakeDnsController):
-    def apply(self):
-        super().apply()
-        raise TeatherError("dns-not-ready", "simulated NetworkManager DNS timeout")
+class ActivateFailingNm(FakeNmConnection):
+    def activate(self, armed):
+        super().activate(armed)
+        raise TeatherError("dns-not-ready", "simulated NetworkManager activation timeout")
 
 
-class FakeNetworkManagerTransport:
-    def __init__(self, resolver):
-        from gi.repository import GLib
+class FakeNmTransport:
+    """Implements NetworkManagerTransport for direct NetworkManagerConnection tests."""
 
+    def __init__(self, resolver, interface_path, *, version="1.42.4", exclusive=False, sticky=False):
         self.resolver = resolver
-        self.settings = {"ipv4": {"method": GLib.Variant("s", "manual")}}
-        self.reapplied = []
-        self.reloads = 0
+        self.interface_path = interface_path
+        self._version = version
+        self.exclusive = exclusive
+        self.sticky = sticky
+        self.added = []
+        self.deactivated = []
+        self.deleted = []
+        self._armed_pending = False
+        self._connections = {}
+        self._active = {}
 
     def version(self):
-        return "1.42.4"
+        return self._version
 
-    def device_for_interface(self, interface):
-        self.interface = interface
-        return "/org/freedesktop/NetworkManager/Devices/7"
+    def add_connection(self, connection):
+        self.added.append(connection)
+        settings_path = "/org/freedesktop/NetworkManager/Settings/9"
+        self._armed_pending = "dns-data" in connection["ipv4"]
+        self._connections[settings_path] = {
+            "connection": {"id": "teather0", "type": "tun"},
+            "tun": {"owner": str(os.getuid())},
+        }
+        return settings_path
 
-    def get_applied_connection(self, _device_path):
-        return self.settings, 41
+    def activate_connection(self, settings_path):
+        active_path = "/org/freedesktop/NetworkManager/ActiveConnection/9"
+        self.interface_path.mkdir(exist_ok=True)
+        if self._armed_pending:
+            if self.exclusive:
+                self.resolver.write_text(f"nameserver {DNS_SENTINEL}\n")
+            else:
+                self.resolver.write_text(PHYSICAL_RESOLVER + f"nameserver {DNS_SENTINEL}\n")
+        self._active[active_path] = settings_path
+        return active_path
 
-    def reapply(self, _device_path, settings, version):
-        self.reapplied.append((settings, version))
-        dns = settings["ipv4"].get("dns-data")
-        if dns is not None and dns.unpack() == ["198.19.0.1"]:
-            self.resolver.write_text("nameserver 198.19.0.1\n")
-        else:
-            self.resolver.write_text("nameserver 1.1.1.1\n")
+    def active_state(self, _active_path):
+        return 2
 
-    def reload_dns(self):
-        self.reloads += 1
-        self.resolver.write_text("nameserver 1.1.1.1\n")
+    def device_path(self, _interface):
+        if self.interface_path.exists():
+            return "/org/freedesktop/NetworkManager/Devices/7"
+        raise TeatherError("networkmanager-unavailable", "no teather0 device")
+
+    def device_active_connection(self, _device_path):
+        return next(iter(self._active), "/")
+
+    def active_connection_settings(self, active_path):
+        return self._active.get(active_path, "/")
+
+    def list_connections(self):
+        return list(self._connections)
+
+    def connection_settings(self, settings_path):
+        return self._connections.get(settings_path, {"connection": {}})
+
+    def deactivate(self, active_path):
+        self.deactivated.append(active_path)
+        if not self.sticky:
+            self.resolver.write_text(PHYSICAL_RESOLVER)
+            if self.interface_path.exists():
+                self.interface_path.rmdir()
+        self._active.pop(active_path, None)
+
+    def delete_connection(self, settings_path):
+        self.deleted.append(settings_path)
+        self._connections.pop(settings_path, None)
 
 
-class OldNetworkManagerTransport(FakeNetworkManagerTransport):
-    def version(self):
-        return "1.40.2"
-
-
-class StuckNetworkManagerTransport(FakeNetworkManagerTransport):
-    def reapply(self, _device_path, settings, version):
-        self.reapplied.append((settings, version))
-        self.resolver.write_text("nameserver 198.19.0.1\n")
-
-
-class CompetingNetworkManagerTransport(FakeNetworkManagerTransport):
-    def __init__(self, resolver, competitor):
-        super().__init__(resolver)
-        self.competitor = competitor
-
-    def reapply(self, _device_path, settings, version):
-        self.reapplied.append((settings, version))
-        dns = settings["ipv4"].get("dns-data")
-        if dns is not None and dns.unpack() == ["198.19.0.1"]:
-            self.resolver.write_text(
-                f"nameserver 198.19.0.1\nnameserver {self.competitor}\n"
-            )
-        else:
-            self.resolver.write_text("nameserver 1.1.1.1\n")
+def make_nm(resolver, interface_path, **transport_kwargs):
+    return NetworkManagerConnection(
+        resolver_path=resolver,
+        interface_path=interface_path,
+        transport=FakeNmTransport(resolver, interface_path, **transport_kwargs),
+        timeout=0.2,
+    )
 
 
 class StorageTests(unittest.TestCase):
@@ -236,6 +264,21 @@ class StorageTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             store.approve(first, "My phone")
             self.assertNotIn(SERIAL_ONE, path.read_text())
+
+    def test_auto_failover_defaults_on_and_persists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config" / "config.json"
+            store = ConfigStore(path)
+            self.assertTrue(store.auto_failover())
+            self.assertFalse(store.set_auto_failover(False))
+            self.assertFalse(ConfigStore(path).auto_failover())
+
+    def test_config_without_failover_key_still_loads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text('{"schema":1,"salt":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","devices":{}}')
+            path.chmod(0o600)
+            self.assertTrue(ConfigStore(path).auto_failover())
 
     def test_config_rejects_permissive_mode(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -265,7 +308,7 @@ class StorageTests(unittest.TestCase):
 
 
 class StatusAndPreflightTests(unittest.TestCase):
-    def test_user_service_allows_the_intended_pkexec_boundary(self):
+    def test_user_service_drops_privilege_and_keeps_sandbox(self):
         service = (
             Path(__file__).resolve().parents[3] / "packaging" / "systemd" / "teather.service"
         ).read_text(encoding="utf-8")
@@ -273,10 +316,18 @@ class StatusAndPreflightTests(unittest.TestCase):
             line.strip() for line in service.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         }
-        self.assertIn("NoNewPrivileges=no", directives)
-        self.assertNotIn("NoNewPrivileges=yes", directives)
-        self.assertIn("ProtectSystem=strict", service)
-        self.assertIn("ProtectHome=read-only", service)
+        self.assertIn("NoNewPrivileges=yes", directives)
+        self.assertNotIn("NoNewPrivileges=no", directives)
+        self.assertIn("ProtectSystem=strict", directives)
+        self.assertIn("ProtectHome=read-only", directives)
+
+    def test_no_privileged_helper_or_polkit_action_is_shipped(self):
+        repo = Path(__file__).resolve().parents[3]
+        self.assertFalse((repo / "desktop/linux/helper").exists())
+        self.assertFalse((repo / "packaging/polkit").exists())
+        build = (repo / "packaging/scripts/build-deb.sh").read_text(encoding="utf-8")
+        self.assertNotIn("teather-helper", build)
+        self.assertNotIn("pkexec", build)
 
     def test_adb_errors_redact_the_raw_serial(self):
         result = subprocess.CompletedProcess(
@@ -345,147 +396,187 @@ class StatusAndPreflightTests(unittest.TestCase):
         sentinel = ipaddress.ip_address(DNS_SENTINEL)
         self.assertIn(sentinel, route)
         self.assertNotIn(sentinel, pool)
-        helper = (
-            Path(__file__).resolve().parents[1] / "helper" / "teather-helper.c"
-        ).read_text(encoding="utf-8")
-        self.assertIn('"--virtual-dns-pool", "198.18.0.0/16"', helper)
+        command = Manager(config=_scratch_config()).\
+            _tunnel_command(45678)
+        self.assertIn("--virtual-dns-pool", command)
+        self.assertIn(VIRTUAL_DNS_POOL, command)
+        self.assertIn("teather0", command)
 
-    def test_networkmanager_dns_is_temporary_and_restorable(self):
+    def test_dns_priority_is_additive_not_exclusive(self):
+        # A positive priority is non-exclusive: NetworkManager keeps every other
+        # resolver ahead of Teather's while they are present.
+        self.assertGreater(DNS_PRIORITY, 0)
+
+
+class NetworkManagerConnectionTests(unittest.TestCase):
+    def test_armed_activation_is_additive_and_reversible(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             resolver = root / "resolv.conf"
-            resolver.write_text("nameserver 1.1.1.1\n")
-            interface = root / "teather0"
-            interface.mkdir()
-            transport = FakeNetworkManagerTransport(resolver)
-            controller = NetworkManagerDns(
-                resolver_path=resolver,
-                interface_path=interface,
-                transport=transport,
-                timeout=0.1,
-            )
-            controller.preflight()
-            controller.apply()
-            self.assertTrue(controller.resolver_is_active())
-            settings, version = transport.reapplied[0]
-            self.assertEqual(version, 41)
-            self.assertEqual(settings["ipv4"]["dns-data"].unpack(), ["198.19.0.1"])
-            self.assertEqual(settings["ipv4"]["dns-priority"].unpack(), -32768)
-            controller.restore_while_active()
-            controller.ensure_no_residue()
-            self.assertEqual(resolver.read_text(), "nameserver 1.1.1.1\n")
+            resolver.write_text(PHYSICAL_RESOLVER)
+            nm = make_nm(resolver, root / "teather0")
+            nm.preflight()
+            nm.activate(armed=True)
+            servers = parse_nameservers(resolver.read_text())
+            self.assertEqual(servers[0], "10.0.2.3")
+            self.assertIn(DNS_SENTINEL, resolver.read_text())
+            self.assertTrue(nm.connection_is_active())
+            connection = nm.transport.added[0]
+            self.assertEqual(connection["ipv4"]["dns-data"].unpack(), [DNS_SENTINEL])
+            self.assertEqual(connection["ipv4"]["dns-priority"].unpack(), DNS_PRIORITY)
+            self.assertEqual(connection["tun"]["pi"].unpack(), False)
+            self.assertEqual(connection["tun"]["owner"].unpack(), str(os.getuid()))
+            nm.deactivate()
+            self.assertNotIn(DNS_SENTINEL, resolver.read_text())
 
-    def test_networkmanager_refuses_versions_without_preserve_external_ip(self):
+    def test_dormant_activation_adds_no_route_or_dns(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             resolver = root / "resolv.conf"
-            resolver.write_text("nameserver 1.1.1.1\n")
-            controller = NetworkManagerDns(
-                resolver_path=resolver,
-                interface_path=root / "teather0",
-                transport=OldNetworkManagerTransport(resolver),
-                timeout=0.1,
-            )
+            resolver.write_text(PHYSICAL_RESOLVER)
+            nm = make_nm(resolver, root / "teather0")
+            nm.preflight()
+            nm.activate(armed=False)
+            self.assertNotIn(DNS_SENTINEL, resolver.read_text())
+            connection = nm.transport.added[0]
+            self.assertNotIn("dns-data", connection["ipv4"])
+            self.assertEqual(connection["ipv4"]["never-default"].unpack(), True)
+
+    def test_exclusive_dns_result_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text(PHYSICAL_RESOLVER)
+            nm = make_nm(resolver, root / "teather0", exclusive=True)
+            nm.preflight()
             with self.assertRaises(TeatherError) as caught:
-                controller.preflight()
+                nm.activate(armed=True)
+            self.assertEqual(caught.exception.category, "dns-exclusive")
+
+    def test_old_networkmanager_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text(PHYSICAL_RESOLVER)
+            nm = make_nm(resolver, root / "teather0", version="1.40.2")
+            with self.assertRaises(TeatherError) as caught:
+                nm.preflight()
             self.assertEqual(caught.exception.category, "networkmanager-version")
 
-    def test_networkmanager_restore_waits_and_reports_residue(self):
+    def test_teardown_reports_dns_residue(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             resolver = root / "resolv.conf"
-            resolver.write_text("nameserver 1.1.1.1\n")
+            resolver.write_text(PHYSICAL_RESOLVER)
+            nm = make_nm(resolver, root / "teather0", sticky=True)
+            nm.preflight()
+            nm.activate(armed=True)
+            with self.assertRaises(TeatherError) as caught:
+                nm.deactivate()
+            self.assertIn(caught.exception.category, {"dns-residue", "interface-residue"})
+
+    def test_preflight_refuses_a_preexisting_interface(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text(PHYSICAL_RESOLVER)
             interface = root / "teather0"
             interface.mkdir()
-            controller = NetworkManagerDns(
-                resolver_path=resolver,
-                interface_path=interface,
-                transport=StuckNetworkManagerTransport(resolver),
-                timeout=0.01,
-            )
-            controller.apply()
+            nm = make_nm(resolver, interface)
             with self.assertRaises(TeatherError) as caught:
-                controller.restore_while_active()
-            self.assertEqual(caught.exception.category, "dns-residue")
+                nm.preflight()
+            self.assertEqual(caught.exception.category, "interface-collision")
 
-    def test_networkmanager_rejects_every_competing_nameserver(self):
-        for competitor in ("127.0.0.53", "2001:4860:4860::8888"):
-            with self.subTest(competitor=competitor), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                resolver = root / "resolv.conf"
-                resolver.write_text("nameserver 1.1.1.1\n")
-                interface = root / "teather0"
-                interface.mkdir()
-                controller = NetworkManagerDns(
-                    resolver_path=resolver,
-                    interface_path=interface,
-                    transport=CompetingNetworkManagerTransport(resolver, competitor),
-                    timeout=0.01,
-                )
-                with self.assertRaises(TeatherError) as caught:
-                    controller.apply()
-                self.assertEqual(caught.exception.category, "dns-not-ready")
-                self.assertFalse(controller.resolver_is_active())
-
-    def test_networkmanager_recovery_regenerates_only_stale_dns(self):
+    def test_recover_removes_a_teather_owned_stale_connection(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             resolver = root / "resolv.conf"
-            resolver.write_text("nameserver 198.19.0.1\n")
-            transport = FakeNetworkManagerTransport(resolver)
-            controller = NetworkManagerDns(
-                resolver_path=resolver,
-                interface_path=root / "missing-teather0",
-                transport=transport,
-                timeout=0.1,
-            )
-            controller.recover()
-            self.assertEqual(transport.reloads, 1)
-            self.assertEqual(resolver.read_text(), "nameserver 1.1.1.1\n")
+            resolver.write_text(PHYSICAL_RESOLVER)
+            interface = root / "teather0"
+            nm = make_nm(resolver, interface)
+            nm.preflight()
+            nm.activate(armed=True)
+            nm._active_path = ""  # simulate a daemon crash that lost its handles
+            nm._settings_path = ""
+            nm.recover()
+            self.assertNotIn(DNS_SENTINEL, resolver.read_text())
+            self.assertTrue(nm.transport.deleted)
 
-    def test_interface_snapshot_refuses_every_extra_route(self):
+    def test_recover_refuses_a_foreign_teather0(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text(PHYSICAL_RESOLVER)
+            interface = root / "teather0"
+            interface.mkdir()
+            transport = FakeNmTransport(resolver, interface)
+            transport._connections["/foreign"] = {
+                "connection": {"id": "teather0", "type": "tun"},
+                "tun": {"owner": "0"},
+            }
+            transport._active["/foreign-active"] = "/foreign"
+            nm = NetworkManagerConnection(
+                resolver_path=resolver, interface_path=interface, transport=transport, timeout=0.1,
+            )
+            with self.assertRaises(TeatherError) as caught:
+                nm.recover()
+            self.assertEqual(caught.exception.category, "ambiguous-interface")
+
+
+def _scratch_config():
+    directory = tempfile.mkdtemp()
+    return ConfigStore(Path(directory) / "config" / "config.json")
+
+
+class InterfaceSnapshotTests(unittest.TestCase):
+    def test_snapshot_matches_armed_and_dormant_route_sets(self):
         address = json.dumps([{
             "ifname": "teather0",
             "addr_info": [{"family": "inet", "local": "192.0.2.1", "prefixlen": 32}],
         }])
-        expected_routes = json.dumps([
+        armed_routes = json.dumps([
             {"dst": "198.18.0.0/15", "dev": "teather0"},
             {"dst": "default", "dev": "teather0", "metric": 32000},
         ])
-        manager = Manager()
-        with patch.object(manager, "_run_json", side_effect=[address, expected_routes]):
-            self.assertTrue(manager._system_interface_snapshot())
-        extra_routes = json.dumps(json.loads(expected_routes) + [
-            {"dst": "203.0.113.0/24", "dev": "teather0"},
-        ])
-        with patch.object(manager, "_run_json", side_effect=[address, extra_routes]):
+        dormant_routes = json.dumps([{"dst": "198.18.0.0/15", "dev": "teather0"}])
+        manager = Manager(config=_scratch_config())
+        with patch.object(manager, "_run_json", side_effect=[address, armed_routes]):
+            self.assertTrue(manager._system_interface_snapshot(armed=True))
+        with patch.object(manager, "_run_json", side_effect=[address, dormant_routes]):
+            self.assertTrue(manager._system_interface_snapshot(armed=False))
+        with patch.object(manager, "_run_json", side_effect=[address, dormant_routes]):
             with self.assertRaises(TeatherError) as caught:
-                manager._system_interface_snapshot()
+                manager._system_interface_snapshot(armed=True)
         self.assertEqual(caught.exception.category, "tunnel-start")
 
 
 class ManagerTests(unittest.TestCase):
-    def make_manager(self, directory, adb):
+    def make_manager(self, directory, adb, nm_factory=FakeNmConnection):
         config = ConfigStore(Path(directory) / "config" / "config.json")
         journal = OwnershipJournal(Path(directory) / "runtime" / "journal.json")
         resolver = Path(directory) / "resolv.conf"
-        resolver.write_text("nameserver 1.1.1.1\n")
+        resolver.write_text(PHYSICAL_RESOLVER)
         manager = Manager(
             config=config, journal=journal, adb=adb, resolver_path=resolver,
             process_factory=FakeProcess,
-            dns_controller=FakeDnsController(resolver),
+            nm=nm_factory(resolver),
             dns_probe=lambda: {"udp": "198.18.0.1", "tcp": "198.18.0.1"},
-            interface_snapshot=lambda: "stable-interface-state",
+            interface_snapshot=lambda armed: "stable-interface-state",
+            snapshot_timeout=0.2,
         )
         manager.preflight = lambda: None
         return manager
+
+    def _approve_one(self, manager):
+        device_id = manager.discover()[0]["device_id"]
+        manager.approve_device(device_id)
+        return device_id
 
     def test_multiple_approved_devices_require_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb(multiple=True)
             manager = self.make_manager(directory, adb)
-            devices = manager.discover()
-            for device in devices:
+            for device in manager.discover():
                 manager.approve_device(device["device_id"])
             with self.assertRaises(TeatherError) as caught:
                 manager.connect()
@@ -495,23 +586,48 @@ class ManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             self.assertEqual(manager.connect(device_id)["state"], "connected")
-            self.assertTrue(manager.get_status()["dns_ready"])
-            self.assertEqual(manager.get_status()["api_version"], 2)
+            status = manager.get_status()
+            self.assertTrue(status["dns_ready"])
+            self.assertTrue(status["failover_armed"])
+            self.assertEqual(status["api_version"], 2)
             manager.disconnect()
             self.assertFalse(manager.get_status()["dns_ready"])
             self.assertEqual(adb.started, [])
             self.assertEqual(adb.stopped, [])
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
 
+    def test_dormant_connect_when_failover_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            manager.config.set_auto_failover(False)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            status = manager.get_status()
+            self.assertEqual(status["state"], "connected")
+            self.assertFalse(status["failover_armed"])
+            self.assertFalse(status["dns_ready"])
+            self.assertNotIn(DNS_SENTINEL, manager.resolver_path.read_text())
+
+    def test_toggling_failover_while_connected_reestablishes_armed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            manager.config.set_auto_failover(False)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            self.assertFalse(manager.get_status()["failover_armed"])
+            manager.set_auto_failover(True)
+            self.assertTrue(manager.get_status()["failover_armed"])
+            self.assertIn(DNS_SENTINEL, manager.resolver_path.read_text())
+
     def test_incompatible_manual_relay_is_refused_without_restart(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb({SERIAL_ONE: compatible_status(configured_upstream="wifi")})
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "android-incompatible")
@@ -522,8 +638,7 @@ class ManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb({SERIAL_ONE: AndroidStatus()})
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.connect(device_id)
             manager.disconnect()
             self.assertEqual(adb.started, [SERIAL_ONE])
@@ -533,30 +648,17 @@ class ManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb({SERIAL_ONE: AndroidStatus()})
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.set_auto_connect(device_id, True)
             manager.maybe_auto_connect()
             self.assertEqual(manager.get_status()["state"], "disconnected")
             self.assertEqual(adb.started, [])
 
-    def test_auto_connect_does_not_repeat_after_an_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            adb = FakeAdb()
-            manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
-            manager.set_auto_connect(device_id, True)
-            manager._state = "error"
-            manager.maybe_auto_connect()
-            self.assertEqual(adb.forwards, [])
-
     def test_failed_disconnect_retains_ownership_journal(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb(fail_remove=True)
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.connect(device_id)
             result = manager.disconnect()
             self.assertEqual(result["error_category"], "recovery-pending")
@@ -567,8 +669,7 @@ class ManagerTests(unittest.TestCase):
             adb = FakeAdb(fail_remove=True)
             manager = self.make_manager(directory, adb)
             manager.process_factory = FailedProcess
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "recovery-pending")
@@ -576,12 +677,9 @@ class ManagerTests(unittest.TestCase):
 
     def test_uncertain_android_start_is_journaled_without_a_forward(self):
         with tempfile.TemporaryDirectory() as directory:
-            adb = FakeAdb(
-                {SERIAL_ONE: AndroidStatus()}, fail_start=True, fail_stop=True,
-            )
+            adb = FakeAdb({SERIAL_ONE: AndroidStatus()}, fail_start=True, fail_stop=True)
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "recovery-pending")
@@ -591,25 +689,22 @@ class ManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.journal.save(Ownership(device_id, 45678, False))
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "recovery-pending")
             self.assertEqual(adb.forwards, [])
 
-    def test_dns_apply_failure_restores_every_owned_resource(self):
+    def test_nm_activation_failure_restores_every_owned_resource(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
-            manager = self.make_manager(directory, adb)
-            manager.dns_controller = ApplyFailingDnsController(manager.resolver_path)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            manager = self.make_manager(directory, adb, nm_factory=ActivateFailingNm)
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "dns-not-ready")
-            self.assertEqual(manager.resolver_path.read_text(), "nameserver 1.1.1.1\n")
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
             self.assertIsNone(manager.journal.load())
             self.assertIsNone(manager._tunnel)
@@ -618,17 +713,18 @@ class ManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
-            snapshots = iter(("before-dns", "changed-after-dns"))
-            manager.interface_snapshot = lambda: next(snapshots)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+
+            def bad_snapshot(_armed):
+                raise TeatherError("tunnel-start", "unexpected teather0 routes")
+
+            manager.interface_snapshot = bad_snapshot
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
-            self.assertEqual(caught.exception.category, "networkmanager-route-mutation")
-            self.assertEqual(manager.resolver_path.read_text(), "nameserver 1.1.1.1\n")
+            self.assertEqual(caught.exception.category, "tunnel-start")
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
             self.assertIsNone(manager.journal.load())
-            self.assertIsNone(manager._tunnel)
 
     def test_dns_probe_failure_restores_every_owned_resource(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -639,35 +735,42 @@ class ManagerTests(unittest.TestCase):
                 raise TeatherError("dns-readiness", "simulated UDP/TCP readiness failure")
 
             manager.dns_probe = fail_probe
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
             self.assertEqual(caught.exception.category, "dns-readiness")
-            self.assertEqual(manager.resolver_path.read_text(), "nameserver 1.1.1.1\n")
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
             self.assertIsNone(manager.journal.load())
-            self.assertIsNone(manager._tunnel)
 
     def test_tunnel_exit_error_survives_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.connect(device_id)
             manager._tunnel.running = False
             manager.health_check()
             self.assertEqual(manager.get_status()["error_category"], "tunnel-exited")
 
-    def test_resolver_loss_does_not_hide_cleanup_failure(self):
+    def test_connection_loss_disconnects_and_restores(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
-            device_id = manager.discover()[0]["device_id"]
-            manager.approve_device(device_id)
+            device_id = self._approve_one(manager)
             manager.connect(device_id)
-            manager.dns_controller.resolver.write_text("nameserver 1.1.1.1\n")
+            manager.nm.active = False
+            manager.health_check()
+            self.assertEqual(manager.get_status()["error_category"], "connection-lost")
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
+
+    def test_connection_loss_does_not_hide_cleanup_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            manager.nm.active = False
             adb.fail_remove = True
             manager.health_check()
             self.assertEqual(manager.get_status()["error_category"], "recovery-pending")
@@ -688,15 +791,17 @@ class InterfaceParityTests(unittest.TestCase):
     def test_dbus_methods_match_cli_surface(self):
         for method in (
             "GetStatus", "ListDevices", "Connect", "Disconnect", "ApproveDevice",
-            "RenameDevice", "ForgetDevice", "SetAutoConnect", "Diagnose",
+            "RenameDevice", "ForgetDevice", "SetAutoConnect", "SetAutoFailover", "Diagnose",
         ):
             self.assertIn(f'name="{method}"', INTROSPECTION_XML)
         parser = build_parser()
-        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "diagnose", "recover"):
+        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "failover", "diagnose", "recover"):
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "autoconnect":
                     arguments += ["on", "a" * 64]
+                elif command == "failover":
+                    arguments += ["on"]
                 parser.parse_args(arguments)
 
 

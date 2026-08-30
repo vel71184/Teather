@@ -6,17 +6,10 @@ list.
 
 ## Before starting
 
-Read:
-
-1. `README.md`
-2. `docs/PROJECT_STATUS.md`
-3. `docs/DECISIONS.md`
-4. `docs/ARCHITECTURE.md`
-5. `AGENTS.md` if using a coding agent
-
-Check the active roadmap milestone. If a proposed change belongs to a later
-milestone, document the idea in the roadmap parking lot instead of implementing it
-early.
+Read `docs/PROJECT_STATUS.md` (the resume point) and `AGENTS.md` (constraints and
+safety gates). `docs/DECISIONS.md` says why past technical choices were made. If a
+change belongs to a later roadmap milestone, add it to the parking lot instead of
+building it early.
 
 ## Good initial contributions
 

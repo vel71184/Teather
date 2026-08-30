@@ -96,57 +96,62 @@ P0 begins with application-level proxy configuration. The accepted P1 desktop
 adds:
 
 - a non-persistent `teather0` TUN device that behaves as a virtual backup network
-  interface;
-- pinned `tun2proxy` 0.8.3 with audited inherited-fd, packet-framing, and TCP
-  virtual-DNS patches;
-- a Teather-owned default route with lower preference than every existing
-  physical default and no mutation of those existing routes;
-- route installation that excludes the loopback ADB/relay path from recursion;
+  interface. Under D-022 NetworkManager creates and owns it as an in-memory
+  connection of type `tun`, with `tun.owner` delegation so the unprivileged
+  packet engine attaches to it directly;
+- pinned `tun2proxy` 0.8.3 with audited packet-framing and TCP virtual-DNS
+  patches, run as `--tun teather0`;
+- a Teather-owned backup default route (metric 32000, installed only when
+  failover is armed) with lower preference than every existing physical default,
+  and no mutation of those existing routes;
 - a routed `198.18.0.0/15`, virtual mappings limited to `198.18.0.0/16`, and the
-  reserved temporary NetworkManager DNS sentinel `198.19.0.1`;
-- signal-safe and crash-recoverable cleanup;
-- preflight and postflight state snapshots;
+  reserved DNS sentinel `198.19.0.1` published at a positive, non-exclusive
+  `ipv4.dns-priority`;
+- signal-safe and crash-recoverable cleanup (the in-memory connection is deleted on teardown and by next-start `recover()`);
+- preflight route/rule/collision refusal checks and a post-activation parity
+  snapshot;
 - a diagnostic command that never mutates state.
 
-The first P1 mode is not connection bonding and does not automatically disable a
-receiver link. Wi-Fi and Ethernet remain configured, connected, and preferred
-while present. After Teather reports ready, the owner may manually disable Wi-Fi;
-the kernel can then select the remaining `teather0` default. Re-enabling Wi-Fi
-must make the pre-existing physical default preferred again without a Teather
-restart.
+The first P1 mode is not connection bonding and never disables a receiver link.
+Wi-Fi and Ethernet remain configured, connected, and preferred while present —
+their routes and resolver are untouched. When such a link is actually lost, the
+kernel selects the remaining metric-32000 `teather0` default and the resolver
+falls through to the sentinel (failover armed). Re-connecting the physical link
+makes it preferred again without a Teather restart. `teather failover off` keeps
+`teather0` present but with no default route and no DNS entry until armed.
 
-Under D-021 (disproven; see D-022 below) the P1 receiver was to perform one
-bounded NetworkManager active-device DNS update on `teather0`; it creates no
-persistent profile and never changes an existing link. Under either mechanism
-it must never delete or replace an existing default route, edit
-`/etc/resolv.conf` directly, flush firewall state, or persist the TUN. Closing or crashing
-the owner process must remove `teather0` and its attached routes automatically;
-explicit cleanup handles any additional Teather-owned state.
+Under D-022 the per-user `teatherd` asks NetworkManager to create and own the
+`teather0` connection; it creates no persistent profile and never changes an
+existing link. Teather must never delete or replace an existing default route,
+edit `/etc/resolv.conf` directly, flush firewall state, or persist the
+connection. Deactivating the in-memory connection (on disconnect, tunnel death,
+or next-start recovery) removes `teather0`, its routes, and its DNS entry.
 
-P1 is split across three privilege levels:
+P1 is split across two privilege levels — there is no privileged component:
 
 1. The unprivileged per-user `teatherd` daemon owns ADB discovery, trust,
-   selection, state, D-Bus, journaling, and process supervision.
+   selection, state, D-Bus, journaling, process supervision, the preflight
+   refusal checks, and the NetworkManager connection lifecycle.
 2. Unprivileged GTK/tray and CLI clients use the same manager API and never
    manipulate networking directly.
-3. A root-owned helper invoked by `pkexec` validates a fixed request, opens TUN,
-   creates the allowed interface state, drops capabilities/groups/GID/UID, sets
-   parent-death handling, and execs the pinned tunnel with the inherited file
-   descriptor.
 
-The helper creates exactly `teather0`, `192.0.2.1/32`, MTU 1500,
-`198.18.0.0/15 dev teather0`, and `default dev teather0 metric 32000`. It refuses
-collisions (including routes overlapping the virtual-DNS pool), unexpected
-arguments, invalid `PKEXEC_UID`, an invalid loopback proxy port, any nonstandard
-IPv4 policy rule, ambiguous VPN/split-default policy, and route preference that
-cannot remain secondary. It clears its environment and permanently drops
-privilege before the packet engine parses traffic.
+`teatherd` builds a fixed connection dictionary — type `tun`, `teather0`,
+`192.0.2.1/32`, MTU 1500, `198.18.0.0/15`, a metric-32000 backup default (armed
+only when failover is on), the `198.19.0.1` sentinel at a positive non-exclusive
+priority, `tun.owner`/`tun.group` = the running user — and activates it through
+`AddConnection2` (in-memory flag) then `ActivateConnection`. Before doing so it refuses
+collisions (including routes overlapping the virtual-DNS pool), an existing
+`teather0`, an invalid loopback proxy port, any nonstandard IPv4 policy rule,
+ambiguous VPN/split-default policy, and a default route that cannot remain
+preferred. `tun2proxy` then attaches to the resulting `tun.owner`-delegated
+device as the desktop user.
 
 The tunnel settings are IPv4-only, virtual DNS enabled, 64 sessions, 300-second
-TCP timeout, MTU 1500, and destination logging disabled. Built-in setup,
-daemonization, UDP gateway, and evasion features are disabled. The non-persistent
-TUN descriptor owns interface lifetime; daemon/helper death closes it and removes
-interface-bound routes.
+TCP timeout, MTU 1500, and destination logging disabled.
+Built-in setup, daemonization, UDP gateway, and evasion features are disabled.
+The in-memory NetworkManager connection owns interface lifetime; `teatherd` death
+plus next-start `recover()` removes it, and NetworkManager itself deletes it on
+deactivation.
 
 #### Historical P1 resolver gate — superseded by D-021
 
@@ -189,35 +194,48 @@ teardown restores the original applied connection and next-start recovery
 performs a bounded NetworkManager DNS regeneration only for unambiguous stale
 sentinel state.
 
-**Disproven; replacement proposed (D-022, 2026-08-29):** the disposable-VM
-matrix confirmed the SSH/remote PolicyKit gate is resolved (NetworkManager's
-own audit log recorded a successful `Reapply` from the real active GNOME
-session), but the DNS mechanism above does not work: `Reapply` accepts the
-sentinel/priority/`ignore-auto-dns` settings without error, yet
-`/etc/resolv.conf` never reflects them, because `teather0` is an
-externally-assumed NetworkManager connection and `Reapply` does not appear to
-regenerate the live `IP4Config` NM's DNS manager reads for that kind of
-connection. Reproduced identically under TCG and KVM, ruling out timing. D-022
-proposes NetworkManager owning `teather0` from creation instead (a native
-`tun`-type connection with `tun.owner` delegation, letting the unprivileged
-`tun2proxy` process attach directly and shrinking the privileged helper's job)
-plus an additive, non-exclusive DNS priority instead of the exclusive one
-above — validated end-to-end via `nmcli` in the disposable VM, but not yet
-implemented in shipped source. See D-022 in `docs/DECISIONS.md` and E-002 in
-`docs/EXPERIMENTS.md` for full evidence. This also corrected the product
-requirement: automatic failover once Wi-Fi's route/resolver actually
-disappears is now the intended default (with a user-facing toggle to require
-manual confirmation instead), not manual Wi-Fi toggling as the only model.
+**Disproven, then replaced (D-022, 2026-08-29, package `0.1.0-4`):** the
+disposable-VM matrix confirmed the SSH/remote PolicyKit gate is resolved, but
+`Reapply` never propagated the sentinel/priority/`ignore-auto-dns` settings to
+`/etc/resolv.conf`, because `teather0` was an *externally-assumed* NetworkManager
+connection (Teather's old helper created it with raw `ip` commands) and
+`Reapply` does not regenerate the live `IP4Config` for that connection type.
+Reproduced identically under TCG and KVM.
 
-P1 implements the route boundary through the fixed helper and per-user daemon
-described above. The graphical application does not manipulate networking
+**Current mechanism (D-022):** NetworkManager creates and owns `teather0` from
+the start as an in-memory connection of type `tun`:
+
+- `tun.owner`/`tun.group` = the desktop user, so `tun2proxy` opens the device
+  directly with no privileged helper;
+- `ipv4.method=manual` with the fixed `192.0.2.1/32` address and the
+  `198.18.0.0/15` + metric-32000 backup-default routes (the default route only
+  when failover is armed);
+- `ipv4.dns-data=[198.19.0.1]` at a **positive** `ipv4.dns-priority` (`32050`)
+  with `ignore-auto-dns=false` — additive and non-exclusive, so
+  `/etc/resolv.conf` lists the physical link's resolver first while it is
+  present and the sentinel only afterwards. This is the property that keeps
+  working Wi-Fi working; `_verify_additive()` fails the connection closed if
+  arming ever leaves the sentinel as the only resolver;
+- never written to disk, deleted on teardown and by next-start `recover()`, and removed by the next `teatherd` start's `recover()` if a
+  `SIGKILL` skipped teardown.
+
+This also changed the operating model: automatic failover once the physical
+link's route and resolver disappear is now the default (config
+`auto_failover`, on by default), with `teather failover off` leaving Teather
+connected but dormant — no default route, no DNS — until armed, because the
+phone's upstream may be metered. Wi-Fi and Ethernet are never touched in either
+mode. See D-022 in `docs/DECISIONS.md` and E-002 in `docs/EXPERIMENTS.md`.
+
+P1 implements the route boundary through the unprivileged per-user daemon and
+NetworkManager. The graphical application does not manipulate networking
 directly.
 
-The user daemon retains `ProtectSystem=strict`, `ProtectHome=read-only`, and
-`PrivateTmp=yes`, but D-020 requires `NoNewPrivileges=no`: setuid-root `pkexec`
-cannot reach the fixed PolicyKit helper when its parent has `NoNewPrivs: 1`. The
-root-owned helper remains the only privileged implementation surface and applies
-`NoNewPrivs: 1` after permanently dropping privilege for the packet engine.
+The user daemon runs with `NoNewPrivileges=yes`, `ProtectSystem=strict`,
+`ProtectHome=read-only`, `RestrictSUIDSGID=yes`, and `PrivateTmp=yes` (D-022;
+D-020's `NoNewPrivileges=no` requirement is gone with the setuid-root helper).
+There is no privileged implementation surface: `teatherd` and `tun2proxy` both
+run as the desktop user, and NetworkManager performs the interface work over
+its D-Bus API.
 
 ## Next evolution, not the end state: standard tunnel endpoint
 
@@ -346,9 +364,11 @@ sockets. It does not use root, hidden APIs, or device-owner privileges.
 
 ### Linux
 
-TUN creation and route changes are confined to the installed root-owned helper
-and a narrowly scoped polkit action. The GUI, CLI, daemon, ADB parser, and packet
-engine run as the desktop user. No wildcard or passwordless sudo policy is used.
+TUN creation and route changes are performed by NetworkManager on `teatherd`'s
+request over its D-Bus API, using the `settings.modify.own` and
+`network-control` actions an active local session already holds (D-022). There
+is no setuid-root helper, no custom polkit action, and no sudo policy. The GUI,
+CLI, daemon, ADB parser, and packet engine all run as the desktop user.
 
 ### Linux control and persistence
 

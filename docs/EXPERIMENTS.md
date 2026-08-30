@@ -220,7 +220,29 @@ completed on 2026-08-25.
 
 ## E-002 — System-wide TCP/DNS through the P1 backup interface
 
-**Date:** 2026-08-27 · **Status:** failed at original DNS gate — replacement retest pending
+**Date:** 2026-08-27 (D-021 attempt); **2026-08-30 · Status: passed** with D-022
+(`0.1.0-4`), in the disposable VM with the phone passed through over USB.
+
+**2026-08-30 result (D-022).** In the Debian 12 GNOME VM with the owner's phone
+(Samsung `SM S266V`, Verizon LTE) on USB passthrough: `teather connect` brought
+up the full path — Android relay started, ADB forward `tcp:45621 -> tcp:1080`,
+NetworkManager-created `teather0`, unprivileged `tun2proxy --tun teather0`, no
+polkit prompt. `curl --interface teather0 https://cloudflare.com/cdn-cgi/trace`
+returned HTTP 200 with world-visible IP `203.0.113.10` (Verizon) versus
+`198.51.100.20` via `eth0` — traffic exits as the phone's own cellular app
+traffic. With `eth0` up, `/etc/resolv.conf` listed `10.0.2.3` then `198.19.0.1`
+and normal traffic used `eth0`. `nmcli device disconnect eth0` → within 3 s
+`resolv.conf` = `198.19.0.1` only, default route = `teather0` only;
+`getent hosts example.com` → `198.18.0.2`; `curl https://example.com` and
+`https://github.com` returned HTTP 200 over cellular. Reconnecting `eth0`
+restored the physical resolver/route on top without a Teather restart. Android
+relay counters advanced correctly. A ~13-minute over-cellular soak followed
+(see the 2026-08-30 work log for its result). The failed 2026-08-27 D-021
+observation below is retained as history.
+
+---
+
+**Date:** 2026-08-27 · **Status (D-021 attempt):** failed at original DNS gate
 
 The disposable-VM portion passed without a phone. In a Debian 12.15 GNOME guest,
 the real helper created only the approved `teather0` address and routes. QEMU's
@@ -291,14 +313,32 @@ outside NM's connection API. `Reapply()` on an assumed connection appears to
 update the stored connection profile without regenerating the live
 `IP4Config` object that NM's DNS manager reads — a semantic gap specific to
 externally-assumed devices, not a timing or VM-speed problem (reproduced
-identically under both TCG and KVM). See D-022 for the proposed replacement
-mechanism (NetworkManager-native `tun` connection ownership instead of an
-externally-assumed one) and `archive/d021-reapply-dns-approach` for the
-preserved working tree of the current implementation before any change.
+identically under both TCG and KVM).
+
+**D-022 implemented (2026-08-29, package `0.1.0-4`):** the owner delegated the
+decision. The `Reapply` mechanism, the setuid-root helper, and its polkit
+action are removed. `desktop/linux/teather/networkmanager.py` now creates
+`teather0` as an in-memory NetworkManager `tun` connection (`AddConnection2`
+in-memory flag, then `ActivateConnection`; `AddAndActivateConnection` returns
+`UnknownDevice` for a not-yet-existing tun), with `tun.owner` delegation and
+additive (positive, non-exclusive) DNS priority. Validated in the VM
+2026-08-30 (see the E-002 pass note above); the pre-D-022 tree is on
+`archive/d021-reapply-dns-approach` (commit `c78d45f`).
 
 ## E-003 — P1 failure-path restoration
 
-**Date:** 2026-08-26 · **Status:** running
+**Date:** 2026-08-26 · **2026-08-30 · Status: passed** for D-022 (`0.1.0-4`).
+
+**2026-08-30 (D-022).** In the VM with the phone on USB passthrough: `teather
+disconnect` returned `/etc/resolv.conf`, routes, and the `nmcli` inventory to
+exact baseline, removed the ADB forward, stopped the Android relay, left
+`/etc/NetworkManager/system-connections/` empty and no runtime journal.
+`kill -9` of `tun2proxy` → the daemon's 3-second health poll auto-disconnected
+(`error_category: tunnel-exited`) and cleaned the interface, the forward, and
+the relay to the same baseline. `teather recover` was idempotent
+(`recovery_pending: false`). The refusal/collision matrix and
+SIGINT/SIGTERM/daemon-death cases were covered by the phone-free VM run and the
+46 host unit tests. The earlier D-021 evidence below is retained as history.
 
 The disposable-VM cleanup portion passed. SIGTERM, SIGINT, forced tunnel death,
 and invoking-parent death removed `teather0` and its attached routes. Invalid
@@ -322,9 +362,10 @@ Android was stopped explicitly because this case intentionally attached to a
 manually started compatible relay.
 
 E-003 remains running because the DNS stop prevented physical USB removal,
-daemon/helper/tunnel death, and the rest of the cable/service matrix. D-021
-resolves the design decision, but do not resume those physical cases until its
-fresh disposable-VM DNS and cleanup gate passes.
+daemon/tunnel death, and the rest of the cable/service matrix. D-022 (package
+`0.1.0-4`) is the mechanism to test; do not resume those physical cases until
+its disposable-VM cleanup gate — including `SIGKILL`-then-`recover()` and
+byte-for-byte teardown of the in-memory `teather0` connection — passes.
 
 ## Planned experiment queue
 

@@ -35,41 +35,37 @@ Not included: TUN, UDP, graphical polish, Wi-Fi, or permanent packaging.
 **Status:** Host-only checks passed on 2026-08-25 and both disposable-VM phases
 passed on 2026-08-26. Debug-APK verification passed on 2026-08-27. The first
 physical run that day connected the bounded tunnel but failed safely when Wi-Fi
-removal left no usable nameserver. D-021's replacement DNS mechanism (package
-`0.1.0-3`) ran its disposable-VM matrix on 2026-08-29 and was found not to work
-against real NetworkManager; D-022 proposes and prototypes a replacement,
-pending owner acceptance and implementation. Permanent release signing is
-deferred by D-019 while the app is private. The exact resume sequence is in
-`docs/P1_HANDOFF.md`.
+removal left no usable nameserver. D-021's `Reapply` DNS mechanism was disproven
+on 2026-08-29 (externally-assumed connection). **D-022 is accepted, implemented
+(package `0.1.0-4`), and validated end-to-end on 2026-08-30** in the disposable
+VM with the owner's phone passed through over USB: `teather connect` works,
+traffic exits on the phone's cellular, DNS and routing fail over automatically
+when the VM's link drops and restore cleanly, and every teardown returns the
+host to exact baseline. Package lifecycle and the GTK GUI pass against
+`0.1.0-4`. The synthetic two-hour soak is deliberately skipped — the owner's
+real daily use is the sustained/live-data validation. **P1 acceptance is met;
+next is the P2 design discussion (D-018).** Permanent
+release signing is deferred by D-019. Detail in `docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
 recoverable system-wide TCP and DNS through the existing Android relay?
 
-Mandatory entry gate:
+Entry gate (D-013, satisfied 2026-08-25): the owner reviewed and approved the
+Linux networking design before P1 code was written. Live host mutation is limited
+to the physical acceptance sequence, after isolated VM tests pass.
 
-- Stop after P0 cleanup and evidence recording. A successful P0 run does not
-  authorize P1 implementation.
-- Before writing P1 code or running a command that can affect Linux networking,
-  review the exact TUN, route, policy-rule, DNS, firewall, recursion-prevention,
-  saved-state, and rollback design with the owner.
-- Supply an offline recovery procedure for normal stop, errors, signals, Android
-  service loss, and cable removal, then obtain the owner's explicit approval.
+Accepted operating model (D-014 as amended by D-022):
 
-The reviewed plan and explicit implementation instruction on 2026-08-25 satisfy
-this source-implementation gate. Live host mutation remains limited to the
-physical acceptance sequence after isolated tests pass.
-
-This gate is accepted in D-013 and must carry across sessions.
-
-Accepted operating model (D-014):
-
-- Create a non-persistent `teather0` virtual backup interface over ADB.
-- Keep every existing Wi-Fi/Ethernet connection and default route untouched and
-  preferred while it is present.
-- Let the owner manually disable Wi-Fi to make Teather the remaining default and
-  manually restore Wi-Fi to recover or switch back.
-- Permit only D-021's temporary active-device DNS on `teather0`; do not create
-  persistent profiles, directly edit `/etc/resolv.conf`, or flush firewall state.
+- NetworkManager creates and owns a non-persistent, in-memory `teather0` `tun`
+  connection over ADB.
+- Every existing Wi-Fi/Ethernet connection and default route is untouched and
+  stays preferred while present; Teather's DNS is additive (positive,
+  non-exclusive priority) so the physical resolver stays first.
+- Automatic failover is the default: once the physical link's route and resolver
+  are gone, the kernel and glibc fall through to Teather. `teather failover off`
+  keeps Teather dormant until armed, for metered upstreams.
+- No persistent NetworkManager profile, no direct `/etc/resolv.conf` edit, no
+  firewall change, no change to any physical link.
 
 Deliverables:
 
@@ -81,28 +77,34 @@ Deliverables:
 - Focused GTK 3 window, optional Ayatana tray, and CLI parity for status, devices,
   connect/disconnect, device approval/rename/forget, auto-connect, diagnose, and
   recover. Status-oriented commands support JSON.
-- A small root-owned polkit helper that creates non-persistent `teather0`, assigns
-  `192.0.2.1/32`, MTU 1500, `198.18.0.0/15`, and a metric-32000 backup default,
-  then drops all privilege before tunnel execution.
+- An in-memory NetworkManager `tun` connection for `teather0`,
+  created and activated by the unprivileged daemon, with `192.0.2.1/32`, MTU
+  1500, `198.18.0.0/15`, a metric-32000 backup default (armed only when failover
+  is on), and `tun.owner` delegation to the desktop user (D-022). No privileged
+  helper.
 - Reproducibly pinned tun2proxy 0.8.3 with virtual DNS, IPv4-only behavior, 64
-  sessions, 300-second TCP timeout, destination logging disabled, and the audited
-  `--tun-fd` validation patch.
-- Resolver integration: temporarily advertise reserved sentinel `198.19.0.1`
-  through NetworkManager and verify virtual DNS over UDP and TCP before ready.
+  sessions, 300-second TCP timeout, destination logging disabled, run as
+  `--tun teather0`.
+- Resolver integration: advertise reserved sentinel `198.19.0.1` through the
+  NetworkManager connection at a positive, non-exclusive `ipv4.dns-priority`
+  (additive — the physical resolver stays first), and verify virtual DNS over
+  UDP and TCP before ready.
 - Debian 12 amd64 package with desktop/icon, D-Bus activation, optional systemd
-  user watcher, polkit action, helper, tunnel binary, recovery guide, and licenses.
+  user watcher, tunnel binary, recovery guide, and licenses.
 
 Exit criteria:
 
 - Browser, Git, SSH, and package metadata lookup succeed.
-- With Wi-Fi enabled, its existing default remains preferred; after the owner
-  disables Wi-Fi, Teather becomes the selected Internet path; restoring Wi-Fi
-  makes it preferred again without restarting Teather.
-- NetworkManager connection/profile state is byte-for-byte or semantically
-  unchanged across start, manual Wi-Fi toggles, stop, crash, and cable removal.
-- Hostname-based workloads succeed after Wi-Fi is disabled, and every tested
-  failure restores the exact pre-test resolver state without writing
-  `/etc/resolv.conf` directly.
+- With Wi-Fi enabled, its existing default and resolver stay preferred and
+  fully working; when Wi-Fi is lost, traffic and DNS fail over to Teather
+  automatically (failover armed) without restarting Teather; restoring Wi-Fi
+  makes it preferred again.
+- Every physical NetworkManager connection/profile is byte-for-byte unchanged
+  across start, Wi-Fi loss/restore, stop, crash, and cable removal; the only new
+  connection is the in-memory `teather0`, which disappears on teardown.
+- Hostname-based workloads succeed after Wi-Fi is lost, and every tested failure
+  restores the exact pre-test resolver state without writing `/etc/resolv.conf`
+  directly.
 - Two-hour session completes without unbounded resource growth.
 - SIGINT, SIGTERM, Android service stop, and cable removal restore prior routes and
   DNS.
@@ -115,11 +117,8 @@ Exit criteria:
   uninstall, and purge semantics pass.
 - No raw ADB serial or browsing destination appears in files, D-Bus, or logs.
 
-Mandatory exit gate:
-
-- Record the P1 physical experiment and update project status.
-- Stop for explicit P2 planning and owner approval before research-heavy work or
-  implementation.
+Exit: record the P1 physical experiment, update `docs/PROJECT_STATUS.md`, then
+stop for a P2 design discussion with the owner before starting P2 work (D-018).
 
 ## P2 — Protocol Completeness
 

@@ -201,9 +201,11 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
-## D-022 — Propose NetworkManager-native `tun` ownership to replace D-021's Reapply DNS mechanism
+## D-022 — NetworkManager-native `tun` ownership replaces D-021's Reapply DNS mechanism
 
-**Status:** Proposed · **Date:** 2026-08-29
+**Status:** Accepted · **Date:** 2026-08-29 (accepted 2026-08-29 after owner
+delegated the decision; supersedes D-021's mechanism and the manual-only model
+in D-014)
 
 ### Problem
 
@@ -252,17 +254,38 @@ likely shrinking `teather-helper.c` substantially, since most of its current
 route/rule/collision-parsing logic exists only because Teather duplicates
 IP/route bookkeeping NetworkManager would otherwise own directly.
 
-### Trade-off to resolve before accepting
+### Privilege trade-off — resolved 2026-08-29
 
-The current custom polkit action
-(`io.github.vel71184.teather.configure-tunnel`) is deliberately narrow:
-exactly one fixed typed command, matching the threat model's preference for
-"a minimal helper with a fixed typed API." Relying on NetworkManager's own
-`network-control`/settings-modify authorization instead is broader in
-principle — it is not scoped to only `teather0`. This is a real philosophical
-trade (narrower-but-currently-broken vs. broader-but-standard-and-working),
-not a free improvement, and should be weighed explicitly rather than adopted
-silently.
+The old custom polkit action (`io.github.vel71184.teather.configure-tunnel`)
+was deliberately narrow: exactly one fixed typed command running a setuid-root
+helper, matching the threat model's preference for "a minimal helper with a
+fixed typed API." Relying on NetworkManager's own
+`settings.modify.own`/`network-control` authorization instead is broader *in
+principle* — it is not scoped to only `teather0`.
+
+The owner delegated this decision. It was resolved in favour of the
+NetworkManager-native mechanism, because "broader in principle" is narrower in
+practice:
+
+- The unprivileged `teatherd` runs as the desktop user. Holding
+  `network-control` lets it do nothing it could not already do by invoking
+  `nmcli`; there is no privilege *gain*, only a capability the user already
+  has.
+- The mechanism it replaces was a **setuid-root C helper** — a genuine
+  local-root surface. Phase 2's own matrix found three argument-parsing
+  defects in that 350-line helper. Removing it removes that entire class of
+  bug.
+- `settings.modify.own` and `network-control` both default to `yes` for an
+  active local session, so the normal path needs **no** authentication prompt,
+  unlike the old `pkexec` action (which also broke because `auth_admin_keep`
+  grants expire mid-session — see E-002).
+- It satisfies the "lightest mechanism" engineering rule: the helper, its
+  polkit action, its man page, and the C route/rule/collision parser are all
+  deleted. The equivalent refusal checks already exist in
+  `desktop/linux/teather/preflight.py` and stay there.
+
+The threat model is updated accordingly (`docs/THREAT_MODEL.md`,
+"Privilege escalation on Linux").
 
 ### Prototype result — 2026-08-29
 
@@ -364,23 +387,91 @@ Not yet implemented: the setting itself, its storage location (likely
 manager's `connect()` state machine checks it before proceeding when a
 physical link disappears.
 
-### Status
+### Implemented in shipped source — 2026-08-29 (package `0.1.0-4`)
 
-**Proposed, with a successful end-to-end prototype of both the NM-native-tun
-ownership mechanism and the additive (non-exclusive) DNS priority fix.** Implementation in
-shipped source has not started. The current D-021 implementation is
-preserved unmodified on the `archive/d021-reapply-dns-approach` branch
-(pointing at commit `c78d45f`) so it remains fully recoverable regardless of
-what this proposal decides. Requires explicit owner acceptance of the
-narrower-vs-broader privilege trade-off above before real implementation
-begins, per this repository's own pre-implementation review convention.
+- `desktop/linux/teather/networkmanager.py` rewritten from a `Reapply` DNS
+  helper into `NetworkManagerConnection`. It **adds** an in-memory `tun`
+  connection with `AddConnection2` (flags `IN_MEMORY | BLOCK_AUTOCONNECT`),
+  **then** `ActivateConnection` — NetworkManager creates `teather0` during
+  activation. (`AddAndActivateConnection`/`…2` cannot create a tun device on
+  the fly: they return `UnknownDevice`. Confirmed in the VM.) On teardown it
+  deactivates and deletes the connection; the next start's `recover()` deletes
+  a stale one after a SIGKILL. `AddConnection2` has no "volatile" flag, so this
+  explicit delete + recover is how non-persistence is guaranteed; the
+  connection is never written to `/etc/NetworkManager/system-connections`.
+  `_verify_additive()` fails the connection closed if arming the sentinel ever
+  leaves it as the *only* resolver while the physical link is still up.
+- `desktop/linux/helper/teather-helper.c`, its route test,
+  `packaging/polkit/…`, and `packaging/man/teather-helper.8` deleted. The
+  packet engine is spawned directly by `teatherd` as the desktop user as
+  `tun2proxy --tun teather0 …` (no `--setup`; that flag is bare and requires
+  root), attaching to the `tun.owner`-delegated device.
+- `packaging/systemd/teather.service` restores `NoNewPrivileges=yes` and adds
+  further sandboxing; `packaging/debian/control` drops the `pkexec` dependency.
+- Additive DNS: `DNS_PRIORITY` moved from `-32768` (exclusive) to `32050`
+  (positive, non-exclusive) and `ignore-auto-dns` is `false`.
+- Auto-failover setting (`config.auto_failover()`, default on) with
+  `SetAutoFailover` on D-Bus, `teather failover on|off`, and a GTK checkbox.
+  Off = the connection is created with no default route and no DNS (dormant)
+  until armed.
+
+The pre-D-022 tree remains on `archive/d021-reapply-dns-approach` (commit
+`c78d45f`).
+
+### VM validation — 2026-08-29/30 (phone-free parts pass)
+
+Run in the disposable Debian 12 GNOME VM against the real
+`NetworkManagerConnection` code, from `teatherd`'s actual context (a
+`systemd --user` transient service):
+
+- **No polkit prompt.** From the user-manager context, polkit's
+  `CheckAuthorization` for `network-control` returns `(authorized=True,
+  challenge=False)` — the "implicit inactive: yes" path. `settings.modify.own`
+  is `yes` there too. (An SSH session is *not* authorized — correctly — but
+  `teatherd` is not an SSH session.) D-021's `pkexec` / `auth_admin_keep` /
+  active-GNOME-session requirement is gone.
+- **Additive DNS.** Armed, with the QEMU NIC up: `/etc/resolv.conf` =
+  `10.0.2.3`, `fec0::3`, `198.19.0.1` — physical first, sentinel last.
+- **Automatic failover.** `nmcli device disconnect eth0` → `resolv.conf` =
+  `198.19.0.1` only, default route = `teather0` only. DNS keeps resolving
+  through the sentinel (a ~1 s blip during NM's route teardown, then steady).
+  Reconnecting the NIC restores the physical resolver/route on top.
+- **Unprivileged packet engine.** `tun2proxy --tun teather0` attaches as
+  uid 1000 with `CapEff: 0000000000000000`; `teather0` carrier comes up;
+  virtual DNS returns `198.18.0.0/16` addresses and a TCP connection to one
+  reaches the controlled loopback SOCKS server.
+- **In-memory / teardown.** `/etc/NetworkManager/system-connections/` stays
+  empty; deactivate + delete returns routes, `resolv.conf`, and the `nmcli`
+  inventory to exact baseline.
+- **Crash recovery.** A leaked `teather0` (handles dropped, simulating SIGKILL)
+  is found and removed by a fresh instance's `recover()`; idempotent.
+- **Dormant mode.** `auto_failover` off → connection active but no default
+  route and no DNS entry.
+
+### End-to-end with the phone — 2026-08-30, passed
+
+The owner's phone (Samsung `SM S266V`, Verizon LTE) was passed through into the
+same VM over USB. `teather connect` ran the full path — Android relay start,
+ADB forward, NetworkManager-created `teather0`, unprivileged `tun2proxy` — and
+`curl --interface teather0` reached the Internet with the phone's cellular IP
+(`203.0.113.10`), not the host's. With the VM's link up, ordinary traffic
+used it and `resolv.conf` had the physical resolver first; disconnecting the
+link failed DNS and routing over to Teather automatically (real sites returned
+HTTP 200 over cellular), and reconnecting restored the physical path with
+Teather still connected. ~12 minutes connected over cellular showed no memory
+growth (teatherd ~25 MB steady). `teather disconnect` and a `kill -9` of
+`tun2proxy` both returned the host to exact baseline and stopped the Android
+relay. Full detail: `docs/P1_HANDOFF.md` "Phase 3" and the 2026-08-30
+`docs/PROJECT_STATUS.md` work-log entry.
+
+Still open for P1 sign-off: a literal two-hour session, the GUI/tray lifecycle
+against `0.1.0-4`, and the repo-wide closeout.
 
 ## Adding or changing a decision
 
-1. Append a new numbered entry; do not rewrite history to hide a discarded path.
-2. State status, date, decision, rationale, and consequences.
-3. If replacing an accepted decision, mark it superseded and link the new entry.
-4. Update README, architecture, roadmap, and project status where affected.
+Append a numbered entry with status, date, decision, and why — don't rewrite an
+old one to hide a path that was tried. When replacing an accepted decision, mark
+the old one superseded and point to the new one.
 
 
 ## D-011 — Pin the initial Android identity and toolchain
@@ -515,10 +606,12 @@ resolver design and satisfied D-013 for source implementation and isolated tests
 The conditional blocker language above records the pre-approval state; it is not
 the current resume status.
 
-**DNS resolution note (2026-08-27):** D-021 narrowly supersedes the prohibition
-on all NetworkManager writes. Teather may temporarily reapply DNS only on the
-active externally owned `teather0` device with preserve-external-IP; persistent
-profiles, direct resolver edits, and mutations to physical links remain forbidden.
+**DNS resolution note (2026-08-27, revised 2026-08-29):** D-021 first narrowed
+the no-write prohibition to a temporary `Reapply` on `teather0`; that mechanism
+was then disproven. **D-022 supersedes it:** NetworkManager creates and owns one
+in-memory, non-persistent `tun` connection for `teather0`. Persistent profiles,
+direct `/etc/resolv.conf` edits, and any change to a physical link's connection,
+routes, or DNS remain forbidden.
 
 **Automatic-failover note (2026-08-29):** D-022 supersedes "the owner manually
 disables or restores it" as the only model. Automatic failover to Teather once
@@ -568,11 +661,18 @@ leaving network residue. A second minimal pinned patch now makes the engine hono
 its existing packet-information argument. The fixed mutation and privilege model
 above is unchanged.
 
-**DNS replacement note (2026-08-27):** D-021 supersedes only this decision's
+**DNS replacement note (2026-08-27):** D-021 superseded only this decision's
 no-nameserver/no-NetworkManager portions after the physical resolver gate failed.
-The helper, TUN, routes, privilege drop, ownership, and refusal boundaries remain
-authoritative. The temporary sentinel is applied by the unprivileged manager and
-must preserve the helper-owned address and routes.
+
+**Mechanism replacement note (2026-08-29):** D-022 supersedes the
+"fixed polkit-mediated helper" and "helper alone opens a non-persistent TUN"
+parts of this decision. NetworkManager now creates and owns `teather0` (address,
+routes, DNS) as an in-memory `tun` connection, and `tun2proxy` attaches to the
+`tun.owner`-delegated device unprivileged. There is no setuid-root helper. The
+*intent* of this decision is unchanged and still authoritative: exactly
+`teather0` at `192.0.2.1/32` MTU 1500, `198.18.0.0/15`, a metric-32000 backup
+default (only when failover is armed), no change to any physical link, and the
+same refusal conditions — now enforced in `preflight.py` instead of C.
 
 ### Refusal conditions
 
@@ -679,7 +779,13 @@ APK signature, versionCode 2, and versionName `0.1.0-p1`.
 
 ## D-020 — Permit the user manager's fixed PolicyKit launch boundary
 
-**Status:** Accepted · **Date:** 2026-08-27
+**Status:** Superseded by D-022 · **Date:** 2026-08-27 (superseded 2026-08-29)
+
+**Supersession note (2026-08-29):** D-022 removes the setuid-root `pkexec`
+helper entirely, so the reason `teatherd` needed `NoNewPrivileges=no` is gone.
+Package `0.1.0-4` restores `NoNewPrivileges=yes` and adds further sandboxing;
+the regression test now asserts the opposite of what it did under D-020. The
+rest of this entry is retained as history.
 
 ### Decision
 
@@ -708,7 +814,7 @@ GID, groups, capabilities, and applies `NoNewPrivs: 1` before executing
 
 ## D-021 — Use temporary per-device NetworkManager DNS for P1
 
-**Status:** Accepted · **Date:** 2026-08-27
+**Status:** Superseded by D-022 · **Date:** 2026-08-27 (superseded 2026-08-29)
 
 ### Decision
 
@@ -739,7 +845,7 @@ unchanged, and both probes pass.
 **Disproven in the disposable-VM matrix (2026-08-29):** this mechanism was
 implemented as designed, but `Reapply` does not actually propagate the DNS
 settings to `/etc/resolv.conf` for `teather0`'s externally-assumed connection
-type — see D-022, which proposes and prototypes a replacement. Status remains
-`Accepted` (not `Superseded`) until D-022 itself is accepted, per this log's
-convention of not rewriting history; treat this decision as non-functional in
-its current form regardless of its status label.
+type. **D-022 is now Accepted and implemented (package `0.1.0-4`)**; it makes
+NetworkManager create and own `teather0` from the start and uses an additive,
+non-exclusive DNS priority. The D-021 implementation is preserved on branch
+`archive/d021-reapply-dns-approach` (commit `c78d45f`).

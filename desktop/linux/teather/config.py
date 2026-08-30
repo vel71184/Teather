@@ -94,6 +94,7 @@ class ConfigStore:
             "schema": ConfigStore.SCHEMA,
             "salt": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
             "devices": {},
+            "auto_failover": True,
         }
 
     def _validate(self) -> None:
@@ -158,6 +159,26 @@ class ConfigStore:
         self._data["devices"][device_id]["auto_connect"] = enabled
         self.save()
         return self.devices()[device_id]
+
+    def auto_failover(self) -> bool:
+        """Whether Teather arms itself as an automatic backup path (D-022).
+
+        Default on: once connected, Teather installs its worse-metric default
+        route and additive DNS so traffic fails over automatically the moment
+        the physical link's route and resolver disappear, mirroring
+        Ethernet/Wi-Fi failover. The physical link itself is never touched.
+
+        Off: Teather still connects (interface and tunnel up) but stays dormant
+        with no default route and no DNS entry until the owner explicitly arms
+        it, because the phone's upstream may be metered cellular data.
+        """
+
+        return bool(self._data.get("auto_failover", True))
+
+    def set_auto_failover(self, enabled: bool) -> bool:
+        self._data["auto_failover"] = bool(enabled)
+        self.save()
+        return self.auto_failover()
 
     def save(self) -> None:
         self.file.write(self._data)

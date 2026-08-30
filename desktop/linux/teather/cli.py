@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     autoconnect = commands.add_parser("autoconnect", help="enable or disable safe auto-connect")
     autoconnect.add_argument("setting", choices=("on", "off"))
     autoconnect.add_argument("device_id")
+    failover = commands.add_parser(
+        "failover",
+        help="arm (on) or hold dormant (off) automatic failover to Teather when Wi-Fi is lost",
+    )
+    failover.add_argument("setting", choices=("on", "off"))
     _json_flag(commands.add_parser("diagnose", help="run read-only diagnostics"))
     _json_flag(commands.add_parser("recover", help="clean journaled resources and diagnose"))
     return parser
@@ -87,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
             result = client.call(
                 "SetAutoConnect", "(sb)", (arguments.device_id, arguments.setting == "on"),
             )
+        elif arguments.command == "failover":
+            result = client.call("SetAutoFailover", "(b)", (arguments.setting == "on",))
         elif arguments.device_command == "approve":
             if not arguments.yes:
                 answer = input("Approve this locally connected phone for Teather? [y/N] ")

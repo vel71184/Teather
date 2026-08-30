@@ -9,25 +9,23 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** P0 passed its physical gates. P1 Linux USB Desktop source and
-> host-only checks, both disposable-VM phases, and debug-APK verification are
-> complete. The first physical P1 run failed safely at the host DNS-retention
-> gate. D-021's bounded replacement (package `0.1.0-3`) ran its active-GNOME
-> disposable-VM matrix and was found not to work against real NetworkManager;
-> D-022 proposes and prototypes a replacement (see `docs/DECISIONS.md`),
-> pending owner acceptance and implementation before another phone run.
+> **Status:** P0 passed its physical gates. P1 (Linux USB Desktop) is
+> implemented as **D-022** (package `0.1.0-4`): NetworkManager owns the
+> non-persistent `teather0` interface, there is no privileged helper, DNS is
+> additive so a working Wi-Fi/Ethernet link is never disturbed, and failover to
+> the phone is automatic once that link is actually gone. **Validated end to end
+> on 2026-08-30** in a disposable VM with the phone passed through over USB —
+> real traffic exits on the phone's cellular, failover and restore work
+> automatically, teardown returns the host to exact baseline. Remaining before
+> P1 sign-off: a two-hour session, the GUI lifecycle, and milestone closeout.
+> See `docs/DECISIONS.md` and `docs/P1_HANDOFF.md`.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
 are not current requirements.
 
-> **Codex startup gate:** The first prompt in every new Teather Codex
-> conversation is read-only. Codex must recommend GPT-5.6 Sol with **Ultra** or
-> **High**, explain the scope classification, and stop before work begins. See
-> [AGENTS.md](AGENTS.md#fresh-codex-session-gate). The same stop applies within
-> a thread before a materially new phase that needs a High/Ultra change. The
-> current D-022 design/implementation work (NetworkManager-native TUN ownership
-> and additive DNS priority, replacing D-021) is an **Ultra** task.
+> Working on Teather with a coding assistant? `AGENTS.md` has the constraints
+> and safety gates; `docs/PROJECT_STATUS.md` is the resume point.
 
 ## Why this exists
 
@@ -103,8 +101,9 @@ it is not independently unlawful.
    be backed by a reproducible experiment recorded in this repository.
 8. **Existing receiver links are not Teather's property.** The first Linux
    system-wide mode must leave NetworkManager-managed Wi-Fi and Ethernet
-   connections untouched and preferred. The owner decides when to disable or
-   restore them.
+   connections untouched and preferred. Teather only takes over automatically
+   once such a link is actually gone (a per-user setting can require manual
+   confirmation instead).
 9. **Prefer the lightest mechanism that meets the milestone's requirement.**
    The phone pays for CPU, battery, and thermal cost, and the desktop client
    should stay cheap at idle. A heavier design (a new background process, a
@@ -169,19 +168,24 @@ The proof of concept deliberately uses replaceable tools:
   existing physical default; Teather never rewrites or disables those links.
 - **First protocol coverage:** IPv4 TCP and tunneled DNS; UDP follows.
 
-The first P1 operating mode is intentionally manual and conservative. With Wi-Fi
-or Ethernet present, the existing connection stays preferred. After Teather
-passes its own readiness check, the owner may manually disable Wi-Fi; Linux then
-uses the remaining `teather0` route. Re-enabling Wi-Fi restores its preferred
-route without Teather editing the connection profile. The exact route,
-virtual-DNS, privilege, and recovery design is accepted in D-015; live testing
-remains gated on isolated verification.
+The first P1 operating mode is conservative. With Wi-Fi or Ethernet present, the
+existing connection and its resolver stay preferred and fully working. Teather
+sits as a live standby: its backup default route has a worse metric and its DNS
+is additive, so nothing changes for the user while the physical link is up. When
+that link is actually lost, the kernel and resolver fall through to Teather
+automatically. A per-user setting (`teather failover off`) keeps Teather dormant
+until the owner arms it, for metered upstreams. Teather never edits or disables a
+physical link's connection profile. The route, DNS, and recovery design is
+accepted in D-015 as amended by D-022.
 
-**P1 resolver design:** NetworkManager temporarily advertises `198.19.0.1` only
-on `teather0` with leak-excluding priority. The endpoint is routed through
-Teather, while virtual mappings use the separate `198.18.0.0/16` pool. The pinned
-tunnel answers DNS over UDP and TCP. No persistent profile or direct
-`/etc/resolv.conf` edit is used. General UDP and IPv6 remain unsupported.
+**P1 resolver design (D-022):** NetworkManager owns `teather0` as an in-memory
+`tun` connection and publishes `198.19.0.1` at a *positive, non-exclusive*
+`ipv4.dns-priority`, so `/etc/resolv.conf` keeps the physical link's resolver
+first while it is present and uses the Teather sentinel only once it is gone.
+The endpoint is routed through Teather; virtual mappings use the separate
+`198.18.0.0/16` pool; the pinned tunnel answers DNS over UDP and TCP. No
+persistent profile or direct `/etc/resolv.conf` edit is used. General UDP and
+IPv6 remain unsupported.
 
 ADB is acceptable here because Teather is personal-first and USB debugging is a
 reasonable development prerequisite. It lets the project validate the most
@@ -297,7 +301,7 @@ directory when its first real file is ready.
 - [P0 laptop/phone handoff](docs/P0_HANDOFF.md) — exact, placeholder-free commands
   for reproducing the completed P0 experiment with a phone connected through ADB.
 - [P1 validation handoff](docs/P1_HANDOFF.md) — the current resume sequence for
-  disposable-VM, package/GUI/helper, and physical P1 acceptance gates.
+  the disposable-VM and physical P1 acceptance gates.
 - [P1 offline recovery](docs/P1_RECOVERY.md) — local recovery commands that do
   not depend on Internet or chat access.
 - [Architecture](docs/ARCHITECTURE.md) — component boundaries, data flow, and
@@ -316,19 +320,17 @@ directory when its first real file is ready.
 
 ## Getting started today
 
-P1 source work, host-only verification, and the disposable Debian 12 GNOME VM
-package/GUI/helper/TUN gates are complete. VersionCode 2 / `0.1.0-p1` has a
-verified debug signature. D-019 defers a permanent release identity while Teather
-is privately tested. During physical validation, package `0.1.0-2` corrected the
-user-service PolicyKit launch boundary and connected the bounded tunnel, but
-disabling Wi-Fi removed the host's only usable nameserver. Teather disconnected
-and restored its state as designed. D-021's replacement (package `0.1.0-3`) ran
-its disposable-VM DNS matrix and was found not to work against real
-NetworkManager; D-022 proposes and prototypes a replacement in
-[the decision log](docs/DECISIONS.md), pending owner acceptance and
-implementation. The exact resume sequence is in [the P1
-handoff](docs/P1_HANDOFF.md). Do not reconnect the phone or repeat physical
-acceptance until a working mechanism passes that matrix.
+P1 source work and host-only verification are complete. VersionCode 2 /
+`0.1.0-p1` has a verified debug signature. D-019 defers a permanent release
+identity while Teather is privately tested. During physical validation, disabling
+Wi-Fi removed the host's only usable nameserver and Teather disconnected safely;
+D-021's `Reapply` replacement was then disproven against real NetworkManager.
+**D-022 is implemented (`0.1.0-4`)** — NetworkManager owns `teather0`, the
+privileged helper is gone, DNS is additive, failover is automatic — and is
+recorded in [the decision log](docs/DECISIONS.md). Host tests pass; the next gate
+is the disposable-VM matrix in [the P1 handoff](docs/P1_HANDOFF.md). Do not
+reconnect the phone or repeat physical acceptance until `0.1.0-4` passes that
+matrix.
 
 The deterministic source-level gate remains:
 

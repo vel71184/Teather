@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import signal
 import subprocess
 import threading
@@ -10,21 +9,22 @@ from pathlib import Path
 from typing import Callable
 
 from .adb import AdbClient, AdbDevice
-from .android_status import AndroidStatus
 from .config import ConfigStore
 from .constants import (
-    DNS_SENTINEL,
     INTERFACE_ADDRESS,
     INTERFACE_NAME,
     RELAY_PORT,
     ROUTE_METRIC,
+    VIRTUAL_DNS_POOL,
     VIRTUAL_DNS_ROUTE,
 )
 from .dns_probe import probe_virtual_dns
 from .errors import TeatherError
 from .journal import Ownership, OwnershipJournal
-from .networkmanager import NetworkManagerDns
+from .networkmanager import NetworkManagerConnection
 from .preflight import evaluate_routes, parse_nameservers
+
+TUNNEL_PATH = "/usr/lib/teather/tun2proxy"
 
 
 class Manager:
@@ -33,28 +33,31 @@ class Manager:
         config: ConfigStore | None = None,
         journal: OwnershipJournal | None = None,
         adb: AdbClient | None = None,
-        helper: str = "/usr/libexec/teather-helper",
+        tunnel_path: str = TUNNEL_PATH,
         resolver_path: Path = Path("/etc/resolv.conf"),
         process_factory: Callable[..., subprocess.Popen] = subprocess.Popen,
-        dns_controller: NetworkManagerDns | None = None,
+        nm: NetworkManagerConnection | None = None,
         dns_probe: Callable[[], dict[str, str]] = probe_virtual_dns,
-        interface_snapshot: Callable[[], str] | None = None,
+        interface_snapshot: Callable[[bool], str] | None = None,
+        snapshot_timeout: float = 5.0,
     ):
         self.config = config or ConfigStore()
         self.journal = journal or OwnershipJournal()
         self.adb = adb or AdbClient()
-        self.helper = helper
+        self.tunnel_path = tunnel_path
         self.resolver_path = resolver_path
         self.process_factory = process_factory
-        self.dns_controller = dns_controller or NetworkManagerDns(resolver_path=resolver_path)
+        self.nm = nm or NetworkManagerConnection(resolver_path=resolver_path)
         self.dns_probe = dns_probe
         self.interface_snapshot = interface_snapshot or self._system_interface_snapshot
+        self.snapshot_timeout = snapshot_timeout
         self._state = "disconnected"
         self._error_category = "none"
         self._message = "No active connection"
         self._active_id = ""
         self._active_serial: str | None = None
         self._tunnel: subprocess.Popen | None = None
+        self._armed = False
         self._dns_ready = False
         self._lock = threading.RLock()
         self._devices: dict[str, AdbDevice] = {}
@@ -131,6 +134,8 @@ class Manager:
             "tcp_supported": True,
             "dns_mode": "virtual",
             "dns_ready": self._dns_ready,
+            "auto_failover": self.config.auto_failover(),
+            "failover_armed": self._armed,
             "udp_supported": False,
             "ipv6_supported": False,
             **metrics,
@@ -168,7 +173,7 @@ class Manager:
 
     def preflight(self) -> None:
         result = evaluate_routes(
-            self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "table", "main"]),
+            self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "table", "all"]),
             self._run_json(["/usr/sbin/ip", "-j", "link", "show"]),
             self._run_json(["/usr/sbin/ip", "-j", "-4", "address", "show"]),
             self._run_json(["/usr/sbin/ip", "-j", "-4", "rule", "show"]),
@@ -181,9 +186,9 @@ class Manager:
             raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
         if not parse_nameservers(resolver):
             raise TeatherError("resolver-unavailable", "No usable non-loopback nameserver is configured")
-        self.dns_controller.preflight()
+        self.nm.preflight()
 
-    def _system_interface_snapshot(self) -> str:
+    def _system_interface_snapshot(self, armed: bool) -> str:
         address = self._run_json(["/usr/sbin/ip", "-j", "-4", "address", "show", "dev", INTERFACE_NAME])
         routes = self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "dev", INTERFACE_NAME])
         try:
@@ -197,27 +202,34 @@ class Manager:
             for info in entry.get("addr_info", [])
             if info.get("family") == "inet"
         ]
-        route_values = {
-            (route.get("dst", "default"), int(route.get("metric", 0)))
+        # Destinations must be exactly right. NetworkManager picks the metric for
+        # the scope-link virtual-DNS route, so only the backup default's metric
+        # is pinned.
+        destinations = {route.get("dst", "default") for route in value["routes"]}
+        default_metrics = {
+            int(route.get("metric", 0))
             for route in value["routes"]
+            if route.get("dst", "default") == "default"
         }
-        expected_routes = {(VIRTUAL_DNS_ROUTE, 0), ("default", ROUTE_METRIC)}
+        expected_destinations = {VIRTUAL_DNS_ROUTE}
+        if armed:
+            expected_destinations.add("default")
         if (
             len(addresses) != 1
             or addresses[0].get("local") != expected_address
             or int(addresses[0].get("prefixlen", -1)) != int(expected_prefix)
-            or len(value["routes"]) != len(expected_routes)
-            or route_values != expected_routes
+            or destinations != expected_destinations
+            or (armed and default_metrics != {ROUTE_METRIC})
         ):
             raise TeatherError("tunnel-start", "Teather interface state is incomplete or unexpected")
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
-    def _wait_interface_snapshot(self) -> str:
-        deadline = time.monotonic() + 5
+    def _wait_interface_snapshot(self, armed: bool) -> str:
+        deadline = time.monotonic() + self.snapshot_timeout
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             try:
-                snapshot = self.interface_snapshot()
+                snapshot = self.interface_snapshot(armed)
                 if snapshot:
                     return snapshot
             except Exception as error:
@@ -225,12 +237,24 @@ class Manager:
             time.sleep(0.1)
         raise TeatherError("tunnel-start", "Teather interface did not become ready") from last_error
 
-    def _cleanup_tunnel_dns(self, cleanup_errors: list[str]) -> None:
-        try:
-            self.dns_controller.restore_while_active()
-        except Exception:
-            # Interface removal is the authoritative fallback for temporary state.
-            pass
+    def _tunnel_command(self, local_port: int) -> list[str]:
+        # No --setup: NetworkManager already owns teather0's address, routes, and
+        # DNS. tun2proxy only attaches to the tun.owner-delegated device and
+        # moves packets, which needs no privilege.
+        return [
+            self.tunnel_path,
+            "--proxy", f"socks5://127.0.0.1:{local_port}",
+            "--tun", INTERFACE_NAME,
+            "--dns", "virtual",
+            "--virtual-dns-pool", VIRTUAL_DNS_POOL,
+            "--mtu", "1500",
+            "--tcp-timeout", "300",
+            "--max-sessions", "64",
+            "--verbosity", "off",
+            "--exit-on-fatal-error",
+        ]
+
+    def _stop_tunnel(self, cleanup_errors: list[str]) -> None:
         if self._tunnel is not None and self._tunnel.poll() is None:
             try:
                 self._tunnel.send_signal(signal.SIGTERM)
@@ -242,11 +266,15 @@ class Manager:
             except Exception:
                 cleanup_errors.append("tunnel-process")
         self._tunnel = None
+
+    def _cleanup_tunnel_nm(self, cleanup_errors: list[str]) -> None:
+        self._stop_tunnel(cleanup_errors)
         self._dns_ready = False
         try:
-            self.dns_controller.ensure_no_residue()
+            self.nm.deactivate()
         except Exception:
-            cleanup_errors.append("resolver-state")
+            cleanup_errors.append("networkmanager-connection")
+        self._armed = False
 
     def connect(self, device_id: str = "") -> dict:
         with self._lock:
@@ -268,6 +296,7 @@ class Manager:
             android_started = False
             serial: str | None = None
             selected_id = ""
+            armed = self.config.auto_failover()
             try:
                 self.preflight()
                 selected_id, device = self._select(device_id)
@@ -287,8 +316,11 @@ class Manager:
                     raise TeatherError("android-not-ready", "Android relay did not report compatible ready status")
                 local_port = self.adb.add_forward(serial)
                 self.journal.save(Ownership(selected_id, local_port, android_started))
+                self.nm.activate(armed)
+                self._armed = armed
+                self._wait_interface_snapshot(armed)
                 self._tunnel = self.process_factory(
-                    ["pkexec", self.helper, "run", str(local_port)],
+                    self._tunnel_command(local_port),
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
@@ -301,25 +333,21 @@ class Manager:
                     exit_code = None
                 if exit_code is not None:
                     detail = self._tunnel.stderr.read(240).strip() if self._tunnel.stderr else ""
-                    raise TeatherError("tunnel-start", detail or "Privileged tunnel helper exited")
-                interface_before_dns = self._wait_interface_snapshot()
-                self.dns_controller.apply()
-                interface_after_dns = self.interface_snapshot()
-                if interface_after_dns != interface_before_dns:
-                    raise TeatherError(
-                        "networkmanager-route-mutation",
-                        "NetworkManager changed Teather's externally owned address or routes",
-                    )
-                self.dns_probe()
-                self._dns_ready = True
+                    raise TeatherError("tunnel-start", detail or "Packet engine exited immediately")
+                if armed:
+                    self.dns_probe()
+                    self._dns_ready = True
+                    self._message = "Connected; Teather is the automatic backup path if Wi-Fi is lost"
+                else:
+                    self._dns_ready = False
+                    self._message = "Connected; failover is disabled, so Teather stays dormant until armed"
                 self._active_id = selected_id
                 self._active_serial = serial
                 self._state = "connected"
-                self._message = "Connected; Teather DNS is ready and Wi-Fi may be disabled manually"
                 return self._emit_status()
             except Exception as error:
                 cleanup_errors: list[str] = []
-                self._cleanup_tunnel_dns(cleanup_errors)
+                self._cleanup_tunnel_nm(cleanup_errors)
                 if local_port is not None and serial is not None:
                     try:
                         self.adb.remove_forward(serial, local_port)
@@ -359,7 +387,7 @@ class Manager:
         with self._lock:
             ownership = self.journal.load()
             cleanup_errors: list[str] = []
-            self._cleanup_tunnel_dns(cleanup_errors)
+            self._cleanup_tunnel_nm(cleanup_errors)
             serial = self._active_serial
             if ownership and serial is None:
                 try:
@@ -405,12 +433,12 @@ class Manager:
             self._active_serial = None
             self._state = "disconnected"
             self._error_category = "none"
-            self._message = "Disconnected; restore Wi-Fi manually if it is disabled"
+            self._message = "Disconnected; Wi-Fi and Ethernet were never touched"
             return self._emit_status()
 
     def recover(self) -> dict:
         with self._lock:
-            self.dns_controller.recover()
+            self.nm.recover()
             ownership = self.journal.load()
             if ownership:
                 self.discover()
@@ -451,6 +479,19 @@ class Manager:
         self.discover()
         return {"device_id": saved.device_id, "auto_connect": saved.auto_connect}
 
+    def set_auto_failover(self, enabled: bool) -> dict:
+        with self._lock:
+            self.config.set_auto_failover(enabled)
+            if self._state == "connected" and self._armed != bool(enabled):
+                active = self._active_id
+                self.disconnect()
+                if self._state == "disconnected":
+                    self.connect(active)
+            return {
+                "auto_failover": self.config.auto_failover(),
+                "failover_armed": self._armed,
+            }
+
     def maybe_auto_connect(self) -> None:
         if self._state not in {"disconnected", "detected"}:
             return
@@ -480,22 +521,24 @@ class Manager:
                 self._message = "Tunnel exited; Teather cleaned its owned resources"
                 self._emit_status()
             return
-        if not self.dns_controller.resolver_is_active():
+        if not self.nm.connection_is_active():
             self.disconnect()
             if self._state == "disconnected":
                 self._state = "error"
-                self._error_category = "resolver-unavailable"
-                self._message = "Teather DNS disappeared; owned state was disconnected and restored"
+                self._error_category = "connection-lost"
+                self._message = "The teather0 connection went away; owned state was disconnected and restored"
                 self._emit_status()
 
     def diagnose(self) -> dict:
         issues: list[str] = []
-        for executable in ("adb", "pkexec", "/usr/sbin/ip"):
+        for executable in ("adb", "/usr/sbin/ip"):
             found = Path(executable).exists() if executable.startswith("/") else any(
                 (Path(directory) / executable).exists() for directory in ("/usr/bin", "/bin", str(Path.home() / ".local/bin"))
             )
             if not found:
                 issues.append(f"missing-{Path(executable).name}")
+        if not Path(self.tunnel_path).exists():
+            issues.append("missing-tun2proxy")
         try:
             resolver = self.resolver_path.read_text(encoding="utf-8")
             nameservers = len(parse_nameservers(resolver))
@@ -505,7 +548,7 @@ class Manager:
         if nameservers == 0:
             issues.append("no-usable-nameserver")
         try:
-            networkmanager_version = self.dns_controller.check_supported()
+            networkmanager_version = self.nm.check_supported()
         except TeatherError as error:
             networkmanager_version = "unavailable"
             issues.append(error.category)
@@ -514,11 +557,12 @@ class Manager:
             "issues": ",".join(issues) if issues else "none",
             "usable_nameservers": nameservers,
             "networkmanager_version": networkmanager_version,
-            "dns_integration": "temporary-active-device",
+            "dns_integration": "networkmanager-native-tun",
             "dns_ready": self._dns_ready,
+            "auto_failover": self.config.auto_failover(),
+            "failover_armed": self._armed,
             "recovery_guide": "/usr/share/doc/teather/RECOVERY.md.gz",
-            "networkmanager_mutation": self._dns_ready,
-            "resolver_mutation": self._dns_ready,
+            "networkmanager_mutation": self._state == "connected",
             "persistent_networkmanager_mutation": False,
             "direct_resolver_mutation": False,
             "firewall_mutation": False,

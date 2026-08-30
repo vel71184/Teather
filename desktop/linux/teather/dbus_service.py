@@ -14,6 +14,7 @@ INTROSPECTION_XML = f"""
     <method name="RenameDevice"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="ForgetDevice"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="SetAutoConnect"><arg type="s" direction="in"/><arg type="b" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
+    <method name="SetAutoFailover"><arg type="b" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="Diagnose"><arg type="a{{sv}}" direction="out"/></method>
     <signal name="StatusChanged"><arg type="a{{sv}}"/></signal>
     <signal name="DevicesChanged"><arg type="aa{{sv}}"/></signal>
@@ -74,6 +75,7 @@ class ManagerDbusService:
                 "RenameDevice": lambda: self.manager.rename_device(arguments[0], arguments[1]),
                 "ForgetDevice": lambda: self.manager.forget_device(arguments[0]),
                 "SetAutoConnect": lambda: self.manager.set_auto_connect(arguments[0], arguments[1]),
+                "SetAutoFailover": lambda: self.manager.set_auto_failover(arguments[0]),
                 "Diagnose": self.manager.diagnose,
             }
             result = methods[method]()

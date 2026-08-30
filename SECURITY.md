@@ -31,7 +31,8 @@ Useful reports include:
 - SOCKS/tunnel protocol parsers.
 - Android upstream selection and leakage.
 - Linux route, DNS, firewall, and TUN cleanup.
-- Privileged Linux helpers.
+- The NetworkManager connection scope Teather requests (it must stay limited to
+  creating, activating, and deleting the one in-memory `teather0` connection).
 - Private-key storage and configuration QR codes.
 - Diagnostic exports and packet captures.
 
