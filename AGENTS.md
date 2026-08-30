@@ -29,12 +29,14 @@ must follow. Order:
 
 1. Android status/text cleanup, Linux-matched icon, zero-gap upstream switch
    (`ACTION_RECONFIGURE`). **Done** 2026-08-30.
-2. **Lightweight UDP** — udpgw-style framed datagrams over a second
-   adb-forwarded TCP port; a ~200-line Android `UdpRelay` bound to the chosen
-   physical transport plus a small Linux shim; `tun2proxy` keeps TCP + virtual
-   DNS. No `VpnService`, no packet stack on the phone. **Next.**
+2. **Lightweight UDP** (D-024). **Done** 2026-08-30, not yet phone-tested:
+   tun2proxy's `udpgw` feature + `--udpgw-server 240.0.0.1:1`; the phone's
+   `UdpGatewayServer` terminates the framed stream over the existing SOCKS
+   connection and forwards datagrams on the selected upstream. No second ADB
+   forward, no `VpnService`, no packet stack. Needs the tun2proxy rebuild with
+   `--features udpgw` at packaging time.
 3. **P3 wireless** — local Wi-Fi link instead of USB, same relay semantics. Its
-   own design pass.
+   own design pass. **Next.**
 4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery.
 
 IPv6 and general "become a VPN" scope stay deferred. Still discuss with the owner

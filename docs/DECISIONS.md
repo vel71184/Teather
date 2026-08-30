@@ -201,6 +201,53 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-024 — Carry UDP with tun2proxy's udpgw feature and a phone-side gateway
+
+**Status:** Accepted · **Date:** 2026-08-30
+
+### Context
+
+The owner directed a focused post-P1 track and asked for lightweight UDP —
+enough for real-time services such as Shadow PC and QUIC — while keeping the
+Android app a thin relay (no `VpnService`, no packet stack). The ADB link is
+TCP-only, so UDP datagrams have to be framed over a TCP stream.
+
+### Decision
+
+Enable tun2proxy's built-in **`udpgw`** feature (its own default; disabled by
+Teather's earlier `--no-default-features` build; adds no dependencies) and run it
+with `--udpgw-server 240.0.0.1:1`. tun2proxy tunnels the udpgw stream through the
+existing SOCKS proxy with that sentinel as the CONNECT target. The phone's
+`Socks5Server` recognises the sentinel and hands the stream to a new
+`UdpGatewayServer` instead of dialing out.
+
+`UdpGatewayServer` speaks the badvpn udpgw framing (`LEN` · `FLAGS` · `CONN_ID` ·
+optional SOCKS-style address · `DATA`). Per connection id it holds one
+`DatagramSocket` bound to the **selected upstream** (shared `NetworkSelector`,
+same transport as TCP), forwards each datagram, and frames replies back. A
+connection id that reappears with a new destination is rebuilt so a reused
+tun2proxy stream cannot leak an old flow's late packets. Idle connections close
+on their own.
+
+- No second ADB forward: UDP rides the one SOCKS port.
+- No new Android permission, no `VpnService`, no L3 packet handling — the app
+  stays an L4 relay (SOCKS for TCP, udpgw for UDP).
+- The sentinel `240.0.0.1:1` is a CONNECT target only; it is never routed.
+- `198.18.0.0/15` virtual-DNS names still resolve on the phone: tun2proxy
+  reverses a virtual IP to its domain and the gateway re-resolves it on the
+  upstream.
+
+### Consequences
+
+- The Debian package must ship a tun2proxy rebuilt with `--features udpgw`
+  (`third_party/tun2proxy/build.sh`); `0.1.0-6` depends on it.
+- IPv6 UDP is still refused (the tun is IPv4-only). General IPv6 stays deferred.
+- Oversized inbound datagrams (> ~2 KB) are dropped rather than fragmented;
+  acceptable for QUIC/game/DNS traffic.
+- Not gated by D-018: this is the owner-directed lightweight-UDP item, not the
+  broader P2 "protocol completeness" scope, which the owner has deprioritised.
+- Needs a live phone test (Shadow PC or a QUIC workload) before it is proven.
+
 ## D-023 — Let the Linux client choose the phone's upstream transport
 
 **Status:** Accepted · **Date:** 2026-08-30

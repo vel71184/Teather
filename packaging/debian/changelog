@@ -1,5 +1,11 @@
 teather (0.1.0-6) unstable; urgency=medium
 
+  * UDP support (D-024). tun2proxy is now built with its `udpgw` feature and run
+    with `--udpgw-server`; the phone's new UdpGatewayServer terminates the
+    framed-datagram stream over the existing SOCKS connection and forwards each
+    datagram on the selected upstream. No second ADB forward, no VpnService, no
+    packet stack on the phone. IPv6 UDP is still refused. NOTE: this package
+    requires the tun2proxy binary rebuilt with `--features udpgw`.
   * `teather upstream` now rebinds the phone's relay upstream with no teardown,
     using the Android app's new ACTION_RECONFIGURE (versionCode 3, 0.1.0-p1.1).
     The SOCKS listener, teather0, the tunnel, routes, and DNS all stay up and

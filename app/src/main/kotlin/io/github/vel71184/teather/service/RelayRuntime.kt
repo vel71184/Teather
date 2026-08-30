@@ -3,10 +3,12 @@ package io.github.vel71184.teather.service
 import android.content.Context
 import android.util.Log
 import io.github.vel71184.teather.network.AndroidNetworkConnector
+import io.github.vel71184.teather.network.NetworkSelector
 import io.github.vel71184.teather.network.UpstreamPreference
 import io.github.vel71184.teather.relay.RelayStats
 import io.github.vel71184.teather.relay.RelayStatsSnapshot
 import io.github.vel71184.teather.relay.Socks5Server
+import io.github.vel71184.teather.relay.UdpGatewayServer
 
 data class RelayConfiguration(
     val port: Int = DEFAULT_PORT,
@@ -57,7 +59,7 @@ object RelayRuntime {
     private var server: Socks5Server? = null
 
     @Volatile
-    private var connector: AndroidNetworkConnector? = null
+    private var networks: NetworkSelector? = null
 
     @Synchronized
     fun start(context: Context, requested: RelayConfiguration): RelayStatus {
@@ -80,20 +82,30 @@ object RelayRuntime {
 
         return try {
             val stats = RelayStats()
+            val selector = NetworkSelector(context, requested.upstream)
             val connector = AndroidNetworkConnector(
-                context = context,
-                preference = requested.upstream,
+                networks = selector,
                 onSelected = stats::selectedUpstream,
+            )
+            val udpGateway = UdpGatewayServer(
+                bindToUpstream = { udp -> selector.select().network.bindSocket(udp) },
+                resolveOnUpstream = { host -> selector.select().network.getByName(host) },
+                onDatagram = { clientToInternet, internetToClient ->
+                    if (clientToInternet > 0) stats.addClientToInternetBytes(clientToInternet)
+                    if (internetToClient > 0) stats.addInternetToClientBytes(internetToClient)
+                },
+                logger = { category -> Log.i(LOG_TAG, category) },
             )
             val newServer = Socks5Server(
                 port = requested.port,
                 connector = connector,
                 stats = stats,
+                udpGateway = udpGateway,
                 logger = { category -> Log.i(LOG_TAG, category) },
             )
             val actualPort = newServer.start()
             server = newServer
-            this.connector = connector
+            this.networks = selector
             boundPort = actualPort
             lifecycle = RelayLifecycle.RUNNING
             snapshot()
@@ -133,7 +145,7 @@ object RelayRuntime {
             controlError = null
             return snapshot()
         }
-        connector?.rebind(requested.upstream)
+        networks?.rebind(requested.upstream)
         configuration = requested
         controlError = null
         Log.i(LOG_TAG, "relay.lifecycle.reconfigured")
@@ -152,7 +164,7 @@ object RelayRuntime {
     private fun stopLocked() {
         server?.close()
         server = null
-        connector = null
+        networks = null
         boundPort = null
         configuration = null
         failureCategory = null

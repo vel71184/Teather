@@ -33,9 +33,12 @@ export CARGO_HOME=${CARGO_HOME:-"$work/cargo-home"}
 export CARGO_TARGET_DIR="$work/target"
 export RUSTFLAGS="-C link-arg=-Wl,--build-id=none -C debuginfo=0 --remap-path-prefix=$work=/usr/src/teather"
 export CARGO_PROFILE_RELEASE_STRIP=symbols
+# `udpgw` is tun2proxy's only default feature and adds no dependencies (see its
+# Cargo.toml `[features]`). Teather needs it: it carries UDP datagrams over the
+# TCP-only ADB link to the phone's UdpGatewayServer.
 cargo +1.90.0 build \
   --manifest-path "$work/tun2proxy-0.8.3/Cargo.toml" \
-  --locked --release --no-default-features --bin tun2proxy-bin
+  --locked --release --no-default-features --features udpgw --bin tun2proxy-bin
 binary="$work/target/release/tun2proxy-bin"
 timestamps=$(LC_ALL=C grep -aoE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' "$binary")
 timestamp_count=$(printf '%s\n' "$timestamps" | wc -l)

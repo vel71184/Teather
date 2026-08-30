@@ -3,6 +3,13 @@ SERVICE_COMPONENT = f"{APP_ID}/.service.RelayService"
 ACTION_START = f"{APP_ID}.action.START"
 ACTION_STOP = f"{APP_ID}.action.STOP"
 ACTION_RECONFIGURE = f"{APP_ID}.action.RECONFIGURE"
+
+# Sentinel destination for tun2proxy's --udpgw-server. tun2proxy tunnels the UDP
+# gateway stream through the SOCKS proxy with this as the CONNECT target; the
+# phone's Socks5Server recognises it and hands the stream to its UdpGatewayServer
+# instead of dialing out. It is never placed in a routing table. Must match
+# UdpGatewayServer.SENTINEL_HOST/PORT in the Android app.
+UDPGW_SENTINEL = "240.0.0.1:1"
 STATUS_SCHEMA = 1
 RELAY_PORT = 1080
 

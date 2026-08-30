@@ -55,8 +55,9 @@ Run read-only diagnostics.
 .B recover [--json]
 Clean only journaled resources, then report diagnostics.
 .SH LIMITATIONS
-P1 supports TCP and virtual DNS over UDP and TCP for IPv4. General UDP and IPv6
-are unsupported. Teather does not change Wi-Fi, Ethernet, persistent
+Teather carries IPv4 TCP, virtual DNS over UDP and TCP, and general UDP (the
+latter over tun2proxy's udpgw stream, terminated by the phone). IPv6 is
+unsupported. Teather does not change Wi-Fi, Ethernet, persistent
 NetworkManager profiles, firewall rules, or physical-interface state. It creates
 one in-memory, non-persistent NetworkManager connection for teather0 whose DNS is
 additive: the physical link's resolver stays first while it is present.

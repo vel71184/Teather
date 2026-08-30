@@ -167,7 +167,8 @@ The proof of concept deliberately uses replaceable tools:
   implementation.
 - **Routing:** a Teather-owned backup default with lower preference than every
   existing physical default; Teather never rewrites or disables those links.
-- **First protocol coverage:** IPv4 TCP and tunneled DNS; UDP follows.
+- **First protocol coverage:** IPv4 TCP, tunneled DNS, and general UDP (udpgw,
+  D-024). IPv6 follows.
 
 The first P1 operating mode is conservative. With Wi-Fi or Ethernet present, the
 existing connection and its resolver stay preferred and fully working. Teather
@@ -185,8 +186,9 @@ accepted in D-015 as amended by D-022.
 first while it is present and uses the Teather sentinel only once it is gone.
 The endpoint is routed through Teather; virtual mappings use the separate
 `198.18.0.0/16` pool; the pinned tunnel answers DNS over UDP and TCP. No
-persistent profile or direct `/etc/resolv.conf` edit is used. General UDP and
-IPv6 remain unsupported.
+persistent profile or direct `/etc/resolv.conf` edit is used. General UDP is
+carried over tun2proxy's udpgw stream and terminated by the phone (D-024); IPv6
+remains unsupported.
 
 ADB is acceptable here because Teather is personal-first and USB debugging is a
 reasonable development prerequisite. It lets the project validate the most

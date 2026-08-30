@@ -19,7 +19,13 @@ from teather.adb import AdbClient, AdbDevice
 from teather.android_status import AndroidStatus, parse_android_status
 from teather.cli import build_parser
 from teather.config import ConfigStore
-from teather.constants import DNS_PRIORITY, DNS_SENTINEL, VIRTUAL_DNS_POOL, VIRTUAL_DNS_ROUTE
+from teather.constants import (
+    DNS_PRIORITY,
+    DNS_SENTINEL,
+    UDPGW_SENTINEL,
+    VIRTUAL_DNS_POOL,
+    VIRTUAL_DNS_ROUTE,
+)
 from teather.dbus_service import INTROSPECTION_XML
 from teather.dns_probe import _answer_address, _query
 from teather.errors import TeatherError
@@ -410,6 +416,12 @@ class StatusAndPreflightTests(unittest.TestCase):
         self.assertIn("--virtual-dns-pool", command)
         self.assertIn(VIRTUAL_DNS_POOL, command)
         self.assertIn("teather0", command)
+        # UDP gateway sentinel is a CONNECT target, so it must not fall inside
+        # the range tun2proxy routes into the tun.
+        self.assertIn("--udpgw-server", command)
+        sentinel_ip = ipaddress.ip_address(UDPGW_SENTINEL.split(":")[0])
+        self.assertNotIn(sentinel_ip, route)
+        self.assertNotIn(sentinel_ip, pool)
 
     def test_dns_priority_is_additive_not_exclusive(self):
         # A positive priority is non-exclusive: NetworkManager keeps every other

@@ -15,7 +15,10 @@ package="$repo/build/p1/teather_${version}_amd64.deb"
   exit 1
 }
 
-if [ ! -x "$tunnel" ]; then
+# Rebuild unless a cached binary already has the udpgw feature Teather now needs
+# (D-024). The build is reproducible, so a rebuild is cheap to verify.
+if [ ! -x "$tunnel" ] || ! "$tunnel" --help 2>&1 | grep -q -- '--udpgw-server'; then
+  rm -f "$tunnel"
   "$repo/third_party/tun2proxy/build.sh" "$tunnel"
 fi
 

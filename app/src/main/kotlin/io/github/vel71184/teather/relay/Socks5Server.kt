@@ -34,6 +34,7 @@ class Socks5Server(
     private val maxConnections: Int = DEFAULT_MAX_CONNECTIONS,
     private val relayIdleTimeoutMs: Int = RELAY_IDLE_TIMEOUT_MS,
     private val idleCheckIntervalMs: Int = IDLE_CHECK_INTERVAL_MS,
+    private val udpGateway: UdpGatewayServer? = null,
     private val logger: (category: String) -> Unit = {},
 ) : Closeable {
     private val running = AtomicBoolean(false)
@@ -116,6 +117,14 @@ class Socks5Server(
             Socks5Protocol.negotiate(client.getInputStream(), client.getOutputStream())
             val destination = Socks5Protocol.readConnectRequest(client.getInputStream())
             requestRead = true
+
+            if (udpGateway?.matches(destination) == true) {
+                Socks5Protocol.writeReply(client.getOutputStream(), Socks5Protocol.REPLY_SUCCEEDED, null)
+                replySent = true
+                logger("relay.udpgw.stream-open")
+                udpGateway.serve(client)
+                return
+            }
 
             remote = connector.connect(destination, CONNECT_TIMEOUT_MS)
             sockets.add(remote)

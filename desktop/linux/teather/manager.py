@@ -15,6 +15,7 @@ from .constants import (
     INTERFACE_NAME,
     RELAY_PORT,
     ROUTE_METRIC,
+    UDPGW_SENTINEL,
     VIRTUAL_DNS_POOL,
     VIRTUAL_DNS_ROUTE,
 )
@@ -139,7 +140,7 @@ class Manager:
             "failover_armed": self._armed,
             "upstream": self.config.upstream(),
             "active_upstream": self._active_upstream,
-            "udp_supported": False,
+            "udp_supported": True,
             "ipv6_supported": False,
             **metrics,
         }
@@ -250,6 +251,10 @@ class Manager:
             "--tun", INTERFACE_NAME,
             "--dns", "virtual",
             "--virtual-dns-pool", VIRTUAL_DNS_POOL,
+            # UDP is carried over the same SOCKS connection as framed datagrams
+            # (badvpn "udpgw"); the phone's UdpGatewayServer terminates it. The
+            # sentinel is a CONNECT target, never a route.
+            "--udpgw-server", UDPGW_SENTINEL,
             "--mtu", "1500",
             "--tcp-timeout", "300",
             "--max-sessions", "64",

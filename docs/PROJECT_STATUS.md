@@ -5,18 +5,21 @@
 - **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
   is validated end-to-end and running live on the developer host. The owner has
   since directed a post-P1 track of work (see the 2026-08-30 entries and the
-  punch list) — not P2 as scoped by D-018. UDP/IPv6 "protocol completeness"
-  stays deferred; the owner rejected the roadmap's assumption that all of P2/P4
-  must happen. Next build task: track 2, lightweight UDP.
+  punch list) — not P2 as scoped by D-018. IPv6 and the broader "become a VPN"
+  scope stay deferred; the owner rejected the roadmap's assumption that all of
+  P2/P4 must happen. Next build task: track 3, P3 wireless.
 - **Runnable build:** Android `0.1.0-p1.1` (`versionCode 3`); Debian package
-  `0.1.0-6` (rebuild pending). `0.1.0-4` = D-022 (NetworkManager owns `teather0`
-  as an in-memory `tun` connection, no setuid helper or polkit action, additive
-  DNS, automatic failover). `0.1.0-5` adds D-023 (`teather upstream
-  auto|cellular|wifi|ethernet`). `0.1.0-6` / `0.1.0-p1.1` makes the upstream
-  switch zero-gap (`ACTION_RECONFIGURE`, also phone-side), matches the Android
+  `0.1.0-6` (needs a tun2proxy rebuilt with `--features udpgw`). `0.1.0-4` =
+  D-022 (NetworkManager owns `teather0` as an in-memory `tun` connection, no
+  setuid helper or polkit action, additive DNS, automatic failover). `0.1.0-5`
+  adds D-023 (`teather upstream auto|cellular|wifi|ethernet`). `0.1.0-6` /
+  `0.1.0-p1.1` makes the upstream switch zero-gap (`ACTION_RECONFIGURE`, also
+  phone-side), adds general UDP (D-024: tun2proxy `udpgw` + a phone-side
+  `UdpGatewayServer` — no VpnService, no second forward), matches the Android
   icon to the Linux artwork, and drops stale "P0" wording. 48 host unit tests +
-  Android unit tests + D-Bus smoke pass; the `0.1.0-p1.1` APK is built but not
-  yet on the phone. **Validated end to end on 2026-08-30**: in the
+  Android unit tests (incl. 10 new udpgw tests) + D-Bus smoke pass; the
+  `0.1.0-p1.1` APK is built but not yet on the phone, and UDP has not had a live
+  test. **Validated end to end on 2026-08-30** (pre-UDP): in the
   disposable VM with the phone on USB passthrough, then installed and run on the
   actual laptop — `teather connect` works, traffic exits on the phone's Verizon
   cellular (`203.0.113.10`), `teather upstream wifi` flips it to the phone's
@@ -198,6 +201,40 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-30 — Lightweight UDP over tun2proxy udpgw (D-024)
+
+- Completed (not yet phone-tested; folded into Android `0.1.0-p1.1` / Debian
+  `0.1.0-6`):
+  - tun2proxy is now built `--no-default-features --features udpgw` (the feature
+    is its own default and adds no deps) and run with
+    `--udpgw-server 240.0.0.1:1`. tun2proxy tunnels the udpgw stream through the
+    existing SOCKS proxy with the sentinel as the CONNECT target.
+  - New `app/.../relay/UdpGatewayServer.kt` + `UdpGatewayProtocol.kt`: the
+    phone's `Socks5Server` recognises the sentinel CONNECT and hands the stream
+    to `UdpGatewayServer`, which speaks the badvpn udpgw framing, holds one
+    `DatagramSocket` per connection id bound to the selected upstream, forwards
+    datagrams, and frames replies back. Reused connection ids with a new
+    destination are rebuilt; idle ones self-close.
+  - Network selection was extracted from `AndroidNetworkConnector` into
+    `network/NetworkSelector.kt`, shared by the TCP connector and the UDP
+    gateway (and it now carries the `rebind()` used by `ACTION_RECONFIGURE`).
+  - `manager.py` passes `--udpgw-server`; `get_status()` reports
+    `udp_supported: true`.
+- Verified with: `./gradlew :app:testDebugUnitTest` (new `UdpGatewayProtocolTest`
+  ×7 and `UdpGatewayServerTest` ×3 — real loopback UDP echo through a piped TCP
+  stream: datagram forward + reply framing, keepalive echo, connection-id reuse
+  rebuild) and 48 Linux host unit tests (`_tunnel_command` now asserts the
+  sentinel is outside the routed range). **No phone test yet** — needs the
+  tun2proxy rebuild and a live UDP workload (Shadow PC / QUIC).
+- Files/areas: `app/.../relay/{UdpGatewayServer,UdpGatewayProtocol}.kt` (new),
+  `app/.../relay/Socks5Server.kt`, `app/.../network/{NetworkSelector.kt (new),
+  AndroidNetworkConnector.kt}`, `app/.../service/RelayRuntime.kt`,
+  `app/src/test/.../{UdpGatewayProtocolTest,UdpGatewayServerTest}.kt` (new);
+  `third_party/tun2proxy/build.sh`, `desktop/linux/teather/{constants,manager}.py`,
+  `desktop/linux/tests/test_core.py`; `packaging/debian/changelog`,
+  `packaging/man/teather.1`; `docs/DECISIONS.md` (D-024), `README.md`, `AGENTS.md`.
+- Next: track 3 — P3 wireless (local Wi-Fi link), its own design pass.
 
 ### 2026-08-30 — Zero-gap upstream switch + Linux-matched icon + stale-text cleanup
 
