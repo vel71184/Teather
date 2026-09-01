@@ -27,6 +27,7 @@ authentication prompt is expected.
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import time
 from pathlib import Path
@@ -44,6 +45,7 @@ from .constants import (
 )
 from .errors import TeatherError
 
+log = logging.getLogger(__name__)
 
 NETWORKMANAGER_BUS = "org.freedesktop.NetworkManager"
 NETWORKMANAGER_PATH = "/org/freedesktop/NetworkManager"
@@ -90,6 +92,8 @@ class NetworkManagerTransport(Protocol):
     def deactivate(self, active_path: str) -> None: ...
 
     def delete_connection(self, settings_path: str) -> None: ...
+
+    def check_connectivity(self) -> int: ...
 
 
 def _plain(value):
@@ -238,6 +242,16 @@ class GioNetworkManagerTransport:
             "()",
         )
 
+    def check_connectivity(self) -> int:
+        reply = self._call(
+            NETWORKMANAGER_PATH,
+            NETWORKMANAGER_INTERFACE,
+            "CheckConnectivity",
+            None,
+            "(u)",
+        )
+        return int(reply.get_child_value(0).get_uint32())
+
     def delete_connection(self, settings_path: str) -> None:
         self._call(settings_path, SETTINGS_CONNECTION_INTERFACE, "Delete", None, "()")
 
@@ -285,6 +299,11 @@ class NetworkManagerConnection:
     def _nameservers(self) -> list[str]:
         try:
             resolver = self.resolver_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            # No resolv.conf at all: treat as an empty resolver. This is a valid
+            # standalone-mode starting point (no other internet, nothing has
+            # written one yet); NetworkManager creates it when teather0 arms.
+            resolver = ""
         except OSError as error:
             raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
         result: list[str] = []
@@ -415,13 +434,15 @@ class NetworkManagerConnection:
             time.sleep(0.1)
 
     def _verify_additive(self) -> None:
-        """Fail closed if arming Teather DNS replaced the physical resolver.
+        """Fail closed if arming Teather DNS replaced a physical resolver.
 
-        At connect time the physical link is still up (`preflight` requires a
-        usable resolver), so an armed `resolv.conf` must list the physical
-        nameserver(s) *and* the sentinel. Only the sentinel would mean Teather
-        made itself the exclusive resolver while Wi-Fi was still working — the
-        exact D-021 failure D-022 exists to prevent.
+        Only meaningful when `preflight` recorded a baseline nameserver — i.e. a
+        physical link was up. Then an armed `resolv.conf` must list that
+        nameserver *and* the sentinel; sentinel-only would mean Teather made
+        itself the exclusive resolver while Wi-Fi was still working, the exact
+        D-021 failure D-022 exists to prevent. With no physical link (standalone
+        mode) sentinel-only is the correct, expected state, so the caller skips
+        this check.
         """
 
         remaining = self._non_sentinel_nameservers()
@@ -452,7 +473,24 @@ class NetworkManagerConnection:
         self._wait_device(present=True)
         if armed:
             self._wait_resolver(sentinel_present=True)
-            self._verify_additive()
+            if self._baseline_nameservers:
+                self._verify_additive()
+        log.info("teather0 activated (armed=%s, baseline_resolvers=%d)", armed, len(self._baseline_nameservers))
+
+    def recheck_connectivity(self) -> None:
+        """Ask NetworkManager to re-run its connectivity probe.
+
+        After a standalone activation (Teather is the only link) NM stays at
+        LIMITED/CONNECTED_SITE until its periodic check next runs, so GNOME
+        Shell shows no network icon even though traffic and DNS work. Nudging
+        the check makes the icon appear. Best effort — never fails a connect.
+        """
+
+        try:
+            state = self.transport.check_connectivity()
+            log.info("NetworkManager connectivity recheck -> state %s", state)
+        except TeatherError as error:
+            log.debug("connectivity recheck skipped: %s", error)
 
     def connection_is_active(self) -> bool:
         if not self._active_path:
@@ -559,3 +597,5 @@ class NetworkManagerConnection:
         self._armed = False
         if self.resolver_has_sentinel():
             raise TeatherError("dns-residue", "The Teather DNS sentinel remains after recovery")
+        if device or settings_path:
+            log.info("recover: removed a stale teather0 connection")

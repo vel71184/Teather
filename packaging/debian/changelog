@@ -1,3 +1,61 @@
+teather (0.1.0-11) unstable; urgency=medium
+
+  * Self-healing after an abnormal disconnect (D-026). If the phone is
+    unplugged, the USB/ADB bridge drops, tun2proxy exits, NetworkManager drops
+    teather0, or the phone-side relay stops, teatherd now notices, releases its
+    own resources, and returns to a clean state that auto-connect brings
+    straight back when the phone reappears — no manual 'teather recover'. The
+    phone-relay check is a slow (~2 min) backstop, skipped entirely while a GUI
+    is polling status, so it adds no steady load. Auto-connect stops retrying
+    after 3 consecutive failures and rests until a replug, a manual Connect, or
+    a 2-minute pause elapses, instead of looping. The startup session check
+    logs its result and surfaces an unclearable state. Phone-side cleanup that cannot be confirmed (a forward
+    that will not remove, a relay that will not confirm stopped) is logged and
+    surfaced as a hint but never wedges the next connect; only an unverifiable
+    teather0 (host state) still asks for a restart. New get_status fields
+    'recovery_hint' and 'last_drop'.
+  * Persistent debug log at ~/.local/state/teather/teatherd.log (rotating,
+    0600, StateDirectory=teather). Every adb control command, D-Bus method,
+    connect/disconnect/reconcile/health step and NetworkManager action is
+    recorded; browsing destinations and resolver contents are not. TEATHER_DEBUG=1
+    raises it to DEBUG.
+  * Desktop notifications on connect, drop, self-heal, and needs-attention, so
+    state changes are visible with the window closed and no tray. Sent at
+    critical urgency with replace-in-place, so they raise a banner (GNOME does
+    not banner normal-urgency notifications) and never stack up.
+  * GTK app is now single-instance: launching teather-gtk again re-presents the
+    existing window. Closing the window never disconnects; it hides to the tray
+    when one is available.
+  * After a standalone activation (Teather the only link) teatherd nudges
+    NetworkManager's connectivity check so GNOME shows a network icon
+    (punch-list item 5).
+
+ -- Teather Project <noreply@example.invalid>  Sun, 31 Aug 2026 22:00:00 +0000
+
+teather (0.1.0-10) unstable; urgency=medium
+
+  * Recover cleanly after a teatherd restart during a live connection
+    (punch-list item 4). ADB cleanup is now idempotent: removing a forward that
+    is already gone and stopping a relay that is already stopped both count as
+    success. Startup recover() clears the ownership journal once the
+    NetworkManager/tunnel teardown is verified, even when the best-effort ADB
+    step cannot be, so 'teather connect' is no longer wedged with
+    recovery-pending until the journal file is deleted by hand.
+
+ -- Teather Project <noreply@example.invalid>  Mon, 31 Aug 2026 16:00:00 +0000
+
+teather (0.1.0-9) unstable; urgency=medium
+
+  * Connect as the only internet path when the host has no other link (D-025).
+    preflight no longer refuses with no-default / resolver-unavailable. With
+    automatic failover armed, Teather comes up as the primary path and relies on
+    tun2proxy virtual DNS plus the phone-side sentinel for resolution; if
+    failover is off and there is no other internet, connect refuses and asks you
+    to run 'teather failover on'. Fallback to Wi-Fi/Ethernet when one appears is
+    unchanged (worse route metric, additive DNS).
+
+ -- Teather Project <noreply@example.invalid>  Sat, 30 Aug 2026 22:00:00 +0000
+
 teather (0.1.0-8) unstable; urgency=medium
 
   * Tune the UDP gateway for bursty low-latency apps such as cloud gaming:

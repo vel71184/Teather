@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import subprocess
@@ -16,6 +17,8 @@ from .constants import (
     SERVICE_COMPONENT,
 )
 from .errors import TeatherError
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,10 @@ class AdbClient:
         if serial:
             command.extend(["-s", serial])
         command.extend(arguments)
+        # Log the control command with the serial redacted (AGENTS.md: logs
+        # identify the failing layer, never the device or its traffic).
+        printable = " ".join("<device>" if part == serial else part for part in command[1:])
+        log.debug("adb %s", printable)
         try:
             result = subprocess.run(
                 command,
@@ -44,14 +51,31 @@ class AdbClient:
                 env={"PATH": "/usr/bin:/bin"},
             )
         except (OSError, subprocess.TimeoutExpired) as error:
+            log.warning("adb %s -> %s", printable, type(error).__name__)
             raise TeatherError("adb-unavailable", f"ADB command failed: {type(error).__name__}") from error
         if check and result.returncode:
             detail = (result.stderr or result.stdout or "ADB command failed").strip()
             if serial:
                 detail = detail.replace(serial, "<device>")
             detail = re.sub(r"[A-Za-z0-9._:-]{16,}", "<redacted>", detail)
+            log.warning("adb %s -> exit %s: %s", printable, result.returncode, detail[:160])
             raise TeatherError("adb-failed", detail[:240])
         return result.stdout
+
+    def list_forwards(self, serial: str) -> list[int]:
+        """Local TCP ports currently forwarded for ``serial`` (``adb forward
+        --list``). Used by the health check to notice a forward that died with
+        an ADB-server restart or a USB blip."""
+
+        ports: list[int] = []
+        for line in self._run(["forward", "--list"]).splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[0] == serial and fields[1].startswith("tcp:"):
+                try:
+                    ports.append(int(fields[1].split(":", 1)[1]))
+                except ValueError:
+                    continue
+        return ports
 
     def devices(self) -> list[AdbDevice]:
         output = self._run(["devices", "-l"])
@@ -115,10 +139,16 @@ class AdbClient:
         raise TeatherError("android-timeout", "Android relay did not apply the new upstream")
 
     def stop_relay(self, serial: str) -> None:
-        self._run(
-            ["shell", "am", "start-foreground-service", "-n", SERVICE_COMPONENT, "-a", ACTION_STOP],
-            serial=serial,
-        )
+        try:
+            self._run(
+                ["shell", "am", "start-foreground-service", "-n", SERVICE_COMPONENT, "-a", ACTION_STOP],
+                serial=serial,
+            )
+        except TeatherError:
+            # Delivering STOP can fail when the service is already gone (nothing
+            # is listening for the intent). That is the desired end state, so
+            # fall through and let the status poll below confirm it.
+            pass
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             if not self.status(serial).running:
@@ -137,4 +167,13 @@ class AdbClient:
         return port
 
     def remove_forward(self, serial: str, port: int) -> None:
-        self._run(["forward", "--remove", f"tcp:{port}"], serial=serial)
+        try:
+            self._run(["forward", "--remove", f"tcp:{port}"], serial=serial)
+        except TeatherError as error:
+            # An already-absent forward (or a device that has since vanished) is
+            # the outcome we want: adb forwards are loopback-only and die with
+            # the adb server or the device, so this is not host-network state to
+            # keep chasing.
+            if "not found" in str(error).lower():
+                return
+            raise

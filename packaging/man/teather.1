@@ -41,8 +41,12 @@ Set safe auto-connect for an approved phone. Auto-connect never starts a stopped
 .B failover on|off
 Arm or hold dormant automatic failover. When on (the default), Teather installs a
 worse-metric backup default route and an additive DNS entry so traffic moves to
-the phone automatically once Wi-Fi or Ethernet is lost. When off, Teather still
-connects but stays dormant until this is set back on.
+the phone automatically once Wi-Fi or Ethernet is lost \(em and, if the host has
+no other internet at all, Teather comes up as the only path. When off, Teather
+still connects when another link is present but stays dormant until this is set
+back on; with no other internet,
+.B connect
+refuses and asks you to arm failover first.
 .TP
 .B upstream auto|cellular|wifi|ethernet
 Choose which of the phone's transports the relay binds outbound sockets to
@@ -53,7 +57,13 @@ binding; the teather0 interface, tunnel, routes, and DNS are untouched.
 Run read-only diagnostics.
 .TP
 .B recover [--json]
-Clean only journaled resources, then report diagnostics.
+Clean only journaled resources, then report diagnostics. Rarely needed:
+.B teatherd
+now reconciles leftover state on its own after an abnormal disconnect (an
+unplugged phone, a dropped USB/ADB bridge, a tunnel or teather0 that went away)
+and returns to a state that reconnects automatically. Only an unverifiable
+teather0 still needs a hand \(em restart the service with
+.BR "systemctl --user restart teather.service" .
 .SH LIMITATIONS
 Teather carries IPv4 TCP, virtual DNS over UDP and TCP, and general UDP (the
 latter over tun2proxy's udpgw stream, terminated by the phone). IPv6 is
@@ -66,6 +76,13 @@ additive: the physical link's resolver stays first while it is present.
 .I ~/.config/teather/config.json
 Mode-0600 preferences, the auto-failover setting, and locally salted device
 identifiers.
+.TP
+.I ~/.local/state/teather/teatherd.log
+Rotating daemon debug log (mode 0600). Records the failing layer and every
+control action \(em adb commands, D-Bus calls, connect/disconnect/reconcile
+steps \(em but never browsing destinations or resolver contents. Set
+.B TEATHER_DEBUG=1
+in the service environment for verbose output.
 .TP
 .I /usr/share/doc/teather/RECOVERY.md.gz
 Offline recovery instructions.

@@ -1,6 +1,6 @@
 # Project status
 
-- **Snapshot date:** 2026-08-30
+- **Snapshot date:** 2026-08-31
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
   is validated end-to-end and running live on the developer host. The owner has
@@ -12,16 +12,33 @@
   **deprioritised** (it does not serve that aim). Shadow PC (cloud gaming, a UDP
   workload) launched and was usable through Teather on `0.1.0-8`. Remaining: the
   E-011 TTL/JA3 half (needs a reflector) and the robustness pass.
+- **Uncommitted (in the tree, both deployed + live-tested, NOT committed):**
+  - **D-025** (`0.1.0-9`) — `teather connect` comes up as the *only* internet
+    path when the host has no other link (armed). Live-tested 2026-08-30.
+  - **D-026** (`0.1.0-11`) — self-healing after an abnormal disconnect,
+    persistent `teatherd.log`, self-clearing toast notifications,
+    single-instance GTK app, standalone connectivity re-check + sole-path
+    tracking. Folds in punch-list items 4/5/6. **Built, installed on the dev
+    host, and fault-injection tested 2026-08-31** (daemon restart, tun2proxy
+    kill, `adb kill-server`, phone unplug/replug, Wi-Fi off/on, GUI
+    open/close — all self-heal and auto-reconnect in a few seconds; phone
+    reboot deferred). 72 passing host unit tests.
+  - `0.1.0-10` (idempotent ADB cleanup, punch item 4) was an intermediate step
+    now subsumed by D-026's teardown rework.
+  **Not committed — ready to commit.**
 - **Runnable build:** Android `0.1.0-p1.2` (`versionCode 4`); Debian package
-  `0.1.0-8` (adds the udpgw tuning; `0.1.0-7` raised the 64->256 flow ceiling). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
+  `0.1.0-11` (D-026 self-healing + logging; `0.1.0-9` D-025 standalone connect;
+  `0.1.0-8` added the udpgw tuning;
+  `0.1.0-7` raised the 64->256 flow ceiling). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
   failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|
   ethernet`). `0.1.0-6` / `0.1.0-p1.1` makes the upstream switch zero-gap
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 48 host
-  unit tests + Android unit tests (incl. 10 new udpgw tests) + D-Bus smoke pass.
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 72 host
+  unit tests (4 for D-025, 20 for D-026) + Android unit tests (incl. 10 udpgw
+  tests) + D-Bus smoke pass.
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
   (see the work-log entry): install, connect, TCP, full Wi-Fi-loss failover,
   UDP via udpgw (STUN round-trip), zero-gap `teather upstream` switch, and a
@@ -173,6 +190,51 @@ Small items, not blocking, to fold into the next relevant change:
    heartbeat keeps re-arming it. Sketched 2026-08-29, not built. Only worth it
    if the owner wants zero-babysit confidence beyond `teather disconnect` /
    `docs/P1_RECOVERY.md`.
+4. ~~**Idempotent ADB cleanup + robust journal recovery.**~~ Done 2026-08-31,
+   first as `0.1.0-10` then reworked into D-026's teardown model (`0.1.0-11`):
+   the ownership journal now names *host* resources to release, and is cleared
+   as soon as the host side (tun2proxy + `teather0`) is verified clean — a
+   phone-side ADB step that cannot be confirmed is logged and hinted but never
+   keeps the journal, so `teather connect` is never wedged by one. An
+   unverifiable `teather0` still raises `ambiguous-interface` and asks for a
+   restart. Original report below.
+   Observed 2026-08-30 after deploying `0.1.0-9`: restarting
+   `teatherd` while a connection was live left the ownership journal with
+   `recovery-pending`, and `teather connect` then refused until the journal file
+   was removed by hand. Cause: `adb forward --remove` of an already-gone forward
+   (and `stop_relay` of an already-stopped relay) returned non-zero, which
+   `disconnect()` and the startup `recover()` both treated as "cleanup
+   unverified", so the journal was kept. Fix, as landed: `AdbClient.
+   remove_forward` swallows a `... not found` failure (covers both a missing
+   listener and a vanished device) and `AdbClient.stop_relay` catches a failed
+   STOP delivery and lets the status poll confirm the relay is down; the
+   loopback-only forward and a phone-side relay are not host state.
+   `Manager.recover()` now runs the ADB cleanup best-effort inside a
+   `try/except TeatherError` and always clears the journal after `nm.recover()`
+   has verified the NetworkManager/tunnel teardown — `nm.recover()` still raises
+   (journal retained) for a genuinely ambiguous `teather0`. Takes effect on the
+   next package rebuild + `systemctl --user restart teather.service`; the stale
+   journal from the original report was cleared by hand in the meantime.
+5. ~~**Connectivity re-check after a standalone activation.**~~ Implemented
+   2026-08-31 (`0.1.0-11`, D-026), **not yet live-verified**. After a
+   standalone armed activation the manager calls
+   `NetworkManagerConnection.recheck_connectivity()`, which invokes
+   `CheckConnectivity` on the NM D-Bus object (best effort, never fails a
+   connect). Still to confirm in a real standalone session with
+   `nmcli -f CONNECTIVITY,STATE g`; if NM's default probe URL can't be reached
+   through the tunnel the icon may still lag until a real request goes out.
+6. ~~**Automatic reconciliation loop.**~~ Implemented 2026-08-31 (`0.1.0-11`,
+   D-026), **not yet live-verified**. `Manager.reconcile()` runs on the daemon
+   poll: when nothing is connected but there is leftover state (a
+   `recovery-pending` error, an ownership journal, or a `teather0` interface) it
+   releases Teather-owned resources and returns to a clean `disconnected` state
+   so auto-connect can take over. `health_check()` also detects an unplugged
+   phone, a dropped ADB forward, and a stopped relay (not just a dead tunnel /
+   vanished `teather0`). The host side (routes/DNS/`teather0`) stays strict — an
+   unverifiable `teather0` still surfaces and asks for a restart, and nothing
+   re-mutates routes/DNS on a schedule. Only phone-side cleanup is treated as
+   non-blocking. The opt-in dead-man's-switch (item 3) is still separate and
+   unbuilt.
 
 ## P1 authorization and live-test boundary
 
@@ -208,6 +270,149 @@ A short dated entry per meaningful session: what changed, how it was verified,
 and the next action. When a milestone finishes, make sure the roadmap, this
 file, `AGENTS.md`'s "Current priority", the README status line, and the next
 handoff agree — a milestone isn't done until they do.
+
+### 2026-08-31 — Self-healing, persistent logging, notifications (D-026, `0.1.0-11`)
+
+- **Trigger:** the owner, on a live tether, hit "no internet" after rebuilding
+  `0.1.0-10` and restarting `teatherd`. Diagnosis: the standalone connection
+  came up fine, then the ADB forward on :44095 died in a USB/adb blip ~7 min
+  later; `health_check()` only tested "tun2proxy alive" and "teather0 present",
+  so the daemon kept reporting `connected` over a dead data path with no
+  fallback. There was also **no daemon log** to look back at (`teatherd` used
+  the `logging` module nowhere; `daemon.py` and `recover()` swallowed every
+  exception). Recovered live by killing 7 stale GTK instances and
+  `teather disconnect && teather connect` (verified with a SOCKS-proxied curl).
+- **Owner asks:** (1) always keep a comprehensive debug log; (2) any *abnormal*
+  disconnect (not a click / command) must self-detect, self-clean, and let the
+  next connect just work — "idiot-proof"; (3) closing the GTK window must not
+  look like it kills the connection; (4) a visible status surface even when
+  connecting with no Wi-Fi (no tray icon in standalone mode).
+- **Change (D-026, all in `desktop/linux`, uncommitted):**
+  - `logging_setup.py` — rotating `~/.local/state/teather/teatherd.log` (0600)
+    via `StateDirectory=teather`, plus stderr→journal. `TEATHER_DEBUG=1` → DEBUG.
+    `adb`/D-Bus/NM/connect/reconcile/health steps logged; destinations and
+    resolver contents are not. Falls back to stderr-only if the dir isn't
+    writable; never crashes.
+  - `manager.py` — `_release_owned()` shared teardown: **host side strict**
+    (journal kept, `clean=False`, until tun2proxy + `teather0` verified
+    released; an unverifiable `teather0` raises `ambiguous-interface`),
+    **phone side lenient** (a forward that won't remove / a relay that won't
+    confirm stopped is logged + hinted, journal still cleared). `health_check()`
+    runs cheap checks every ~3 s (unplugged phone via `adb devices`, dropped
+    forward via `adb forward --list`, dead tunnel, vanished `teather0` — all
+    local to the adb server / D-Bus). The relay `dumpsys` probe is a slow
+    (~2 min) backstop, suppressed while a GUI is polling status. An abnormal
+    drop lands in a clean `disconnected` state (not `error`) with a new
+    `last_drop` field, so the existing 3-s auto-connect brings it back when the
+    phone returns — but auto-connect stops after 3 straight failures and rests
+    until a replug / manual Connect / 2-min pause. `reconcile()` runs on the
+    poll loop and clears a `recovery-pending` / stale-journal / orphan-`teather0`
+    state without a manual `teather recover`. Startup runs the same check and
+    logs its result. New status fields `recovery_hint`, `last_drop`.
+  - `adb.py` — `list_forwards()`; every `_run` argv logged with the serial
+    redacted.
+  - `networkmanager.py` — `recheck_connectivity()` (`CheckConnectivity` on NM),
+    called after a standalone armed activation (punch item 5).
+  - `dbus_service.py` — desktop notifications on connect / drop / self-heal /
+    sole-path change / needs-attention. Critical urgency + `replaces_id` (GNOME
+    won't banner normal urgency), and the daemon closes its own banner after
+    ~8 s so all but "needs attention" behave as toasts.
+  - `gui.py` — single-instance `Gtk.Application` (re-launch re-presents, kills
+    the multi-process problem); window close never disconnects; shows
+    `recovery_hint` and a "closing this window doesn't disconnect" note.
+  - `packaging` — `0.1.0-11`; `teather.service` gains `StateDirectory=teather`;
+    man page notes the log + self-heal.
+- **Verified:** `python3 -m pytest desktop/linux/tests/test_core.py` — **72
+  passed** (20 new/rewritten for D-026; 6 old tests that encoded the
+  conservative "keep the journal, surface recovery-pending" contract were
+  rewritten to the new self-heal contract, each still asserting host
+  resolver/route state is fully restored).
+- **Live-tested 2026-08-31 (dev host, `0.1.0-11`):**
+  - Built, `dpkg -i` over `0.1.0-10`, `systemctl --user restart`. Clean start;
+    `~/.local/state/teather/teatherd.log` created (0600); startup session check
+    cleared the orphaned teather0 + dead tun2proxy left by the `0.1.0-10`
+    session. `teather connect` came up as an armed backup with a **verified**
+    data path (SOCKS-proxied curl through the phone → 200).
+  - **Bug found + fixed:** killing tun2proxy self-healed to `disconnected` but
+    did not auto-reconnect — the teardown was stopping the relay Teather
+    started, and auto-connect will not start a stopped relay. Fix: only a user
+    `disconnect` stops the relay; a `systemctl restart` now also uses a
+    host-only `Manager.shutdown()` that leaves the relay up. +3 regression
+    tests.
+  - **Fault-injection tests, all pass on the fixed build (`0.1.0-11`):**
+    `systemctl restart` → auto-reconnect ~5 s; tun2proxy `kill -9` →
+    `tunnel-exited` in 2 s, reconnect ~4 s; `adb kill-server` (the real
+    forward-killer) → `relay-unreachable` in 2 s, reconnect ~5 s; phone
+    unplug + replug → `phone-disconnected`, reconnect on replug. Data path
+    verified each time (SOCKS-proxied curl through the phone). The relay ran
+    the whole session (~8 reconnects) without a restart — cumulative byte/client
+    counters confirm it.
+  - GUI: connection holds through window open/close; a second `teather-gtk`
+    re-presents the one window (no second process); clean exit, no orphans.
+  - Not the cause of the forward deaths: the phone is USB-only (wireless
+    debugging off), USB autosuspend is disabled for it. The USB transport id
+    was seen changing on its own (genuine re-enumeration) — that is the
+    forward-killer, and it is now a ~5 s self-heal.
+  - Standalone (Wi-Fi off while connected): internet kept working, the GNOME
+    top-bar network icon **appeared** (the `CheckConnectivity` nudge — punch
+    item 5 — works), and `health_check` now tracks Wi-Fi/Ethernet coming and
+    going while connected: it keeps the `standalone` flag accurate and toasts
+    "Teather is now your only connection" / "Wi-Fi/Ethernet is back". Confirmed
+    on a real Wi-Fi toggle — toast fired both ways, icon held, internet held.
+  - Notifications: GNOME only banners *critical* urgency and never self-expires
+    it, so all notifications go out critical + `replaces_id`, and the daemon
+    closes its own banner after ~8 s (toast) for everything but "needs
+    attention". Confirmed working on the dev host.
+  - **Deferred:** phone reboot (owner will bench it for later).
+- **Next action:** commit D-025 + D-026 (owner's call); phone-reboot soak when
+  convenient; then the E-011 TTL/JA3 half.
+
+### 2026-08-30 — Connect with no other internet (D-025); standalone/fallback
+
+- **Symptom (owner, on a live tether):** on a host with no Wi-Fi and no
+  Ethernet, `teather connect` refused. The gate was `preflight` — `evaluate_routes`
+  returned `no-default` ("No existing IPv4 default route") and, before that,
+  `resolver-unavailable` when `resolv.conf` had no usable nameserver. Workaround
+  was an ordinary phone hotspot to bootstrap, then drop it. The primary use case
+  was blocked by a leftover D-014/D-015 precondition.
+- **Change:**
+  - `packaging` — bumped to `0.1.0-9` (changelog + `control` + `build-deb.sh`).
+  - `preflight.py` — no physical default is now a `standalone` result
+    (`safe=True`), not a refusal. Every ambiguous/unsafe state (VPN/split
+    default, overlapping route, nonstandard policy rule, an existing default
+    that would outrank metric 32000) is still rejected.
+  - `manager.py` `preflight(armed)` — in standalone mode skips the
+    pre-existing-resolver requirement when `armed` (virtual DNS + phone-side
+    sentinel resolve); refuses with `failover-disabled` when **not** armed
+    (a dormant no-default connection does nothing). Threads `armed` in from
+    `connect()`. Adds `standalone` to `get_status`; connect message reflects it.
+  - `networkmanager.py` — `_verify_additive` (the sole-resolver guard) runs
+    only when `preflight` recorded a baseline nameserver, i.e. a physical link
+    was up. `_nameservers` tolerates a missing `resolv.conf`.
+  - `gui.py` shows "Failover: sole path" when standalone + armed.
+  - man page + `docs/DECISIONS.md` D-025 (+ D-014/D-015 notes).
+- Fallback is unchanged and automatic: same armed connection, metric 32000 +
+  positive DNS priority, so Wi-Fi/Ethernet still takes over if it appears.
+- **Verified:** `python3 -m pytest tests/test_core.py` — 52 passed (4 new:
+  standalone route preflight, `failover-disabled` when not armed, standalone
+  activation with a sentinel-only resolver, standalone connect comes up as the
+  only path; 1 updated: `make_manager` preflight stub signature).
+- **Deployed + live-tested 2026-08-30:** built `0.1.0-9`, `dpkg -i` over
+  `0.1.0-8`, `systemctl --user restart teather.service`. The owner then launched
+  with Wi-Fi off and **standalone connect worked** — traffic and DNS over
+  cellular with no other link. Fallback (bring Wi-Fi/hotspot back) also
+  confirmed working earlier in the armed-backup role.
+- **Two issues seen, both filed to the punch list (items 4–5), not fixed:**
+  1. The `systemctl restart` while the tether was live left the ownership
+     journal `recovery-pending`; `teather connect` refused until
+     `/run/user/$UID/teather/ownership.json` was removed by hand. Non-idempotent
+     ADB cleanup is the cause — see punch-list item 4. Any restart during a
+     connection reproduces it.
+  2. No GNOME tray network icon in standalone mode (NM parks at
+     `CONNECTED_SITE`/`LIMITED` until its connectivity probe passes through the
+     tunnel). Cosmetic — punch-list item 5.
+- **Next action:** the E-011 TTL/JA3 half (needs a reflector) and the robustness
+  pass, which should now start with punch-list item 4.
 
 ### 2026-08-30 — UDP gateway tuning for cloud gaming (`0.1.0-8`); Shadow PC works
 

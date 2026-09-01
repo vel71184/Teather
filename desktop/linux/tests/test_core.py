@@ -30,7 +30,8 @@ from teather.dbus_service import INTROSPECTION_XML
 from teather.dns_probe import _answer_address, _query
 from teather.errors import TeatherError
 from teather.journal import Ownership, OwnershipJournal
-from teather.manager import Manager
+from teather.logging_setup import configure_logging, log_path
+from teather.manager import _AUTOCONNECT_MAX_TRIES, _RELAY_PROBE_EVERY, Manager
 from teather.networkmanager import NetworkManagerConnection
 from teather.preflight import evaluate_routes, parse_nameservers
 
@@ -68,13 +69,20 @@ class FakeAdb:
         self.removed = []
         self.forwards = []
         self.upstreams = []
+        self.present = True          # False simulates the phone being unplugged
+        self.forward_ports = []       # local ports currently "forwarded"
 
     def devices(self):
+        if not self.present:
+            return []
         result = [AdbDevice(SERIAL_ONE, "Phone one")]
         if self.multiple:
             result.append(AdbDevice(SERIAL_TWO, "Phone two"))
             self.states.setdefault(SERIAL_TWO, compatible_status())
         return result
+
+    def list_forwards(self, _serial):
+        return list(self.forward_ports)
 
     def status(self, serial):
         return self.states[serial]
@@ -103,12 +111,14 @@ class FakeAdb:
 
     def add_forward(self, serial):
         self.forwards.append(serial)
+        self.forward_ports = [45678]
         return 45678
 
     def remove_forward(self, serial, port):
         self.removed.append((serial, port))
         if self.fail_remove:
             raise TeatherError("adb-failed", "simulated forward cleanup failure")
+        self.forward_ports = [p for p in self.forward_ports if p != port]
 
 
 class FakeProcess:
@@ -153,9 +163,13 @@ class FakeNmConnection:
         self.armed = None
         self.active = False
         self.recovered = 0
+        self.connectivity_rechecks = 0
 
     def preflight(self):
         return None
+
+    def recheck_connectivity(self):
+        self.connectivity_rechecks += 1
 
     def check_supported(self):
         return "1.42.4"
@@ -246,6 +260,10 @@ class FakeNmTransport:
     def connection_settings(self, settings_path):
         return self._connections.get(settings_path, {"connection": {}})
 
+    def check_connectivity(self):
+        self.connectivity_checks = getattr(self, "connectivity_checks", 0) + 1
+        return 4  # NM_CONNECTIVITY_FULL
+
     def deactivate(self, active_path):
         self.deactivated.append(active_path)
         if not self.sticky:
@@ -314,6 +332,31 @@ class StorageTests(unittest.TestCase):
             self.assertNotIn("SERIAL", path.read_text())
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
+    def test_configure_logging_is_idempotent_and_writes_a_private_log(self):
+        import logging as _logging
+        import teather.logging_setup as ls
+        root = _logging.getLogger("teather")
+        saved = (list(root.handlers), root.level, root.propagate, ls._configured)
+
+        def restore():
+            root.handlers[:] = saved[0]
+            root.setLevel(saved[1])
+            root.propagate = saved[2]
+            ls._configured = saved[3]
+
+        self.addCleanup(restore)
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_STATE_HOME": directory, "STATE_DIRECTORY": ""}, clear=False):
+                root.handlers[:] = []
+                ls._configured = False
+                first = configure_logging()
+                second = configure_logging()  # no duplicate handlers, returns None
+                self.assertEqual(first, log_path())
+                self.assertIsNone(second)
+                self.assertTrue(first.exists())
+                self.assertEqual(stat.S_IMODE(first.stat().st_mode), 0o600)
+                self.assertEqual(len(root.handlers), 2)
+
     def test_journal_can_track_an_android_start_without_a_forward(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = OwnershipJournal(Path(directory) / "runtime" / "ownership.json")
@@ -353,6 +396,43 @@ class StatusAndPreflightTests(unittest.TestCase):
                 AdbClient(executable="adb")._run(["shell", "false"], serial=SERIAL_ONE)
         self.assertNotIn(SERIAL_ONE, str(caught.exception))
 
+    def test_remove_forward_tolerates_an_already_gone_listener(self):
+        result = subprocess.CompletedProcess(
+            ["adb"], 1, stdout="", stderr="error: listener 'tcp:41234' not found",
+        )
+        with patch("teather.adb.subprocess.run", return_value=result):
+            AdbClient(executable="adb").remove_forward(SERIAL_ONE, 41234)
+
+    def test_remove_forward_still_raises_on_a_real_failure(self):
+        result = subprocess.CompletedProcess(
+            ["adb"], 1, stdout="", stderr="error: adb server is out of date",
+        )
+        with patch("teather.adb.subprocess.run", return_value=result):
+            with self.assertRaises(TeatherError):
+                AdbClient(executable="adb").remove_forward(SERIAL_ONE, 41234)
+
+    def test_list_forwards_parses_only_this_devices_tcp_forwards(self):
+        listing = (
+            f"{SERIAL_ONE} tcp:39251 tcp:1080\n"
+            f"OTHER-DEVICE tcp:40000 tcp:1080\n"
+            f"{SERIAL_ONE} localabstract:x localabstract:y\n"
+        )
+        result = subprocess.CompletedProcess(["adb"], 0, stdout=listing, stderr="")
+        with patch("teather.adb.subprocess.run", return_value=result):
+            ports = AdbClient(executable="adb").list_forwards(SERIAL_ONE)
+        self.assertEqual(ports, [39251])
+
+    def test_stop_relay_confirms_a_relay_that_is_already_stopped(self):
+        stop = subprocess.CompletedProcess(["adb"], 1, stdout="", stderr="Error: not running")
+        dumpsys = subprocess.CompletedProcess(
+            ["adb"], 0,
+            stdout="teather.status.version=1\nlifecycle=idle\nbound_port=0\n"
+            "configured_port=1080\nconfigured_upstream=cellular\n",
+            stderr="",
+        )
+        with patch("teather.adb.subprocess.run", side_effect=[stop, dumpsys]):
+            AdbClient(executable="adb").stop_relay(SERIAL_ONE)
+
     def test_status_parser_ignores_surrounding_dumpsys_text(self):
         status = parse_android_status(
             "header\nteather.status.version=1\nlifecycle=running\nbound_port=1080\n"
@@ -371,6 +451,31 @@ class StatusAndPreflightTests(unittest.TestCase):
     def test_route_preflight_accepts_preferred_physical_default(self):
         routes = json.dumps([{"dst": "default", "dev": "wlan0", "metric": 600}])
         self.assertTrue(evaluate_routes(routes).safe)
+
+    def test_route_preflight_allows_a_host_with_no_default_route(self):
+        # No other internet: Teather becomes the primary path instead of a backup.
+        result = evaluate_routes("[]")
+        self.assertTrue(result.safe)
+        self.assertEqual(result.category, "standalone")
+        # An ambiguous default is still refused even with nothing else present.
+        self.assertEqual(
+            evaluate_routes(json.dumps([{"dst": "default", "dev": "tun0", "metric": 50}])).category,
+            "vpn-active",
+        )
+
+    def test_manager_preflight_standalone_requires_armed_failover(self):
+        with tempfile.TemporaryDirectory() as directory:
+            resolver = Path(directory) / "resolv.conf"  # never created: no other internet
+            manager = Manager(
+                config=ConfigStore(Path(directory) / "config.json"),
+                resolver_path=resolver,
+                nm=FakeNmConnection(resolver),
+            )
+            with patch.object(manager, "_run_json", return_value="[]"):
+                with self.assertRaises(TeatherError) as caught:
+                    manager.preflight(armed=False)
+                self.assertEqual(caught.exception.category, "failover-disabled")
+                manager.preflight(armed=True)  # armed: no resolver needed, succeeds
 
     def test_route_preflight_refuses_collisions_vpn_and_split_default(self):
         self.assertEqual(evaluate_routes("[]", '[{"ifname":"teather0"}]').category, "interface-collision")
@@ -474,6 +579,20 @@ class NetworkManagerConnectionTests(unittest.TestCase):
                 nm.activate(armed=True)
             self.assertEqual(caught.exception.category, "dns-exclusive")
 
+    def test_standalone_activation_accepts_a_sentinel_only_resolver(self):
+        # No physical link at preflight (empty resolv.conf) -> no baseline
+        # nameserver -> the sole-resolver check is correctly skipped, so arming
+        # Teather as the only path succeeds instead of failing dns-exclusive.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text("")
+            nm = make_nm(resolver, root / "teather0", exclusive=True)
+            nm.preflight()
+            nm.activate(armed=True)
+            self.assertEqual(parse_nameservers(resolver.read_text()), [DNS_SENTINEL])
+            self.assertTrue(nm.connection_is_active())
+
     def test_old_networkmanager_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -522,6 +641,15 @@ class NetworkManagerConnectionTests(unittest.TestCase):
             nm.recover()
             self.assertNotIn(DNS_SENTINEL, resolver.read_text())
             self.assertTrue(nm.transport.deleted)
+
+    def test_recheck_connectivity_calls_networkmanager_and_never_raises(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text("")
+            nm = make_nm(resolver, root / "teather0")
+            nm.recheck_connectivity()
+            self.assertEqual(nm.transport.connectivity_checks, 1)
 
     def test_recover_refuses_a_foreign_teather0(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -585,7 +713,7 @@ class ManagerTests(unittest.TestCase):
             interface_snapshot=lambda armed: "stable-interface-state",
             snapshot_timeout=0.2,
         )
-        manager.preflight = lambda: None
+        manager.preflight = lambda *_args, **_kwargs: None
         return manager
 
     def _approve_one(self, manager):
@@ -618,6 +746,26 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual(adb.started, [])
             self.assertEqual(adb.stopped, [])
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
+
+    def test_standalone_connect_comes_up_as_the_only_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            resolver = Path(directory) / "resolv.conf"  # no other internet: never created
+            manager = Manager(
+                config=ConfigStore(Path(directory) / "config" / "config.json"),
+                journal=OwnershipJournal(Path(directory) / "runtime" / "journal.json"),
+                adb=adb, resolver_path=resolver, process_factory=FakeProcess,
+                nm=FakeNmConnection(resolver),
+                dns_probe=lambda: {"udp": "198.18.0.1", "tcp": "198.18.0.1"},
+                interface_snapshot=lambda armed: "stable-interface-state",
+                snapshot_timeout=0.2,
+            )
+            device_id = self._approve_one(manager)
+            with patch.object(manager, "_run_json", return_value="[]"):
+                status = manager.connect(device_id)
+            self.assertEqual(status["state"], "connected")
+            self.assertTrue(status["failover_armed"])
+            self.assertIn("only internet path", status["message"])
 
     def test_dormant_connect_when_failover_disabled(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -704,17 +852,24 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual(manager.get_status()["state"], "disconnected")
             self.assertEqual(adb.started, [])
 
-    def test_failed_disconnect_retains_ownership_journal(self):
+    def test_disconnect_survives_a_flaky_phone_side_cleanup(self):
+        # A forward that won't remove is loopback-only and not host state: the
+        # disconnect still lands in a clean, reconnectable state, with the
+        # phone-side uncertainty surfaced as a hint rather than a wedge.
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb(fail_remove=True)
             manager = self.make_manager(directory, adb)
             device_id = self._approve_one(manager)
             manager.connect(device_id)
             result = manager.disconnect()
-            self.assertEqual(result["error_category"], "recovery-pending")
-            self.assertIsNotNone(manager.journal.load())
+            self.assertEqual(result["state"], "disconnected")
+            self.assertEqual(result["error_category"], "none")
+            self.assertIsNone(manager.journal.load())
+            self.assertTrue(result["recovery_hint"])
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
+            self.assertEqual(manager.connect(device_id)["state"], "connected")
 
-    def test_failed_connect_cleanup_retains_ownership_journal(self):
+    def test_failed_connect_host_cleanup_is_reported_but_phone_side_is_not(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb(fail_remove=True)
             manager = self.make_manager(directory, adb)
@@ -722,29 +877,39 @@ class ManagerTests(unittest.TestCase):
             device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
-            self.assertEqual(caught.exception.category, "recovery-pending")
-            self.assertIsNotNone(manager.journal.load())
+            # The tunnel failure surfaces as itself; the un-removable forward
+            # does not upgrade it to a wedged recovery-pending, and the journal
+            # is cleared so the next connect is free.
+            self.assertEqual(caught.exception.category, "tunnel-start")
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
 
-    def test_uncertain_android_start_is_journaled_without_a_forward(self):
+    def test_uncertain_android_start_does_not_wedge_the_next_connect(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb({SERIAL_ONE: AndroidStatus()}, fail_start=True, fail_stop=True)
             manager = self.make_manager(directory, adb)
             device_id = self._approve_one(manager)
             with self.assertRaises(TeatherError) as caught:
                 manager.connect(device_id)
-            self.assertEqual(caught.exception.category, "recovery-pending")
-            self.assertEqual(manager.journal.load(), Ownership(device_id, None, True))
+            self.assertEqual(caught.exception.category, "adb-failed")
+            # The relay may or may not have started on the phone, but that is
+            # phone state: the journal is cleared and a retry is unblocked. The
+            # relay is left alone (a failed connect is a self-heal path — a
+            # running relay gets adopted on the retry, not stopped).
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(adb.stopped, [])
 
-    def test_existing_journal_blocks_a_new_connection(self):
+    def test_a_leftover_journal_is_reconciled_then_the_connect_proceeds(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
             device_id = self._approve_one(manager)
             manager.journal.save(Ownership(device_id, 45678, False))
-            with self.assertRaises(TeatherError) as caught:
-                manager.connect(device_id)
-            self.assertEqual(caught.exception.category, "recovery-pending")
-            self.assertEqual(adb.forwards, [])
+            status = manager.connect(device_id)
+            self.assertEqual(status["state"], "connected")
+            # the stale forward was released before the fresh one was added
+            self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
+            self.assertEqual(adb.forwards, [SERIAL_ONE])
 
     def test_nm_activation_failure_restores_every_owned_resource(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -793,7 +958,7 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
             self.assertIsNone(manager.journal.load())
 
-    def test_tunnel_exit_error_survives_cleanup(self):
+    def test_abnormal_tunnel_exit_self_heals_to_a_reconnectable_state(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
@@ -801,9 +966,37 @@ class ManagerTests(unittest.TestCase):
             manager.connect(device_id)
             manager._tunnel.running = False
             manager.health_check()
-            self.assertEqual(manager.get_status()["error_category"], "tunnel-exited")
+            status = manager.get_status()
+            # No error state that blocks auto-connect; the drop reason is
+            # recorded, the host is restored, and the journal is clear.
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(status["last_drop"], "tunnel-exited")
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
 
-    def test_connection_loss_disconnects_and_restores(self):
+    def test_self_heal_leaves_a_teather_started_relay_up_for_auto_reconnect(self):
+        # Regression: a drop's teardown must NOT stop a relay Teather started —
+        # auto-connect will not restart a stopped relay, so doing so leaves the
+        # self-heal cleaned up but permanently disconnected (seen live on
+        # 0.1.0-11 before the fix).
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb({SERIAL_ONE: AndroidStatus()})  # relay stopped -> Teather starts it
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.set_auto_connect(device_id, True)
+            manager.connect(device_id)
+            self.assertEqual(adb.started, [SERIAL_ONE])
+
+            manager._tunnel.running = False
+            manager.health_check()
+            self.assertEqual(manager.get_status()["state"], "disconnected")
+            self.assertEqual(adb.stopped, [])  # relay left running
+
+            manager.maybe_auto_connect()
+            self.assertEqual(manager.get_status()["state"], "connected")
+            self.assertEqual(adb.started, [SERIAL_ONE])  # adopted, not restarted
+
+    def test_connection_loss_disconnects_restores_and_stays_reconnectable(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
@@ -811,10 +1004,12 @@ class ManagerTests(unittest.TestCase):
             manager.connect(device_id)
             manager.nm.active = False
             manager.health_check()
-            self.assertEqual(manager.get_status()["error_category"], "connection-lost")
+            status = manager.get_status()
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(status["last_drop"], "connection-lost")
             self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
 
-    def test_connection_loss_does_not_hide_cleanup_failure(self):
+    def test_connection_loss_surfaces_but_does_not_wedge_on_flaky_adb(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
@@ -823,18 +1018,247 @@ class ManagerTests(unittest.TestCase):
             manager.nm.active = False
             adb.fail_remove = True
             manager.health_check()
-            self.assertEqual(manager.get_status()["error_category"], "recovery-pending")
-            self.assertIsNotNone(manager.journal.load())
+            status = manager.get_status()
+            # host state restored, journal cleared, phone-side uncertainty noted
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
+            self.assertIsNone(manager.journal.load())
+            self.assertTrue(status["recovery_hint"])
 
-    def test_recovery_retains_journal_until_phone_returns(self):
+    def test_recovery_clears_the_journal_once_the_tunnel_is_torn_down(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.journal.save(Ownership(device_id, 45678, True))
+            result = manager.recover()
+            self.assertFalse(result["recovery_pending"])
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.nm.recovered, 1)
+            self.assertEqual(adb.removed, [(SERIAL_ONE, 45678)])
+            # recover() is a self-heal path: it releases the host side and the
+            # forward but leaves the relay running for the next connect to adopt.
+            self.assertEqual(adb.stopped, [])
+
+    def test_recovery_clears_the_journal_even_when_the_phone_is_absent(self):
         with tempfile.TemporaryDirectory() as directory:
             adb = FakeAdb()
             manager = self.make_manager(directory, adb)
             device_id = manager.config.device_id(SERIAL_ONE)
             manager.journal.save(Ownership(device_id, 45678, True))
             adb.devices = lambda: []
-            self.assertTrue(manager.recover()["recovery_pending"])
+            result = manager.recover()
+            self.assertFalse(result["recovery_pending"])
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.nm.recovered, 1)
+
+    def test_recovery_keeps_the_journal_when_the_tunnel_teardown_is_unverified(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.journal.save(Ownership(device_id, 45678, True))
+
+            def unsafe_recover():
+                raise TeatherError("ambiguous-interface", "teather0 is not ours")
+
+            manager.nm.recover = unsafe_recover
+            with self.assertRaises(TeatherError) as caught:
+                manager.recover()
+            self.assertEqual(caught.exception.category, "ambiguous-interface")
             self.assertIsNotNone(manager.journal.load())
+
+    def test_restart_during_a_live_connection_does_not_wedge_connect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb(fail_remove=True, fail_stop=True)
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.journal.save(Ownership(device_id, 45678, True))
+            manager.recover()
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.connect(device_id)["state"], "connected")
+
+
+class SelfHealTests(unittest.TestCase):
+    def make_manager(self, directory, adb):
+        return ManagerTests.make_manager(self, directory, adb)
+
+    def _connect_one(self, manager):
+        device_id = manager.discover()[0]["device_id"]
+        manager.approve_device(device_id)
+        manager.set_auto_connect(device_id, True)
+        manager.connect(device_id)
+        return device_id
+
+    def test_unplugging_the_phone_self_heals_and_auto_reconnects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+
+            adb.present = False  # the phone is unplugged
+            manager.health_check()
+            status = manager.get_status()
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(status["last_drop"], "phone-disconnected")
+            self.assertEqual(status["error_category"], "none")
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
+
+            adb.present = True  # plugged back in
+            manager.maybe_auto_connect()
+            self.assertEqual(manager.get_status()["state"], "connected")
+
+    def test_a_dropped_adb_forward_is_detected_as_a_lost_connection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+            adb.forward_ports = []  # the forward died with an adb-server blip
+            manager.health_check()
+            status = manager.get_status()
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(status["last_drop"], "relay-unreachable")
+
+    def test_reconcile_clears_a_stale_journal_on_the_poll_loop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = manager.discover()[0]["device_id"]
+            manager.approve_device(device_id)
+            manager.journal.save(Ownership(device_id, 45678, False))
+            manager._state = "error"
+            manager._error_category = "recovery-pending"
+
+            manager.reconcile()
+
+            self.assertEqual(manager.get_status()["state"], "disconnected")
+            self.assertIsNone(manager.journal.load())
+            self.assertEqual(manager.nm.recovered, 1)
+
+    def test_auto_connect_backs_off_after_repeated_failures_then_a_replug_resumes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = manager.discover()[0]["device_id"]
+            manager.approve_device(device_id)
+            manager.set_auto_connect(device_id, True)
+
+            def boom(_id=""):
+                raise TeatherError("networkmanager-activation", "simulated wedged NM")
+
+            with patch.object(manager, "connect", side_effect=boom):
+                for _ in range(_AUTOCONNECT_MAX_TRIES + 3):
+                    manager.maybe_auto_connect()
+            # capped, not looping forever
+            self.assertEqual(manager._autoconnect_tries, 0)
+            self.assertGreater(manager._autoconnect_paused_until, 0.0)
+            self.assertIn("Paused", manager.get_status()["message"])
+
+            # a replug (eligible set goes empty then non-empty) lifts the pause
+            adb.present = False
+            manager.maybe_auto_connect()
+            adb.present = True
+            manager.maybe_auto_connect()
+            self.assertEqual(manager._autoconnect_paused_until, 0.0)
+            self.assertEqual(manager.get_status()["state"], "connected")
+
+    def test_shutdown_releases_the_host_but_leaves_the_relay_for_next_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb({SERIAL_ONE: AndroidStatus()})  # Teather starts the relay
+            manager = self.make_manager(directory, adb)
+            device_id = self._connect_one(manager)
+            self.assertEqual(adb.started, [SERIAL_ONE])
+
+            manager.shutdown()
+            self.assertEqual(adb.stopped, [])  # relay left running
+            self.assertEqual(manager.resolver_path.read_text(), PHYSICAL_RESOLVER)
+            self.assertIsNone(manager.journal.load())
+            self.assertIsNone(manager._tunnel)
+
+            # next start adopts the still-running relay
+            manager.connect(device_id)
+            self.assertEqual(adb.started, [SERIAL_ONE])  # not started again
+            self.assertEqual(manager.get_status()["state"], "connected")
+
+    def test_explicit_disconnect_still_stops_a_relay_teather_started(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb({SERIAL_ONE: AndroidStatus()})
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+            manager.disconnect()
+            self.assertEqual(adb.stopped, [SERIAL_ONE])
+
+    def test_relay_probe_is_skipped_while_a_recent_status_is_known(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+            adb.states[adb.devices()[0].serial] = AndroidStatus()  # relay now stopped
+            manager._health_tick = _RELAY_PROBE_EVERY - 1
+            manager._relay_ok_at = manager._relay_ok_at or 1.0
+            import teather.manager as m
+            with patch.object(m.time, "monotonic", return_value=manager._relay_ok_at + 10):
+                manager.health_check()  # within the "recently confirmed" window -> no probe
+            self.assertEqual(manager.get_status()["state"], "connected")
+
+    def test_relay_probe_detects_a_stopped_relay_as_a_backstop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+            adb.states[adb.devices()[0].serial] = AndroidStatus()  # relay stopped
+            manager._health_tick = _RELAY_PROBE_EVERY - 1
+            import teather.manager as m
+            with patch.object(m.time, "monotonic", return_value=manager._relay_ok_at + 10_000):
+                manager.health_check()
+            status = manager.get_status()
+            self.assertEqual(status["state"], "disconnected")
+            self.assertEqual(status["last_drop"], "relay-stopped")
+
+    def test_sole_path_transition_is_tracked_and_announced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            self._connect_one(manager)
+            self.assertFalse(manager.get_status()["standalone"])
+
+            with_wifi = json.dumps([{"dst": "default", "dev": "wlan0", "metric": 600}])
+            no_wifi = json.dumps([{"dst": "default", "dev": "teather0", "metric": 32000}])
+
+            with patch.object(manager, "_run_json", return_value=with_wifi):
+                manager.health_check()
+            self.assertFalse(manager.get_status()["standalone"])  # no change
+
+            with patch.object(manager, "_run_json", return_value=no_wifi):
+                manager.health_check()
+            status = manager.get_status()
+            self.assertTrue(status["standalone"])
+            self.assertIn("carrying all traffic", status["message"])
+            self.assertEqual(status["state"], "connected")
+
+            with patch.object(manager, "_run_json", return_value=with_wifi):
+                manager.health_check()
+            self.assertFalse(manager.get_status()["standalone"])
+
+    def test_standalone_connect_nudges_the_connectivity_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            resolver = Path(directory) / "resolv.conf"  # no other internet
+            manager = Manager(
+                config=ConfigStore(Path(directory) / "config" / "config.json"),
+                journal=OwnershipJournal(Path(directory) / "runtime" / "journal.json"),
+                adb=adb, resolver_path=resolver, process_factory=FakeProcess,
+                nm=FakeNmConnection(resolver),
+                dns_probe=lambda: {"udp": "198.18.0.1", "tcp": "198.18.0.1"},
+                interface_snapshot=lambda armed: "stable-interface-state",
+                snapshot_timeout=0.2,
+            )
+            device_id = manager.discover()[0]["device_id"]
+            manager.approve_device(device_id)
+            with patch.object(manager, "_run_json", return_value="[]"):
+                manager.connect(device_id)
+            self.assertEqual(manager.nm.connectivity_rechecks, 1)
 
 
 class InterfaceParityTests(unittest.TestCase):

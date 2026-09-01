@@ -9,6 +9,7 @@ class TeatherWindow:
         gi.require_version("Gtk", "3.0")
         from gi.repository import GLib, Gtk
         self.GLib, self.Gtk = GLib, Gtk
+        self.app = None
         self.client = DbusClient()
         self.window = Gtk.Window(title="Teather")
         self.window.set_default_size(520, 430)
@@ -20,8 +21,16 @@ class TeatherWindow:
         title.set_markup("<span size='xx-large' weight='bold'>Teather</span>")
         title.set_xalign(0)
         box.pack_start(title, False, False, 0)
-        self.state = Gtk.Label(xalign=0)
+        self.state = Gtk.Label(xalign=0, wrap=True)
         box.pack_start(self.state, False, False, 0)
+        note = Gtk.Label(xalign=0, wrap=True)
+        note.set_markup(
+            "<small>Closing this window does not disconnect Teather — the background "
+            "service keeps running and reconnects on its own. Reopen from the tray, or "
+            "run <tt>teather-gtk</tt> again.</small>"
+        )
+        note.get_style_context().add_class("dim-label")
+        box.pack_start(note, False, False, 0)
 
         self.devices = Gtk.ListStore(str, str, bool, bool, str)
         self.selector = Gtk.ComboBox.new_with_model(self.devices)
@@ -72,6 +81,10 @@ class TeatherWindow:
         upstream_row.pack_start(self.upstream, False, False, 0)
         box.pack_start(upstream_row, False, False, 0)
 
+        self.hint = Gtk.Label(xalign=0, wrap=True, selectable=True)
+        self.hint.get_style_context().add_class("dim-label")
+        box.pack_start(self.hint, False, False, 0)
+
         self.metrics = Gtk.Label(xalign=0, selectable=True)
         box.pack_start(self.metrics, False, False, 0)
         diagnostics = Gtk.Button(label="Diagnostics")
@@ -99,7 +112,8 @@ class TeatherWindow:
             menu.append(self.tray_status)
             for label, callback in (
                 ("Connect", self._connect), ("Disconnect", lambda *_: self._call("Disconnect")),
-                ("Open", lambda *_: self.present()), ("Quit", lambda *_: self.Gtk.main_quit()),
+                ("Open", lambda *_: self.present()),
+                ("Quit", lambda *_: self.app.quit() if self.app is not None else self.Gtk.main_quit()),
             ):
                 item = self.Gtk.MenuItem(label=label)
                 item.connect("activate", callback)
@@ -212,6 +226,7 @@ class TeatherWindow:
                 selected = self._selected()
                 self.autoconnect.set_active(bool(selected and selected["auto_connect"]))
             self.state.set_text(f"State: {status['state']} — {status['message']}")
+            self.hint.set_text(status.get("recovery_hint", "") or "")
             if self.tray_status is not None:
                 self.tray_status.set_label(f"Status: {status['state']}")
             self._failover_guard = True
@@ -222,7 +237,12 @@ class TeatherWindow:
             if want in self._upstreams:
                 self.upstream.set_active(self._upstreams.index(want))
             self._upstream_guard = False
-            armed = "armed" if status.get("failover_armed") else "dormant"
+            if status.get("standalone") and status.get("failover_armed"):
+                armed = "sole path"
+            elif status.get("failover_armed"):
+                armed = "armed"
+            else:
+                armed = "dormant"
             active_up = status.get("active_upstream") or status.get("upstream", "cellular")
             self.metrics.set_text(
                 f"Active sessions: {status['active_sessions']}\n"
@@ -237,10 +257,16 @@ class TeatherWindow:
         return self.GLib.SOURCE_CONTINUE
 
     def _delete(self, *_args):
+        # Never tear down the connection here — the daemon owns it. With a tray
+        # icon we can hide and stay reachable; without one, closing ends only
+        # this window (re-run teather-gtk to see status again).
         if self.indicator is not None:
             self.window.hide()
             return True
-        self.Gtk.main_quit()
+        if self.app is not None:
+            self.app.quit()
+        else:
+            self.Gtk.main_quit()
         return False
 
     def present(self):
@@ -248,14 +274,36 @@ class TeatherWindow:
         self.window.present()
 
 
+class TeatherApplication:
+    """Single-instance wrapper: launching teather-gtk again re-presents the
+    existing window instead of starting another process."""
+
+    def __init__(self):
+        import gi
+        gi.require_version("Gtk", "3.0")
+        from gi.repository import Gio, Gtk
+        self.Gtk = Gtk
+        self.app = Gtk.Application(
+            application_id="io.github.vel71184.Teather",
+            flags=Gio.ApplicationFlags.FLAGS_NONE,
+        )
+        self.app.connect("activate", self._activate)
+        self.window = None
+
+    def _activate(self, _app):
+        if self.window is None:
+            self.window = TeatherWindow()
+            self.window.app = self.app
+            self.app.add_window(self.window.window)
+        self.window.present()
+
+    def run(self, argv):
+        return self.app.run(argv)
+
+
 def main() -> int:
-    import gi
-    gi.require_version("Gtk", "3.0")
-    from gi.repository import Gtk
-    window = TeatherWindow()
-    window.present()
-    Gtk.main()
-    return 0
+    import sys
+    return TeatherApplication().run(sys.argv)
 
 
 if __name__ == "__main__":

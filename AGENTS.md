@@ -18,7 +18,14 @@ pick a reasoning mode. Just start. Ask the owner only for the things listed unde
 ## Current priority
 
 P0/E-001 and P1 acceptance are complete. D-022 has run live on the developer
-laptop since 2026-08-30. Debian `0.1.0-8` / Android `0.1.0-p1.2`.
+laptop since 2026-08-30. Debian `0.1.0-11` / Android `0.1.0-p1.2`. Uncommitted
+but deployed + live-tested on the dev host: `0.1.0-9` = D-025 (standalone
+connect); `0.1.0-11` = D-026 (self-healing after an abnormal disconnect +
+persistent `teatherd.log` + self-clearing toast notifications + single-instance
+GTK + sole-path tracking; folds in punch items 4/5/6). Fault-injection tested
+2026-08-31 (daemon restart, tun2proxy kill, `adb kill-server`, unplug/replug,
+Wi-Fi toggle, GUI). **Not committed** — offer to commit; phone-reboot soak
+deferred.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
@@ -37,8 +44,11 @@ follow. Status:
    itself. The 2026-08-30 test confirmed the egress is genuinely the phone's
    cellular link; the **TTL / JA3 half is still pending** a reflector and a
    cellular-bound request from the phone (which has no HTTP client). **Next.**
-4. **Robustness** — unplug/replug, phone reboot, ADB drop, long-session battery,
-   plus a soak under real daily use.
+4. **Robustness** — D-026 (`0.1.0-11`) implements self-healing reconciliation,
+   the wider `health_check()`, persistent logging, toast notifications, the
+   single-instance GTK app, the standalone connectivity re-check, and sole-path
+   tracking (punch items 4/5/6). Fault-injection tested 2026-08-31 and passing.
+   Remaining: commit it, then the phone-reboot case and a real daily-use soak.
 
 The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
 (`0.1.0-7`) after a full-desktop failover exhausted the old limit, then tuned the

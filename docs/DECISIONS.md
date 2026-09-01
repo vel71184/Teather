@@ -201,6 +201,193 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-026 — Self-heal an abnormal disconnect; persistent daemon logging
+
+**Status:** Accepted · **Date:** 2026-08-31 (owner-directed) · **Build:**
+`0.1.0-11` — live-tested on the dev host 2026-08-31 (fault injection: daemon
+restart, tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi
+off/on, GUI open/close; phone reboot deferred)
+
+### Context
+
+On 2026-08-31 the owner lost internet on a live tether. The standalone
+connection (D-025) had come up correctly, then the loopback ADB forward died in
+a USB/adb-server blip a few minutes later. `Manager.health_check()` only tested
+"tun2proxy process alive" and "`teather0` connection active", so the daemon kept
+reporting `connected` over a dead data path — and in standalone mode there is no
+physical fallback, so the result was no internet with no visible cause. There
+was also nothing to diagnose from: `teatherd` used the `logging` module nowhere
+and both `daemon.py`'s poll loop and `Manager.recover()` swallowed every
+exception.
+
+The owner's requirement: **any abnormal loss of the connection — anything other
+than the user clicking Disconnect or running the command — must be detected, the
+owned state cleaned up, and the next connect must just work, with no manual
+`teather recover` and no guessing.** Plus: keep a comprehensive log to look back
+at; make closing the GTK window obviously not a disconnect; and give a visible
+status surface when connecting with no Wi-Fi (where GNOME shows no tray icon).
+
+Earlier steps toward this — `0.1.0-10` (punch-list item 4, idempotent ADB
+cleanup) — are folded into this decision.
+
+### Decision
+
+**One teardown path, split by whose state it is.**
+
+- **Host side is strict.** The tun2proxy child and the in-memory `teather0`
+  connection (its address, route, and DNS) must be verified released before a
+  teardown counts as clean; until then the ownership journal is kept and the
+  state is `recovery-pending`. A `teather0` that exists but cannot be confirmed
+  Teather-owned raises `ambiguous-interface` and asks the user to restart the
+  service — it is never auto-deleted or connected over. This preserves
+  `AGENTS.md`'s "route/DNS changes must be bounded, reversible, and restored"
+  and D-022's fail-closed posture.
+- **Phone side is lenient.** The ADB forward is loopback-only and dies with the
+  cable; the relay app is not host state. A forward that will not remove or a
+  relay whose stop cannot be confirmed is logged and surfaced as
+  `recovery_hint`, but the ownership journal is still cleared once the host side
+  is clean, so it can never wedge the next connect (the next connect re-derives
+  phone state from `adb` directly — adopting a healthy relay or starting a fresh
+  one).
+
+**Detection.** `health_check()` (on the existing ~3 s poll) runs cheap checks
+every cycle — an unplugged phone (`adb devices`, local to the adb server), a
+dropped forward (`adb forward --list`, likewise), a dead tunnel, a vanished
+`teather0`. The one check that costs a phone round-trip — the relay
+compatibility probe (`adb dumpsys`) — is a **slow backstop only**: at most once
+every ~2 min, and skipped entirely when something else (a GUI polling
+`GetStatus`, which already does that `dumpsys` every second) has confirmed the
+relay recently. It exists only to catch a relay that died while the USB link,
+the forward and tun2proxy all stayed up, which Android makes rare. An abnormal
+drop runs the shared teardown and lands in a clean `disconnected` state — **not
+`error`** — with a `last_drop` field naming the cause.
+
+**Retry, bounded.** The daemon's auto-connect brings the connection back when
+the phone reappears, but stops after 3 consecutive failed `connect()` attempts
+and rests (cleanly disconnected, nothing spinning) until the situation changes:
+a phone replug (the eligible-device set changing), a manual `Connect`, a
+failover toggle, or a 2-minute pause elapsing. Without this, a persistently
+failing connect (a wedged NetworkManager, say) would loop every 3 s.
+
+**Reconciliation.** `Manager.reconcile()` runs on the poll loop: when nothing is
+connected but there is leftover state (`recovery-pending`, an ownership journal,
+or a `teather0` interface) it runs the teardown and returns to `disconnected`
+(30 s cool-down between failed attempts). Startup uses the same path. Nothing
+re-mutates routes/DNS/NM on a schedule — reconciliation only *releases*
+Teather-owned state.
+
+**Logging.** `logging_setup.py` attaches a rotating file handler
+(`~/.local/state/teather/teatherd.log`, mode 0600, via a new
+`StateDirectory=teather` in the unit) plus stderr (→ journal). It logs the
+failing layer and control-plane actions — every `adb` command (serial redacted
+to `<device>`), D-Bus method, NetworkManager call, and connect/disconnect/
+reconcile/health step — and never DNS probe names, resolver contents, or
+per-flow destinations (`AGENTS.md`). `TEATHER_DEBUG=1` raises it to DEBUG. If
+the directory is not writable the daemon still runs and logs to stderr only.
+
+**Visibility.** `dbus_service.py` fires a desktop notification on connect, drop,
+self-heal, and needs-attention (best effort, silent if no notification daemon
+is present), so state changes are seen with the window closed and no tray. Live
+testing on GNOME (2026-08-31) showed GNOME only raises a *banner* for critical
+urgency and does not auto-expire a critical banner, so: all Teather
+notifications go out at critical urgency with the previous id as `replaces_id`
+(one Teather notification, ever), and for everything except "needs attention"
+the daemon closes it itself after ~8 s via `CloseNotification` — a toast that
+clears on its own. The
+GTK app becomes a single-instance `Gtk.Application` (re-launching re-presents
+the window instead of spawning another process — the multi-instance mess seen
+on 2026-08-31), closing the window never disconnects, and the window shows
+`recovery_hint` plus an explicit "closing this window does not disconnect" note.
+After a standalone armed activation the manager calls NM's `CheckConnectivity`
+so GNOME's network icon appears (punch-list item 5).
+
+### Consequences
+
+- `get_status` gains `recovery_hint` (a plain-language next step, or empty) and
+  `last_drop` (the last abnormal-drop category, cleared on a successful
+  connect). Additive; `api_version` unchanged.
+- Six host tests that encoded the old "keep the journal, surface
+  `recovery-pending` on any unconfirmed cleanup" contract were rewritten to the
+  new split (host strict / phone lenient); each still asserts the host resolver
+  and routes are fully restored. 65 host tests pass; **no live test yet.**
+- A relay Teather started can outlive a disconnect if its stop could not be
+  confirmed while the phone was reachable — it is left running (visible as the
+  phone's foreground-service notification) and adopted on the next connect,
+  rather than pinning the journal. This matches how a user-started relay is
+  already treated.
+- **Only a user `disconnect` stops a relay Teather started.** The self-heal
+  paths (health-drop, `reconcile`, `recover`, a failed connect) leave it
+  running: auto-connect will not start a *stopped* relay, so stopping it during
+  a self-heal would clean everything up and then sit permanently disconnected.
+  Caught in the first live test of `0.1.0-11` (2026-08-31): killing tun2proxy
+  self-healed to `disconnected` correctly but never reconnected because the
+  teardown had stopped the relay.
+- The daemon does slightly more `adb` work per poll: two `adb` calls every 3 s
+  while connected (`devices`, `forward --list`), both local to the adb server
+  with no phone contact. The one phone round-trip (`dumpsys`) is the ~2-min
+  backstop, suppressed while a GUI is open. Net steady-state cost is negligible.
+
+## D-025 — Allow Teather to connect as the only internet path
+
+**Status:** Accepted · **Date:** 2026-08-30 (owner-directed; adjusts D-014/D-015
+refusal conditions)
+
+### Context
+
+D-014/D-015 framed Teather as a *secondary* interface that sits behind an
+existing physical default route, and `preflight` enforced that literally: it
+refused to connect when there was no existing IPv4 default route (`no-default`)
+or no usable non-loopback resolver (`resolver-unavailable`). Those gates come
+from an era when disabling Wi-Fi could leave the host with no working resolver
+and virtual DNS was unproven.
+
+The owner hit this in normal use: on a host with no Wi-Fi and no Ethernet —
+exactly when a phone tether is most wanted — `teather connect` refused. The
+only workaround was to bring up an ordinary phone hotspot, connect Teather,
+then drop the hotspot. That is the primary use case, not an edge case, and the
+refusal was an oversight rather than a deliberate safety boundary.
+
+### Decision
+
+`preflight` now recognises a **standalone** case: no physical default route
+present. It still rejects every genuinely ambiguous or unsafe state (a
+VPN/split default, an overlapping route, a nonstandard policy rule, an existing
+default whose metric would outrank Teather's). When standalone:
+
+- **Armed** (`auto_failover` on, the default): Teather comes up as the only
+  path. No pre-existing resolver is required — tun2proxy virtual DNS plus the
+  phone-side sentinel do the resolving. `NetworkManagerConnection` skips its
+  `_verify_additive` sole-resolver check when `preflight` recorded no baseline
+  nameserver (that check exists only to catch Teather displacing a *physical*
+  resolver while Wi-Fi is still up — the D-021 regression).
+- **Dormant** (`auto_failover` off): `connect` refuses with `failover-disabled`
+  and tells the user to run `teather failover on`, because a dormant connection
+  with no physical default carries no traffic and would silently do nothing.
+
+Fallback behaviour is unchanged: the armed connection already uses a
+worse-than-physical route metric (32000) and a positive DNS priority, so if
+Wi-Fi or Ethernet later appears it automatically becomes preferred and Teather
+drops back to standby — the same additive model D-022 established. Standalone
+and fallback are the *same* armed connection, not a mode switch.
+
+### Consequences
+
+- D-014's "its default route has lower preference than every existing physical
+  default" and D-015's "connection requires at least one usable non-loopback
+  IPv4 resolver" now hold only when a physical link is present. With none,
+  Teather is the primary path by design.
+- `get_status` gains a `standalone` boolean; the GTK window shows "sole path".
+- Wi-Fi/Ethernet are still never touched by Teather. No new privilege, no new
+  mutation — the armed connection is byte-identical to before.
+
+**Live test (2026-08-30, `0.1.0-9`):** launched with Wi-Fi off — standalone
+connect worked, traffic and DNS over cellular with no other link; fallback to a
+returning link confirmed. Two follow-ups, both cosmetic/robustness and filed to
+the `docs/PROJECT_STATUS.md` punch list (items 4–5), neither blocking D-025:
+a `teatherd` restart during a live connection left a `recovery-pending` journal
+(non-idempotent ADB cleanup), and GNOME shows no tray network icon in standalone
+mode until NetworkManager's connectivity probe passes through the tunnel.
+
 ## D-024 — Carry UDP with tun2proxy's udpgw feature and a phone-side gateway
 
 **Status:** Accepted · **Date:** 2026-08-30
@@ -713,6 +900,11 @@ behavior — see D-022's resolved open question. Wi-Fi/Ethernet remain untouched
 by Teather in either mode; only whether Teather activates itself automatically
 once they're gone is configurable.
 
+**Standalone note (2026-08-30):** D-025 supersedes "its default route has lower
+preference than every existing physical default" as a *precondition*. When no
+physical default is present, armed Teather connects as the only path; the
+lower-preference metric still applies whenever a physical default does exist.
+
 ## D-015 — Approve the bounded P1 Linux USB desktop architecture
 
 **Status:** Accepted · **Date:** 2026-08-25
@@ -735,6 +927,11 @@ P1 uses tun2proxy virtual DNS and IPv4 only. It does not configure a nameserver.
 Connection requires at least one usable non-loopback IPv4 resolver after the owner has
 disabled Wi-Fi. If none remains, Teather disconnects without editing resolver
 state and the DNS design returns to review. General UDP and IPv6 are unsupported.
+
+**Standalone note (2026-08-30):** D-025 narrows the resolver precondition — it
+holds only when a physical link is present. With no other internet, armed
+Teather connects with no pre-existing resolver and relies on virtual DNS plus
+the phone-side sentinel. General UDP is now supported (D-024).
 
 ### Fixed Linux mutations
 

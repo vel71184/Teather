@@ -77,7 +77,12 @@ def evaluate_routes(
             if metric >= ROUTE_METRIC:
                 return PreflightResult(False, "route-preference", "An existing default would not remain preferred")
     if not defaults:
-        return PreflightResult(False, "no-default", "No existing IPv4 default route is present")
+        # No physical default route: the host has no other internet. Teather
+        # becomes the primary path rather than a backup. Every genuinely unsafe
+        # or ambiguous state (a VPN/split default, an overlapping route, a
+        # nonstandard policy rule, an existing default that would outrank
+        # Teather's) is already rejected above, so this is safe to allow.
+        return PreflightResult(True, "standalone", "No existing IPv4 default route; Teather will be the only path")
     return PreflightResult(True, "ready", "Existing defaults remain preferred")
 
 

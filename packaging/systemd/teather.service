@@ -20,7 +20,11 @@ ProtectSystem=strict
 ProtectHome=read-only
 RestrictSUIDSGID=yes
 LockPersonality=yes
-ReadWritePaths=-%h/.config/teather -%t/teather
+# StateDirectory gives the daemon a private (0700) ~/.local/state/teather for
+# its rotating debug log (teatherd.log); systemd creates it and adds it to the
+# unit's writable paths. ProtectHome=read-only still applies everywhere else.
+StateDirectory=teather
+ReadWritePaths=-%h/.config/teather -%t/teather -%S/teather
 
 [Install]
 WantedBy=default.target

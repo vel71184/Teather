@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -26,6 +28,23 @@ from .networkmanager import NetworkManagerConnection
 from .preflight import evaluate_routes, parse_nameservers
 
 TUNNEL_PATH = "/usr/lib/teather/tun2proxy"
+
+log = logging.getLogger(__name__)
+
+# health_check runs on the daemon's ~3s poll. The cheap checks (adb device
+# present, forward present, tunnel alive, teather0 active) run every cycle. The
+# phone-relay probe is an `adb shell dumpsys` round-trip to the phone, so it
+# runs only as a slow backstop — it exists purely to catch a relay that died
+# while the USB link, the forward and tun2proxy all stayed up, which is rare
+# (Android keeps a foreground service alive hard). ~2 min at a 3 s poll.
+_RELAY_PROBE_EVERY = 40
+
+# maybe_auto_connect stops retrying after this many consecutive failed connects
+# and rests (cleanly disconnected) until something changes — a phone replug, a
+# manual connect, or the pause elapsing. Without this a persistently failing
+# connect (e.g. a wedged NetworkManager) would loop every 3 s forever.
+_AUTOCONNECT_MAX_TRIES = 3
+_AUTOCONNECT_PAUSE = 120.0
 
 
 class Manager:
@@ -57,10 +76,20 @@ class Manager:
         self._message = "No active connection"
         self._active_id = ""
         self._active_serial: str | None = None
+        self._active_local_port: int | None = None
         self._active_upstream = ""
         self._tunnel: subprocess.Popen | None = None
         self._armed = False
+        self._standalone = False
         self._dns_ready = False
+        self._recovery_hint = ""
+        self._last_drop = ""
+        self._health_tick = 0
+        self._reconcile_cooldown = 0.0
+        self._autoconnect_tries = 0
+        self._autoconnect_paused_until = 0.0
+        self._autoconnect_seen: set[str] = set()
+        self._relay_ok_at = 0.0
         self._lock = threading.RLock()
         self._devices: dict[str, AdbDevice] = {}
         self.on_status_changed: Callable[[dict], None] = lambda _status: None
@@ -71,6 +100,13 @@ class Manager:
         status = self.get_status(refresh_android=False)
         self.on_status_changed(status)
         return status
+
+    def emit_current_status(self) -> dict:
+        """Re-push the current status. The daemon calls this once the D-Bus
+        service (and its notifier) is wired, so a problem found by the startup
+        session check is still surfaced."""
+        with self._lock:
+            return self._emit_status()
 
     def discover(self) -> list[dict]:
         remembered = self.config.devices()
@@ -109,6 +145,7 @@ class Manager:
                 "rejected_clients": 0,
             }
         status = self.adb.status(self._active_serial)
+        self._note_relay_status(status)
         metrics = {
             "active_sessions": status.active_sessions,
             "bytes_client_to_internet": status.bytes_client_to_internet,
@@ -133,11 +170,14 @@ class Manager:
             "active_device_id": self._active_id,
             "error_category": self._error_category,
             "message": self._message,
+            "recovery_hint": self._recovery_hint,
+            "last_drop": self._last_drop,
             "tcp_supported": True,
             "dns_mode": "virtual",
             "dns_ready": self._dns_ready,
             "auto_failover": self.config.auto_failover(),
             "failover_armed": self._armed,
+            "standalone": self._standalone,
             "upstream": self.config.upstream(),
             "active_upstream": self._active_upstream,
             "udp_supported": True,
@@ -175,7 +215,7 @@ class Manager:
             raise TeatherError("route-inspection", "Linux route inspection failed")
         return result.stdout
 
-    def preflight(self) -> None:
+    def preflight(self, armed: bool) -> None:
         result = evaluate_routes(
             self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "table", "all"]),
             self._run_json(["/usr/sbin/ip", "-j", "link", "show"]),
@@ -184,11 +224,27 @@ class Manager:
         )
         if not result.safe:
             raise TeatherError(result.category, result.message)
+        standalone = result.category == "standalone"
+        self._standalone = standalone
+        if standalone and not armed:
+            # A dormant connection with no physical default carries no traffic and
+            # would silently do nothing. Tell the user how to make it usable.
+            raise TeatherError(
+                "failover-disabled",
+                "No other internet connection is present and automatic failover is off; "
+                "run 'teather failover on' to use Teather as your only connection",
+            )
+        # With a physical link up, Teather must not become the sole resolver
+        # (nm._verify_additive enforces this). Standalone + armed has no physical
+        # resolver to sit behind: tun2proxy virtual DNS plus the phone-side
+        # sentinel do the resolving, so a pre-existing nameserver is not required.
         try:
             resolver = self.resolver_path.read_text(encoding="utf-8")
         except OSError as error:
-            raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
-        if not parse_nameservers(resolver):
+            if not standalone:
+                raise TeatherError("resolver-inspection", "Cannot inspect resolver state") from error
+            resolver = ""
+        if not standalone and not parse_nameservers(resolver):
             raise TeatherError("resolver-unavailable", "No usable non-loopback nameserver is configured")
         self.nm.preflight()
 
@@ -284,11 +340,13 @@ class Manager:
     def _cleanup_tunnel_nm(self, cleanup_errors: list[str]) -> None:
         self._stop_tunnel(cleanup_errors)
         self._dns_ready = False
+        self._active_local_port = None
         try:
             self.nm.deactivate()
         except Exception:
             cleanup_errors.append("networkmanager-connection")
         self._armed = False
+        self._standalone = False
 
     def connect(self, device_id: str = "") -> dict:
         with self._lock:
@@ -296,10 +354,19 @@ class Manager:
                 if not device_id or device_id == self._active_id:
                     return self.get_status()
                 raise TeatherError("already-connected", "Disconnect the active phone first")
-            if self.journal.load() is not None:
+            # A leftover ownership journal or an error state from an earlier drop
+            # would otherwise wedge every future connect. Try to clear it the
+            # same way the daemon's periodic self-heal would before refusing.
+            if self._load_journal_safe() is not None or self._state == "error":
+                self._reconcile_locked(trigger="connect")
+            if self._load_journal_safe() is not None:
                 self._state = "error"
                 self._error_category = "recovery-pending"
-                self._message = "Journaled resources must be recovered before creating a new connection"
+                self._message = (
+                    "Teather still has leftover resources from an earlier session that it "
+                    "could not clean up automatically."
+                )
+                self._recovery_hint = "Restart the background service:  systemctl --user restart teather.service"
                 self._emit_status()
                 raise TeatherError("recovery-pending", self._message)
             self._state = "connecting"
@@ -313,7 +380,7 @@ class Manager:
             armed = self.config.auto_failover()
             upstream = self.config.upstream()
             try:
-                self.preflight()
+                self.preflight(armed)
                 selected_id, device = self._select(device_id)
                 serial = device.serial
                 if not self.adb.package_installed(serial):
@@ -337,6 +404,7 @@ class Manager:
                     raise TeatherError("android-not-ready", "Android relay did not report compatible ready status")
                 local_port = self.adb.add_forward(serial)
                 self.journal.save(Ownership(selected_id, local_port, android_started))
+                self._active_local_port = local_port
                 self.nm.activate(armed)
                 self._armed = armed
                 self._wait_interface_snapshot(armed)
@@ -358,106 +426,278 @@ class Manager:
                 if armed:
                     self.dns_probe()
                     self._dns_ready = True
-                    self._message = "Connected; Teather is the automatic backup path if Wi-Fi is lost"
+                    if self._standalone:
+                        # No physical link: NetworkManager parks at LIMITED and
+                        # GNOME shows no network icon until its connectivity
+                        # probe next runs. Nudge it so the icon appears.
+                        recheck = getattr(self.nm, "recheck_connectivity", None)
+                        if callable(recheck):
+                            recheck()
+                    self._message = (
+                        "Connected. Teather is your only internet path right now; Wi-Fi or Ethernet will take over automatically if one appears."
+                        if self._standalone
+                        else "Connected. Teather is the automatic backup path if Wi-Fi or Ethernet drops."
+                    )
                 else:
                     self._dns_ready = False
                     self._message = "Connected; failover is disabled, so Teather stays dormant until armed"
                 self._active_id = selected_id
                 self._active_serial = serial
+                self._active_local_port = local_port
                 self._active_upstream = upstream
                 self._state = "connected"
+                self._error_category = "none"
+                self._recovery_hint = ""
+                self._last_drop = ""
+                self._health_tick = 0
+                self._relay_ok_at = time.monotonic()
+                log.info("connected: device=%s upstream=%s armed=%s standalone=%s port=%s",
+                         selected_id[:12], upstream, armed, self._standalone, local_port)
                 return self._emit_status()
             except Exception as error:
-                cleanup_errors: list[str] = []
-                self._cleanup_tunnel_nm(cleanup_errors)
-                if local_port is not None and serial is not None:
+                log.warning("connect failed: %s", error)
+                # If the relay may have been started but not yet journalled,
+                # record it so the teardown below (and any later reconcile) can
+                # still find and stop it.
+                if android_started and selected_id and self._load_journal_safe() is None:
                     try:
-                        self.adb.remove_forward(serial, local_port)
+                        self.journal.save(Ownership(selected_id, local_port, True))
                     except Exception:
-                        cleanup_errors.append("adb-forward")
-                if android_started and serial is not None:
-                    try:
-                        self.adb.stop_relay(serial)
-                    except Exception:
-                        cleanup_errors.append("android-relay")
-                if cleanup_errors and selected_id and (local_port is not None or android_started):
-                    try:
-                        self.journal.save(Ownership(selected_id, local_port, android_started))
-                    except Exception:
-                        cleanup_errors.append("ownership-journal")
-                elif not cleanup_errors:
-                    try:
-                        self.journal.clear()
-                    except Exception:
-                        cleanup_errors.append("ownership-journal")
+                        pass
+                clean, errors = self._release_owned(use_nm_scan=False)
                 self._tunnel = None
+                self._active_local_port = None
                 self._state = "error"
-                if cleanup_errors:
+                if not clean:
                     self._error_category = "recovery-pending"
                     self._message = (
-                        f"{error}; cleanup could not be verified for " + ", ".join(cleanup_errors) +
-                        "; run teather recover"
+                        f"Could not connect ({error}); cleanup of "
+                        + ", ".join(sorted(set(errors)))
+                        + " could not be confirmed."
                     )
+                    if not self._recovery_hint:
+                        self._recovery_hint = (
+                            "Teather retries cleanup automatically; if it stays stuck, run:  "
+                            "systemctl --user restart teather.service"
+                        )
                     error = TeatherError("recovery-pending", self._message)
                 else:
                     self._error_category = getattr(error, "category", "internal-error")
                     self._message = str(error)
+                    if {"adb-forward", "android-relay"} & set(errors):
+                        self._recovery_hint = (
+                            "The phone-side relay may still be running; it won't block reconnecting."
+                        )
                 self._emit_status()
                 raise error
 
-    def disconnect(self) -> dict:
-        with self._lock:
-            ownership = self.journal.load()
-            cleanup_errors: list[str] = []
-            self._cleanup_tunnel_nm(cleanup_errors)
-            serial = self._active_serial
-            if ownership and serial is None:
-                try:
-                    self.discover()
-                    device = self._devices.get(ownership.device_id)
-                    serial = device.serial if device else None
-                except TeatherError:
-                    serial = None
-            if ownership:
-                if serial is None or self.config.device_id(serial) != ownership.device_id:
-                    self._active_id = ""
-                    self._active_serial = None
-                    self._state = "error"
-                    self._error_category = "recovery-pending"
-                    self._message = "Owned ADB state is journaled; reconnect that phone and run teather recover"
-                    return self._emit_status()
-                if ownership.local_port is not None:
-                    try:
-                        self.adb.remove_forward(serial, ownership.local_port)
-                    except Exception:
-                        cleanup_errors.append("adb-forward")
-                if ownership.android_started:
-                    try:
-                        self.adb.stop_relay(serial)
-                    except Exception:
-                        cleanup_errors.append("android-relay")
-                if not cleanup_errors:
-                    try:
-                        self.journal.clear()
-                    except Exception:
-                        cleanup_errors.append("ownership-journal")
-            if cleanup_errors:
-                self._active_id = ""
-                self._active_serial = None
-                self._state = "error"
-                self._error_category = "recovery-pending"
-                self._message = (
-                    "Cleanup could not be verified for " + ", ".join(cleanup_errors) +
-                    "; inspect the ownership journal and run teather recover"
+    # -- shared teardown / self-heal ------------------------------------
+
+    def _load_journal_safe(self) -> Ownership | None:
+        try:
+            return self.journal.load()
+        except TeatherError as error:
+            # A corrupt runtime journal helps nobody. It lives in /run, it is
+            # ours, and its only job is to name resources to release — drop it
+            # and fall back to inspecting live state.
+            log.warning("ownership journal unreadable (%s); clearing it", error)
+            try:
+                self.journal.clear()
+            except Exception:
+                pass
+            return None
+
+    def _note_relay_status(self, status) -> None:
+        """Remember the last time the phone relay was seen healthy so
+        health_check can skip its own probe when a GUI is already polling."""
+        if getattr(status, "compatible", False):
+            self._relay_ok_at = time.monotonic()
+
+    def _device_present(self, serial: str) -> bool:
+        try:
+            return any(device.serial == serial for device in self.adb.devices())
+        except TeatherError:
+            # ADB itself is unreachable — can't prove the phone is gone, so do
+            # not declare it gone (the tunnel/forward checks will catch a real
+            # break).
+            return True
+
+    def _forward_present(self, serial: str, port: int) -> bool:
+        try:
+            return port in self.adb.list_forwards(serial)
+        except TeatherError:
+            return True
+
+    def _resolve_serial(self, ownership: Ownership | None) -> str | None:
+        if self._active_serial is not None:
+            return self._active_serial
+        if ownership is None:
+            return None
+        try:
+            self.discover()
+        except TeatherError:
+            return None
+        device = self._devices.get(ownership.device_id)
+        if device is None or self.config.device_id(device.serial) != ownership.device_id:
+            return None
+        return device.serial
+
+    def _release_owned(self, *, use_nm_scan: bool, stop_relay: bool = False) -> tuple[bool, list[str]]:
+        """Release every Teather-owned resource. Returns ``(clean, errors)``.
+
+        The **host side** — the tun2proxy child and the in-memory ``teather0``
+        connection with its route and DNS — is strict: ``clean`` is False and
+        the ownership journal is kept until it is verified released
+        (``AGENTS.md``: route/DNS state must be bounded and restored, and an
+        unverifiable ``teather0`` is a real problem the user must see).
+
+        The **phone side** — the loopback ADB forward and the relay app — is
+        lenient: both die with the cable, neither is host state, and neither may
+        ever wedge the next connect. A forward that will not remove is logged
+        and surfaced as a hint, and the journal is still cleared once the host
+        side is clean (the next connect re-derives phone state from ``adb``).
+
+        ``stop_relay`` is True only for a user ``disconnect`` — the user wants
+        everything gone. The self-heal paths (health-drop, reconcile, recover,
+        a failed connect) leave a relay Teather started **running**: stopping it
+        would defeat auto-reconnect, which will not start a stopped relay, so
+        the self-heal would clean up and then sit there. A left-running relay is
+        adopted on the next connect.
+
+        ``use_nm_scan`` runs NetworkManager's ownership-verifying ``teather0``
+        scan (for the daemon-restarted / lost-handles case). ``disconnect``
+        leaves it off and relies on its live handles.
+        """
+
+        errors: list[str] = []
+        ownership = self._load_journal_safe()
+        serial = self._resolve_serial(ownership)
+        phone_gone = (
+            (serial is None and ownership is not None and self._active_serial is None)
+            or (serial is not None and not self._device_present(serial))
+        )
+
+        self._cleanup_tunnel_nm(errors)
+        if use_nm_scan:
+            try:
+                self.nm.recover()
+                errors = [item for item in errors if item != "networkmanager-connection"]
+            except TeatherError as error:
+                log.warning("teardown: nm.recover refused: %s", error)
+                if "networkmanager-connection" not in errors:
+                    errors.append("networkmanager-connection")
+                self._recovery_hint = (
+                    "teather0 is still present and Teather can't confirm it owns it — "
+                    "check:  nmcli con show teather0"
                 )
-                return self._emit_status()
-            self._active_id = ""
-            self._active_serial = None
-            self._active_upstream = ""
+
+        if ownership is not None and not phone_gone and serial is not None:
+            if ownership.local_port is not None:
+                try:
+                    self.adb.remove_forward(serial, ownership.local_port)
+                except Exception as error:
+                    log.warning("teardown: remove_forward failed: %s", error)
+                    errors.append("adb-forward")
+            if ownership.android_started and stop_relay:
+                try:
+                    self.adb.stop_relay(serial)
+                except Exception as error:
+                    log.warning("teardown: stop_relay failed: %s", error)
+                    errors.append("android-relay")
+
+        host_clean = not ({"networkmanager-connection", "tunnel-process"} & set(errors))
+        if ownership is not None and host_clean:
+            try:
+                self.journal.clear()
+            except Exception:
+                errors.append("ownership-journal")
+
+        clean = host_clean and self._load_journal_safe() is None
+        return clean, errors
+
+    def _finish_teardown(self, clean: bool, errors: list[str], *, disconnected_message: str) -> dict:
+        self._active_id = ""
+        self._active_serial = None
+        self._active_local_port = None
+        self._active_upstream = ""
+        phone_side = {"adb-forward", "android-relay"} & set(errors)
+        if clean:
             self._state = "disconnected"
             self._error_category = "none"
-            self._message = "Disconnected; Wi-Fi and Ethernet were never touched"
-            return self._emit_status()
+            self._message = disconnected_message
+            self._recovery_hint = (
+                "Teather couldn't confirm the phone-side relay/bridge was released; "
+                "it can't block reconnecting, but you can stop the relay from the phone if you want."
+                if phone_side else ""
+            )
+        else:
+            self._state = "error"
+            self._error_category = "recovery-pending"
+            self._message = (
+                "Teather could not finish cleaning up: "
+                + ", ".join(sorted(set(errors)))
+                + "."
+            )
+            if not self._recovery_hint:
+                self._recovery_hint = "Restart the background service:  systemctl --user restart teather.service"
+        return self._emit_status()
+
+    def disconnect(self) -> dict:
+        with self._lock:
+            log.info("disconnect requested (state=%s)", self._state)
+            self._last_drop = ""
+            clean, errors = self._release_owned(use_nm_scan=False, stop_relay=True)
+            return self._finish_teardown(
+                clean, errors,
+                disconnected_message="Disconnected. Wi-Fi and Ethernet were never touched.",
+            )
+
+    def shutdown(self) -> None:
+        """Teardown for the daemon stopping (SIGTERM / systemd restart). Releases
+        the host side — tun2proxy, teather0, its route and DNS — so nothing
+        dangles, but **leaves the phone relay running**: a daemon restart is not
+        the user asking to disconnect, and the next start adopts the relay so
+        the connection comes straight back. An explicit `teather disconnect`
+        stops the relay; this does not."""
+        with self._lock:
+            log.info("shutdown teardown (state=%s)", self._state)
+            clean, errors = self._release_owned(use_nm_scan=False)
+            if not clean:
+                log.warning("shutdown teardown incomplete: %s", sorted(set(errors)))
+
+    def reconcile(self) -> None:
+        """Periodic self-heal, run from the daemon poll loop. A cheap no-op
+        unless there is leftover state (an error state, an ownership journal,
+        or a teather0 interface) while nothing is connected."""
+
+        with self._lock:
+            self._reconcile_locked(trigger="poll")
+
+    def _reconcile_locked(self, *, trigger: str) -> None:
+        if self._state in {"connecting", "connected"}:
+            return
+        interface_path = getattr(self.nm, "interface_path", None)
+        needs = (
+            self._error_category == "recovery-pending"
+            or self._load_journal_safe() is not None
+            or bool(interface_path and interface_path.exists())
+        )
+        if not needs:
+            return
+        if trigger == "poll" and time.monotonic() < getattr(self, "_reconcile_cooldown", 0.0):
+            return
+        log.info("reconcile (%s): state=%s error=%s", trigger, self._state, self._error_category)
+        clean, errors = self._release_owned(use_nm_scan=True)
+        if clean:
+            self._finish_teardown(
+                clean, errors,
+                disconnected_message="Teather cleared leftover resources from an earlier session and is ready to connect.",
+            )
+            log.info("reconcile: recovered to a clean disconnected state")
+        else:
+            self._reconcile_cooldown = time.monotonic() + 30.0
+            self._finish_teardown(clean, errors, disconnected_message="")
+            log.warning("reconcile: still not clean: %s", sorted(set(errors)))
 
     def set_upstream(self, upstream: str) -> dict:
         """Choose which Android transport the relay uses.
@@ -493,19 +733,21 @@ class Manager:
 
     def recover(self) -> dict:
         with self._lock:
-            self.nm.recover()
-            ownership = self.journal.load()
-            if ownership:
-                self.discover()
-                device = self._devices.get(ownership.device_id)
-                if device:
-                    if ownership.local_port is not None:
-                        self.adb.remove_forward(device.serial, ownership.local_port)
-                    if ownership.android_started:
-                        self.adb.stop_relay(device.serial)
-                    self.journal.clear()
+            log.info("recover requested (state=%s)", self._state)
+            clean, errors = self._release_owned(use_nm_scan=True)
+            self._finish_teardown(
+                clean, errors,
+                disconnected_message="Recovered leftover resources; ready to connect.",
+            )
+            if not clean and "networkmanager-connection" in errors:
+                # An unverifiable teather0 is a real host-state problem the user
+                # must see, not something to silently keep retrying.
+                raise TeatherError(
+                    "ambiguous-interface",
+                    self._recovery_hint or "teather0 could not be confirmed as Teather-owned",
+                )
             result = self.diagnose()
-            result["recovery_pending"] = bool(self.journal.load())
+            result["recovery_pending"] = not clean
             return result
 
     def approve_device(self, device_id: str) -> dict:
@@ -536,6 +778,7 @@ class Manager:
 
     def set_auto_failover(self, enabled: bool) -> dict:
         with self._lock:
+            self.note_user_intent()
             self.config.set_auto_failover(enabled)
             if self._state == "connected" and self._armed != bool(enabled):
                 active = self._active_id
@@ -547,42 +790,160 @@ class Manager:
                 "failover_armed": self._armed,
             }
 
+    def note_user_intent(self) -> None:
+        """Clear the auto-connect backoff. Called on any deliberate user action
+        (manual connect, approve, failover/auto-connect toggle) so a paused
+        retry loop resumes immediately instead of waiting out the pause."""
+        self._autoconnect_tries = 0
+        self._autoconnect_paused_until = 0.0
+
     def maybe_auto_connect(self) -> None:
         if self._state not in {"disconnected", "detected"}:
+            return
+        if self._load_journal_safe() is not None:
+            # Leftover state still pending; reconcile owns clearing it first.
             return
         devices = self.discover()
         eligible = []
         for device in devices:
             if device["connected"] and device["approved"] and device["auto_connect"]:
                 raw = self._devices[device["device_id"]]
-                if self.adb.status(raw.serial).compatible:
-                    eligible.append(device["device_id"])
-        if len(eligible) == 1:
-            self.connect(eligible[0])
-        elif len(eligible) > 1:
+                try:
+                    if self.adb.status(raw.serial).compatible:
+                        eligible.append(device["device_id"])
+                except TeatherError as error:
+                    log.debug("auto-connect: status probe failed for a device: %s", error)
+
+        # A change in which phones are eligible (a replug, an approval) is a
+        # fresh situation — drop any backoff from the previous one.
+        seen = set(eligible)
+        if seen != self._autoconnect_seen:
+            self._autoconnect_seen = seen
+            self.note_user_intent()
+
+        if len(eligible) > 1:
             self._state = "detected"
             self._error_category = "selection-required"
-            self._message = "Multiple auto-connect phones are eligible; select one locally"
+            self._message = "Two auto-connect phones are eligible — pick one in the Teather window."
             self._emit_status()
+            return
+        if len(eligible) != 1:
+            return
+        if time.monotonic() < self._autoconnect_paused_until:
+            return
+
+        try:
+            log.info("auto-connecting to %s", eligible[0][:12])
+            self.connect(eligible[0])
+            self._autoconnect_tries = 0
+        except TeatherError as error:
+            self._autoconnect_tries += 1
+            log.warning("auto-connect attempt %d failed: %s", self._autoconnect_tries, error)
+            if self._autoconnect_tries >= _AUTOCONNECT_MAX_TRIES:
+                self._autoconnect_tries = 0
+                self._autoconnect_paused_until = time.monotonic() + _AUTOCONNECT_PAUSE
+                self._message = (
+                    f"Auto-connect failed {_AUTOCONNECT_MAX_TRIES} times ({error}). "
+                    f"Paused for {int(_AUTOCONNECT_PAUSE // 60)} minutes — unplug/replug the phone "
+                    "or press Connect to retry now."
+                )
+                self._recovery_hint = "Press Connect in the Teather window to retry immediately."
+                self._emit_status()
 
     def health_check(self) -> None:
+        """Detect an abnormal loss of the live connection and self-heal.
+
+        Abnormal = anything other than the user asking to disconnect: the phone
+        unplugged, the USB/ADB bridge dropped, tun2proxy died, NetworkManager
+        dropped teather0, or the phone-side relay stopped. On any of these
+        Teather releases its own resources and returns to a clean
+        `disconnected` state so the daemon's auto-connect can bring it straight
+        back when the phone reappears — no manual `teather recover` step.
+        """
+
         if self._state != "connected":
             return
-        if self._tunnel is None or self._tunnel.poll() is not None:
-            self.disconnect()
-            if self._state == "disconnected":
-                self._state = "error"
-                self._error_category = "tunnel-exited"
-                self._message = "Tunnel exited; Teather cleaned its owned resources"
-                self._emit_status()
+        self._health_tick += 1
+        self._track_sole_path()
+        serial = self._active_serial
+        drop: tuple[str, str] | None = None
+        if serial is not None and not self._device_present(serial):
+            drop = ("phone-disconnected", "the phone was unplugged or lost its USB link")
+        elif self._tunnel is None or self._tunnel.poll() is not None:
+            drop = ("tunnel-exited", "the tunnel process stopped")
+        elif not self.nm.connection_is_active():
+            drop = ("connection-lost", "NetworkManager dropped the teather0 connection")
+        elif (
+            serial is not None
+            and self._active_local_port is not None
+            and not self._forward_present(serial, self._active_local_port)
+        ):
+            drop = ("relay-unreachable", "the USB bridge to the phone's relay disappeared")
+        elif (
+            serial is not None
+            and self._health_tick % _RELAY_PROBE_EVERY == 0
+            and time.monotonic() - self._relay_ok_at > _RELAY_PROBE_EVERY * 3 - 5
+        ):
+            # Slow backstop only, and skipped entirely when something else
+            # (a GUI polling GetStatus) has confirmed the relay recently.
+            try:
+                status = self.adb.status(serial)
+                self._note_relay_status(status)
+                if not status.compatible:
+                    drop = ("relay-stopped", "the relay app on the phone is no longer running")
+            except TeatherError:
+                drop = None
+
+        if drop is None:
             return
-        if not self.nm.connection_is_active():
-            self.disconnect()
-            if self._state == "disconnected":
-                self._state = "error"
-                self._error_category = "connection-lost"
-                self._message = "The teather0 connection went away; owned state was disconnected and restored"
-                self._emit_status()
+        category, human = drop
+        log.warning("health: lost the connection — %s (%s)", category, human)
+        self._last_drop = category
+        clean, errors = self._release_owned(use_nm_scan=False)
+        if category == "phone-disconnected":
+            tail = "Teather cleaned up; it reconnects automatically when the phone is plugged back in."
+        elif category == "relay-stopped":
+            tail = "Teather cleaned up. The relay on the phone stopped — press Connect, or start it from the phone, to resume."
+        else:
+            tail = "Teather cleaned up and is reconnecting automatically."
+        self._finish_teardown(
+            clean, errors,
+            disconnected_message=f"Connection dropped — {human}. {tail}",
+        )
+
+    def _physical_default_present(self) -> bool | None:
+        """True/False if a non-teather0 IPv4 default route exists; None if it
+        can't be determined this tick (don't act on None)."""
+        try:
+            routes = json.loads(self._run_json(["/usr/sbin/ip", "-j", "-4", "route", "show", "default"]))
+        except (TeatherError, ValueError):
+            return None
+        return any(
+            isinstance(route, dict) and str(route.get("dev", "")) != INTERFACE_NAME
+            for route in routes
+        )
+
+    def _track_sole_path(self) -> None:
+        """While connected + armed, notice Wi-Fi/Ethernet coming or going so the
+        `standalone` flag stays accurate and the user is told when their tether
+        actually starts carrying everything (it matters for data usage)."""
+        if not self._armed:
+            return
+        present = self._physical_default_present()
+        if present is None:
+            return
+        now_sole = not present
+        if now_sole == self._standalone:
+            return
+        self._standalone = now_sole
+        if now_sole:
+            self._message = (
+                "Wi-Fi/Ethernet dropped — Teather is now carrying all traffic over the phone's cellular data."
+            )
+        else:
+            self._message = "Wi-Fi/Ethernet is back; Teather dropped to standby."
+        log.info("sole-path transition: standalone=%s", now_sole)
+        self._emit_status()
 
     def diagnose(self) -> dict:
         issues: list[str] = []
