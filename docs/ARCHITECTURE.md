@@ -34,42 +34,58 @@ Teather has four stable conceptual layers:
 UI, discovery, and diagnostics observe or control these layers; they do not merge
 them.
 
-## Near-term architecture: SOCKS over ADB
+## Current architecture: relay over ADB
+
+This is what is implemented and daily-driven (P1 complete + the owner's
+post-P1 track; see `docs/PROJECT_STATUS.md`).
 
 ```mermaid
 flowchart LR
-    A["Receiver app traffic"] --> B["Linux TUN"]
-    B --> C["tun2socks"]
-    C --> D["ADB forwarded socket"]
-    D --> E["Android SOCKS5 relay"]
+    A["Receiver app traffic"] --> B["teather0 TUN"]
+    B --> C["tun2proxy (--dns virtual, --udpgw-server)"]
+    C --> D["ADB forwarded loopback socket"]
+    D --> E["Android SOCKS5 + udpgw relay"]
     E --> F["Bound Android upstream"]
 ```
 
+TCP and virtual DNS ride the SOCKS5 path; general UDP rides tun2proxy's badvpn
+"udpgw" TCP stream, which the phone's `UdpGatewayServer` terminates with a real
+`DatagramSocket` bound to the same upstream (D-024) — no VpnService, no packet
+stack, no second forward.
+
 ### Android host
 
-Implemented P0 responsibilities and accepted P1 extensions:
+Implemented responsibilities:
 
 - Request the user-visible foreground-service lifecycle required for a sustained
   relay.
 - Discover eligible upstream `Network` instances.
 - Bind each outbound socket to the chosen upstream rather than relying blindly on
   the process default.
-- Accept only Android-loopback traffic. P1 keeps the listener on port 1080 and
-  reaches it only through an authorized ADB forward.
-- Implement SOCKS5 CONNECT for IPv4/domain-name TCP destinations.
-- Add authenticated sessions before listening on Wi-Fi or another shared link.
-- Track connection counts and byte counters without retaining destination history
-  by default.
+- Accept only Android-loopback traffic. The listener stays on port 1080 (default)
+  and is reached only through an authorized ADB forward.
+- Implement SOCKS5 CONNECT for IPv4, domain-name, and literal-IPv6 TCP
+  destinations (`Socks5Server`).
+- Terminate tun2proxy's udpgw TCP stream for general UDP (`UdpGatewayServer`) —
+  one `DatagramSocket` per connection id, bound to the selected upstream;
+  reused connection ids are torn down and rebuilt so a stream never leaks a
+  stale flow's packets.
+- Switch the outbound upstream live on `ACTION_RECONFIGURE` (`NetworkSelector`
+  rebind + `RelayRuntime.reconfigure()`) with no listener teardown; sockets
+  already open keep their link.
+- Add authenticated sessions before listening on Wi-Fi or another shared link
+  (still future — the ADB link is loopback-only).
+- Track connection counts and byte counters without retaining destination history.
 - Expose structured failure reasons to the UI and development log.
-- Protect the exported release control service with `android.permission.DUMP`.
-  Application-namespaced start/stop actions are available to authorized ADB
-  shell, while ordinary applications are denied.
-- Emit `dumpsys` status schema version 1 with lifecycle, bound port, configured
-  and selected upstream, cellular availability/validation, aggregate counters,
-  and coarse errors. Status contains no destinations or device/subscriber data.
+- Protect the exported control service with `android.permission.DUMP` (D-016);
+  ordinary applications are denied.
+- Emit `dumpsys` status schema version 1 (lifecycle, bound/configured port,
+  configured and selected upstream, cellular availability/validation, aggregate
+  counters, coarse errors) — no destinations or device/subscriber data.
 
-P0 should not require Android `VpnService`. Teather is acting as a relay server,
-not capturing the phone's own application traffic.
+Teather never uses Android `VpnService`: it is a relay server, not a capture of
+the phone's own application traffic. This is the structural reason the traffic
+looks like the phone's own (the primary goal).
 
 ### ADB transport
 
@@ -320,10 +336,15 @@ must not ship without Teather-layer authentication.
 
 ## DNS and IPv6
 
-DNS is part of the tunnel, not an afterthought. The design must prevent accidental
-fallback to the receiver's previous resolver while Teather is active.
+DNS is part of the tunnel, not an afterthought. Under D-022 it is *additive*
+rather than exclusive: the physical resolver stays first in `/etc/resolv.conf`
+while a physical link is present, and the Teather sentinel `198.19.0.1` (routed,
+never allocated) is used only once that link is gone. `dns_probe` verifies UDP
+and TCP virtual DNS before the daemon reports connected.
 
-IPv6 behavior is intentionally undecided. Early tests must record:
+IPv6 through Teather is currently **unsupported** — `ipv6.method = disabled` on
+the `teather0` connection, and the relay only handles IPv4 egress. A future IPv6
+milestone still needs to record:
 
 - whether the Android upstream has IPv6;
 - whether the relay engine handles IPv6 destinations;
@@ -354,6 +375,17 @@ Requirements:
 - Failure messages identify Android upstream, local transport, authentication,
   relay protocol, DNS, or receiver routing as separate categories.
 
+As of D-026 (`0.1.0-11`) the Linux daemon goes further than "repair on startup":
+its poll loop runs `reconcile()` + an expanded `health_check()` continuously, so
+an abnormal loss (phone unplug, ADB forward drop, tun2proxy exit, `teather0`
+removed, relay stopped) is detected within seconds, the host side is released to
+a clean `disconnected` state (new `last_drop` field, not `error`), and
+auto-connect reconnects once the phone is reachable — no manual `teather
+recover`. The host side stays strict: an unverifiable `teather0` still stops with
+`ambiguous-interface`. A user `disconnect` is the only path that stops the phone
+relay; every self-heal path and the daemon shutdown leave it running for the
+next start to adopt.
+
 ## Privilege boundaries
 
 ### Android
@@ -383,32 +415,46 @@ arguments and never enter logs, D-Bus responses, or disk.
 ## Language direction
 
 - **Kotlin/Compose** is accepted for the Android UI and platform lifecycle.
-- **SOCKS5 plus existing tun2socks** is accepted for the initial experiment.
+- **SOCKS5 plus existing tun2proxy** is accepted for the initial experiment.
 - **Go networking core** is proposed because WireGuard userspace and gVisor-style
   networking components are mature in that ecosystem.
 - **Rust receiver/core** remains an alternative where memory safety and native
   platform packaging outweigh reuse of Go networking components.
 
 
-## Implemented P0 component map
+## Implemented component map
 
-The first concrete implementation preserves the planned boundaries:
+### Android (`app/`)
 
-| Component | Current implementation | Boundary |
+| Component | Implementation | Boundary |
 |---|---|---|
-| Control/UI | `MainActivity` | Starts/stops relay and renders aggregate state |
-| Lifecycle | `RelayService` and `RelayRuntime` | Foreground-service ownership and idempotent teardown |
-| Upstream | `AndroidNetworkConnector` | Selects a non-VPN Android `Network`; binds DNS and sockets |
-| Protocol | `Socks5Protocol` | Parses negotiation and TCP `CONNECT` without Android imports |
-| Relay | `Socks5Server` | Loopback accept, limits, timeouts, bidirectional copying |
-| Metrics | `RelayStats` | Aggregate counts and coarse errors only |
-| Transport helper | `desktop/linux/teather-p0` | ADB forward, lifecycle, smoke/soak, cleanup |
+| Control/UI | `MainActivity` | Port + upstream picker, start/stop, live status, clipboard helper |
+| Lifecycle | `RelayService`, `RelayRuntime` | `DUMP`-protected foreground service; `START`/`STOP`/`RECONFIGURE`; idempotent teardown |
+| Upstream | `NetworkSelector`, `UpstreamPreference`, `AndroidNetworkConnector` | Picks a non-VPN Android `Network`; live-swappable; binds DNS + each outbound socket |
+| TCP protocol | `Socks5Protocol`, `Socks5Server` | SOCKS5 negotiation + `CONNECT` (v4/domain/v6); loopback accept, limits, timeouts, copying |
+| UDP protocol | `UdpGatewayProtocol`, `UdpGatewayServer` | badvpn udpgw framing; one `DatagramSocket` per connection id |
+| Metrics/status | `RelayStats`, `RelayStatusWire` | Aggregate counts, byte totals, error categories; `dumpsys` schema 1 |
 
-P0 originally exported the lifecycle service only in debug builds. D-016
-supersedes that arrangement: debug and release now export the service behind
-`android.permission.DUMP`, allowing authorized ADB shell control while denying
-ordinary applications. The data plane remains bound to `127.0.0.1`. P0 itself
-did not touch Linux routes, resolver settings, or firewall state.
+### Linux (`desktop/linux/teather/`)
+
+| Component | Implementation | Boundary |
+|---|---|---|
+| Daemon | `daemon.py` → `teatherd` | `systemd --user` D-Bus service; poll loop reconcile → health_check → auto-connect |
+| Orchestration | `Manager` | connect/disconnect/recover/reconcile/health; owns tun2proxy child, ADB forward, ownership journal |
+| Interface owner | `NetworkManagerConnection` | The one in-memory `tun` `teather0` connection; additive DNS; `CheckConnectivity` nudge |
+| Preflight | `preflight.py` | Refuses unsafe route/rule/interface states; recognises standalone |
+| DNS readiness | `dns_probe.py` | UDP + TCP virtual-DNS check before "connected" |
+| ADB | `AdbClient` | devices / forward / dumpsys / relay control; serials redacted |
+| Logging | `logging_setup.py` | Rotating `~/.local/state/teather/teatherd.log` (0600) |
+| D-Bus + notify | `dbus_service.py` | `io.github.vel71184.Teather1.Manager`; self-clearing toasts |
+| CLI | `cli.py` → `teather` | Pure D-Bus client for every method |
+| GUI | `gui.py` → `teather-gtk` | Single-instance GTK3 window + optional tray |
+| Config | `config.py` | Mode-0600 JSON; salted device-id hashes, never raw serials |
+| Historical | `desktop/linux/teather-p0` | P0 ADB-forward + smoke/soak helper (superseded) |
+
+D-016: the Android control service is exported in both debug and release behind
+`android.permission.DUMP` — authorized ADB shell control, ordinary applications
+denied. The data plane stays bound to `127.0.0.1`.
 
 The permanent cross-platform networking-core language remains open under D-008.
 P1's pinned Rust packet engine does not settle that later architectural choice.

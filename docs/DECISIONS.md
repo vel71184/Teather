@@ -1039,7 +1039,7 @@ required for first approval and ambiguous multi-device selection.
 
 ## D-018 — Stop for explicit planning before P2
 
-**Status:** Accepted · **Date:** 2026-08-25
+**Status:** Accepted, then **discharged** 2026-08-30 · **Date:** 2026-08-25
 
 ### Decision
 
@@ -1047,6 +1047,16 @@ After P1 physical acceptance and evidence recording, work stops for an explicit
 P2 design discussion and approval. No research-heavy investigation or
 implementation of general UDP, IPv6, broader DNS behavior, suspend/resume, or
 protocol changes begins automatically.
+
+### Discharge (2026-08-30)
+
+The stop happened. The owner then rejected the roadmap's assumption that all of
+P2 ("protocol completeness") and P4 (WireGuard) must follow, and directed a
+**focused post-P1 track** instead: lightweight general UDP (D-024, not a full
+packet stack), standalone connect (D-025), self-heal + logging robustness
+(D-026), and primary-goal verification (E-011). Full IPv6, keepalive/backpressure
+protocol work, and WireGuard stay deferred and still require their own owner
+go-ahead. See `AGENTS.md` "Current priority" and `docs/PROJECT_STATUS.md`.
 
 ## D-019 — Defer permanent release signing during private P1 testing
 

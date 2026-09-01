@@ -1,10 +1,15 @@
 # P1 Linux USB Desktop validation handoff
 
-This is the current execution contract. P0 and E-001 are complete. The P1 Android
-control surface, Linux daemon/CLI/GTK client, NetworkManager connection module,
-package, recovery guide, and pinned tunnel build are implemented in the working
-tree (D-022, package `0.1.0-4`; there is no longer a privileged helper). Host
-checks passed on 2026-08-29. Do not restart P0 or rebuild the P1 scaffold.
+**P1 acceptance was met (D-022, first packaged as `0.1.0-4`) and Teather is now
+the owner's daily connection; the current build is Debian `0.1.0-11` / Android
+`0.1.0-p1.2`.** The version numbers in the VM/install procedures below are
+historical — substitute the current package. `docs/PROJECT_STATUS.md` is the
+live resume point; this file is kept for the acceptance-gate procedure.
+
+P0 and E-001 are complete. The P1 Android control surface, Linux daemon/CLI/GTK
+client, NetworkManager connection module, package, recovery guide, and pinned
+tunnel build are implemented in the working tree (there is no privileged
+helper). Do not restart P0 or rebuild the P1 scaffold.
 
 The VM and phone steps below need the owner (see `AGENTS.md` "Safety gates").
 Everything up to them — building the package, updating code and docs — does not.

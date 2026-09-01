@@ -161,22 +161,24 @@ over USB debugging:
 
 ```mermaid
 flowchart LR
-    A["Linux applications"] --> B["TUN + tun2socks"]
-    B --> C["ADB port forwarding"]
-    C --> D["Teather Android SOCKS relay"]
-    D --> E["Selected Android upstream"]
+    A["Linux applications"] --> B["teather0 TUN + tun2proxy"]
+    B --> C["ADB port forwarding (loopback)"]
+    C --> D["Teather Android SOCKS5 / udpgw relay"]
+    D --> E["Selected Android upstream (cellular by default)"]
 ```
 
-The proof of concept deliberately uses replaceable tools:
+The implementation deliberately uses replaceable tools:
 
-- **Android:** Kotlin foreground service exposing a local SOCKS5 relay.
+- **Android:** Kotlin foreground service exposing a local SOCKS5 relay plus a
+  udpgw terminator for UDP.
 - **USB:** `adb forward` between a Linux loopback port and the Android service.
-- **Linux:** a non-persistent `teather0` TUN plus an existing `tun2socks`
-  implementation.
-- **Routing:** a Teather-owned backup default with lower preference than every
+- **Linux:** a non-persistent `teather0` TUN, driven by `tun2proxy` (rebuilt
+  with `--features udpgw`), with NetworkManager owning the connection.
+- **Routing:** a Teather-owned backup default at a worse metric than every
   existing physical default; Teather never rewrites or disables those links.
-- **First protocol coverage:** IPv4 TCP, tunneled DNS, and general UDP (udpgw,
-  D-024). IPv6 follows.
+  With no physical default present, Teather becomes the primary path (D-025).
+- **Protocol coverage:** IPv4 TCP, tunneled DNS (UDP + TCP), and general UDP
+  (udpgw, D-024). IPv6 is unsupported.
 
 The first P1 operating mode is conservative. With Wi-Fi or Ethernet present, the
 existing connection and its resolver stay preferred and fully working. Teather
@@ -245,9 +247,9 @@ standard WireGuard client cannot.
 
 | Stage | Link | Receiver setup | Coverage | Purpose |
 |---|---|---|---|---|
-| P0 — Relay Proof | USB/ADB | Linux script or CLI | Browser TCP | Prove cellular relay |
-| P1 — Linux USB Desktop | USB/ADB | Debian GUI, tray, CLI, backup `teather0` | System-wide TCP + DNS after manual link choice | First installable path |
-| P2 — Protocol Completeness | USB/ADB | Same Android/Linux applications | TCP + UDP + IPv6 policy | Compatibility and stability |
+| P0 — Relay Proof | USB/ADB | Linux script or CLI | Browser TCP | Prove cellular relay ✅ |
+| P1 — Linux USB Desktop | USB/ADB | Debian GUI, tray, CLI, backup `teather0` | System-wide TCP + DNS, automatic failover, and (post-P1) general UDP + standalone connect + self-heal | First installable path ✅ |
+| P2 — Protocol Completeness | USB/ADB | Same Android/Linux applications | IPv6 policy, keepalive/backpressure, suspend/resume (UDP already landed post-P1) | Compatibility and stability |
 | P3 — Wireless Relay | Local-only Wi-Fi | Linux companion | Wireless equivalent of P2 | Remove the cable |
 | P4 — WireGuard Compatibility | Local-only Wi-Fi | Standard WireGuard client | Cross-platform full tunnel | Universal receiver path |
 | P5 — Daily-Driver Experience | Existing transports | Polished Android/desktop control | Proven protocol coverage | Onboarding, history, and recovery polish |
@@ -272,38 +274,38 @@ The first viable Linux milestone is complete when all of the following are true:
 - No secret keys, device identifiers, browsing history, or packet captures are
   committed to the repository.
 
-UDP, IPv6, and Wi-Fi are outside this first acceptance gate. P1 includes a
-focused operational GUI; rich history and daily-driver polish are P5.
+This gate was met by P1. UDP was outside it but has since landed (D-024); IPv6
+and Wi-Fi remain out. P1 includes a focused operational GUI; rich history and
+daily-driver polish are P5.
 
-## Proposed repository shape
-
-The directories below are the intended destination, not all of them exist yet:
+## Repository shape
 
 ```text
 Teather/
-├── android/                 # Kotlin/Compose host application
-├── desktop/
-│   ├── linux/               # Initial Linux connector and route manager
-│   └── shared/              # Cross-platform receiver code when justified
-├── core/                    # Shared protocol/flow engine, language still open
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DECISIONS.md
-│   ├── DEVELOPMENT.md
-│   ├── EXPERIMENTS.md
-│   ├── PROJECT_STATUS.md
-│   ├── ROADMAP.md
-│   ├── TEST_PLAN.md
-│   └── THREAT_MODEL.md
-├── tools/                   # Reproducible developer utilities
-├── AGENTS.md                # Durable context for coding agents
+├── app/                     # Android relay — Kotlin foreground service
+│   └── src/main/kotlin/io/github/vel71184/teather/
+│       ├── relay/           # Socks5Server, UdpGatewayServer, protocols, stats
+│       ├── network/         # NetworkSelector, AndroidNetworkConnector, upstream
+│       ├── service/         # RelayService, RelayRuntime, status wire
+│       └── MainActivity.kt
+├── desktop/linux/
+│   ├── teather/             # teatherd / teather / teather-gtk implementation
+│   ├── bin/                 # thin entry-point scripts
+│   ├── tests/               # host unit tests (pytest / unittest)
+│   ├── resources/           # icon art
+│   └── teather-p0           # historical P0 helper
+├── packaging/               # Debian package, systemd --user unit, D-Bus, man
+├── third_party/tun2proxy/   # pinned tun2proxy build (rebuilt with --features udpgw)
+├── docs/                    # see the documentation map below
+├── AGENTS.md                # durable context + safety gates for coding agents
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 └── README.md
 ```
 
-Do not create placeholder source trees merely to match this diagram. Add a
-directory when its first real file is ready.
+Later cross-platform receivers (`desktop/shared/`, a shared flow `core/`) and a
+`tools/` directory do not exist yet; add a directory when its first real file is
+ready.
 
 ## Documentation map
 
@@ -329,40 +331,44 @@ directory when its first real file is ready.
   documented.
 - [Security policy](SECURITY.md) — how to report a vulnerability safely.
 
-## Getting started today
+## What runs today
 
-P1 is complete and Teather runs live on the developer laptop. D-019 defers a
-permanent release identity while Teather is privately tested (the APK is
-debug-signed). **D-022** — NetworkManager owns an in-memory `teather0`, no
-privileged helper, additive DNS, automatic failover — plus **D-023** (on-the-fly
-`teather upstream` transport switch), an `ACTION_RECONFIGURE` that makes that
-switch zero-gap, and **D-024** (general UDP over tun2proxy's `udpgw` feature,
-terminated by a phone-side `UdpGatewayServer`). Current builds: Debian `0.1.0-8`,
-Android `0.1.0-p1.2`. A 2026-08-30 end-to-end test on the laptop + phone covered
-install, connect, TCP, full Wi-Fi-loss failover, a UDP STUN round-trip through
-the relay, the zero-gap upstream switch, and a clean teardown to byte-identical
-host state. See [the decision log](docs/DECISIONS.md) and
-[project status](docs/PROJECT_STATUS.md).
+P1 is complete and Teather is the owner's daily connection. The APK is
+debug-signed (D-019 defers a permanent release identity during private testing).
 
-The deterministic source-level gate remains:
+**Android** (`0.1.0-p1.2`): a Kotlin foreground service running a local SOCKS5
+relay plus a udpgw terminator for general UDP, with a live upstream picker
+(`auto|cellular|wifi|ethernet`) and status/metrics.
+
+**Linux** (Debian `0.1.0-11`): a per-user `teatherd` D-Bus service, a `teather`
+CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
+`teather0` (no privileged helper, additive DNS — D-022); failover to the phone
+is automatic when Wi-Fi/Ethernet is lost, and Teather can also come up as the
+*only* path when there is no other link (D-025). The `teather upstream` switch is
+zero-gap (D-023 + `ACTION_RECONFIGURE`). General UDP rides tun2proxy's `udpgw`
+stream, terminated on the phone (D-024) — enough for Shadow PC cloud gaming.
+An abnormal disconnect (phone unplug, USB/ADB drop, tun2proxy crash, a dropped
+forward) is detected in seconds and auto-reconnects, with a persistent
+`~/.local/state/teather/teatherd.log` and self-clearing toast notifications
+(D-026).
+
+Validated by a 2026-08-30 end-to-end test (install, connect, TCP on cellular,
+full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream switch,
+byte-identical teardown) and a 2026-08-31 fault-injection pass (daemon restart,
+tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI). See
+[the decision log](docs/DECISIONS.md) and [project status](docs/PROJECT_STATUS.md).
+
+Build:
 
 ```bash
-make check
+make check          # gradle test + lint + APKs, then the Linux unit tests
+make android-build  # debug APK only  -> app/build/outputs/apk/debug/
+make p1-package     # Debian package  -> build/p1/teather_<version>_amd64.deb
 ```
 
-To reproduce the historical P0 experiment from scratch with an unlocked phone
-attached through authorized ADB, run:
-
-```bash
-./desktop/linux/teather-p0 doctor
-./desktop/linux/teather-p0 all
-./desktop/linux/teather-p0 soak
-```
-
-The helper discovers the non-sensitive phone and host environment; there are no
-device-specific constants to fill into source. See [the P0 handoff](docs/P0_HANDOFF.md)
-for its historical physical boundary and evidence procedure. It is not the
-current resume point.
+The historical P0 experiment (SOCKS-only TCP over ADB) is reproducible with
+`./desktop/linux/teather-p0 doctor|all|soak` and `docs/P0_HANDOFF.md`; it is
+superseded by P1 and is not the current resume point.
 
 ## Reference material
 

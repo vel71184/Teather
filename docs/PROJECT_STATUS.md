@@ -2,30 +2,29 @@
 
 - **Snapshot date:** 2026-08-31
 - **Lifecycle:** implementation / pre-alpha
-- **Active milestone:** P1 — Linux USB Desktop. Acceptance met: D-022
-  is validated end-to-end and running live on the developer host. The owner has
-  since directed a post-P1 track of work (see the 2026-08-30 entries and the
-  punch list) — not P2 as scoped by D-018. IPv6 and the broader "become a VPN"
-  scope stay deferred; the owner rejected the roadmap's assumption that all of
-  P2/P4 must happen. The owner also clarified the core aim: cellular traffic
-  through Teather must not be classified as tethered. P3 wireless is
-  **deprioritised** (it does not serve that aim). Shadow PC (cloud gaming, a UDP
-  workload) launched and was usable through Teather on `0.1.0-8`. Remaining: the
-  E-011 TTL/JA3 half (needs a reflector) and the robustness pass.
-- **Uncommitted (in the tree, both deployed + live-tested, NOT committed):**
-  - **D-025** (`0.1.0-9`) — `teather connect` comes up as the *only* internet
-    path when the host has no other link (armed). Live-tested 2026-08-30.
-  - **D-026** (`0.1.0-11`) — self-healing after an abnormal disconnect,
+- **Active milestone:** P1 — Linux USB Desktop. **Complete and daily-driven.**
+  D-022 (NetworkManager owns `teather0`, additive DNS, automatic failover) is
+  validated end-to-end and running live on the developer host. The owner then
+  directed a focused post-P1 track — not the full P2/P4 sequence — which
+  discharged D-018. IPv6 and the broader "become a VPN" scope stay deferred.
+  The core aim: cellular traffic through Teather must not be classified as
+  tethered. P3 wireless is **deprioritised** (does not serve that aim).
+- **Committed 2026-08-31** (`071e2cc` + docs `36f4286`), all deployed and
+  live-tested:
+  - **D-023** (`0.1.0-5..7`) — `teather upstream auto|cellular|wifi|ethernet`,
+    zero-gap via `ACTION_RECONFIGURE`.
+  - **D-024** (`0.1.0-6..8`) — general UDP over tun2proxy's `udpgw` stream, a
+    phone-side `UdpGatewayServer`. Shadow PC cloud gaming works (`0.1.0-8`).
+  - **D-025** (`0.1.0-9`) — Teather comes up as the *only* internet path when
+    armed and no other link exists.
+  - **D-026** (`0.1.0-11`) — abnormal-disconnect self-heal + auto-reconnect,
     persistent `teatherd.log`, self-clearing toast notifications,
-    single-instance GTK app, standalone connectivity re-check + sole-path
-    tracking. Folds in punch-list items 4/5/6. **Built, installed on the dev
-    host, and fault-injection tested 2026-08-31** (daemon restart, tun2proxy
-    kill, `adb kill-server`, phone unplug/replug, Wi-Fi off/on, GUI
-    open/close — all self-heal and auto-reconnect in a few seconds; phone
-    reboot deferred). 72 passing host unit tests.
-  - `0.1.0-10` (idempotent ADB cleanup, punch item 4) was an intermediate step
-    now subsumed by D-026's teardown rework.
-  **Not committed — ready to commit.**
+    single-instance GTK, sole-path tracking. Fault-injection tested 2026-08-31
+    (daemon restart, tun2proxy kill, `adb kill-server`, unplug/replug, Wi-Fi
+    toggle, GUI). Phone-reboot case deferred. 72 host unit tests pass.
+- **Remaining:** the E-011 TTL/JA3 half of primary-goal verification (needs a
+  reflector + a cellular-bound request from the phone); the phone-reboot soak;
+  a longer daily-use soak.
 - **Runnable build:** Android `0.1.0-p1.2` (`versionCode 4`); Debian package
   `0.1.0-11` (D-026 self-healing + logging; `0.1.0-9` D-025 standalone connect;
   `0.1.0-8` added the udpgw tuning;
@@ -63,63 +62,124 @@ upstream selection, pairing, status, and session metrics.
 
 ## Current objective
 
-P0 proved the implemented vertical path on the owner's actual phone and Linux
-laptop:
+The implemented vertical path, proven end to end on the owner's phone + laptop:
 
 ```text
-Linux curl -> laptop loopback -> ADB forwarding -> Android SOCKS5 relay
-           -> explicitly selected Android Network -> Internet
+Linux app -> teather0 TUN -> tun2proxy -> ADB forward (loopback) ->
+  Android SOCKS5 / udpgw relay -> selected Android upstream (cellular) -> Internet
 ```
 
-The physical P0 gates passed on the owner's phone. On 2026-08-25 the owner
-provided the complete P1 implementation plan and explicitly requested its
-implementation. This satisfies D-013's source-implementation approval gate. The
-bounded desktop, Android control, recovery, and package surfaces are implemented
-and pass host checks. The disposable-VM Phase 1 package, D-Bus, real GNOME
-GUI/tray/fallback, watcher, and no-mutation gate passed on 2026-08-26 (against
-the older helper-based package). D-019 accepts Gradle's debug signing for
-private P1 testing. The debug APK is verified. On 2026-08-27 the physical run
-connected the bounded tunnel but disabling Wi-Fi removed the only usable
-non-loopback IPv4 nameserver; Teather failed safely and restored owned state.
-D-021's `Reapply` DNS design was then implemented and disproven against real
-NetworkManager (E-002). **D-022 (NetworkManager owns `teather0`, no privileged
-helper, additive DNS, automatic failover) and D-023 (`teather upstream` picks
-the phone's transport) are implemented and validated** — in the disposable VM
-and then live on this laptop (see the 2026-08-30 work log). P1's question is
-answered. The current objective is the P2 design discussion (D-018); the owner
-is daily-driving `0.1.0-5` in the meantime.
+P1 (Linux USB Desktop) is **complete and daily-driven.** D-022 (NetworkManager
+owns an in-memory `teather0`, no privileged helper, additive DNS, automatic
+failover) and D-023 (`teather upstream` picks the phone's transport, zero-gap)
+were validated in a disposable VM and then live on this laptop 2026-08-30.
 
-## Implemented P0 surface
+After P1, the owner **directed a focused post-P1 track** and rejected the
+roadmap's assumption that all of P2 ("protocol completeness") and P4 (WireGuard)
+must follow — this discharged D-018. What was actually done:
 
-- Android application and pinned Gradle wrapper/build configuration.
-- User-started connected-device foreground service.
-- SOCKS5 no-auth negotiation and TCP `CONNECT` for IPv4, domain, and literal
-  IPv6 targets.
-- Listener bound strictly to Android `127.0.0.1`.
-- Per-connection Android upstream selection and network-bound DNS/socket creation.
-- Connection limits, handshake/connect/idle timeouts, cancellation, counters, and
-  coarse error categories.
-- Minimal Android control/status interface.
-- P0 originally used a debug-only exported service lifecycle. P1 supersedes it
-  with a release service protected by `android.permission.DUMP`.
-- Linux helper for redacted discovery, build, install, start, test, soak, logs,
-  status, and cleanup.
-- Unit/integration tests and GitHub Actions build/lint workflow.
-- Placeholder-free laptop continuation guide in `docs/P0_HANDOFF.md`.
+- **D-024** — lightweight general UDP over tun2proxy's `udpgw` stream, terminated
+  by a phone-side `UdpGatewayServer` (no VpnService, no packet stack, no second
+  forward). Live-tested (STUN round-trip); Shadow PC cloud gaming works.
+- **D-025** — Teather can come up as the *only* internet path when the host has
+  no other link. Live-tested 2026-08-30.
+- **D-026** — self-healing after an abnormal disconnect, persistent
+  `teatherd.log`, toast notifications, single-instance GTK, sole-path tracking.
+  Fault-injection tested 2026-08-31.
+
+The owner also clarified the **primary goal**: cellular traffic through Teather
+must not be classified as tethered. The re-origination that serves that goal is
+already built (the phone opens every socket itself); the 2026-08-30 test
+confirmed the egress is genuinely the phone's cellular link.
+
+**Remaining:** the E-011 TTL/JA3 half (needs a reflector + a cellular-bound
+request from the phone, which has no HTTP client); the phone-reboot soak;
+committing nothing further is pending. IPv6, multi-client, other platforms, and
+the WireGuard endpoint (P4) stay deferred. IPv6 and "become a VPN" scope are not
+in progress.
+
+## Implemented surface (what actually exists)
+
+### Android relay — `app/` (Kotlin, `0.1.0-p1.2`, `versionCode 4`, debug-signed)
+
+- `RelayService` — an exported `connectedDevice` foreground service protected by
+  `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
+  `ACTION_RECONFIGURE` intents carrying `relay_port` + `relay_upstream`.
+- `Socks5Server` — SOCKS5 no-auth, TCP `CONNECT` for IPv4 / domain / literal
+  IPv6 targets, bound strictly to `127.0.0.1`; per-connection outbound socket
+  opened by `AndroidNetworkConnector` on the selected `Network`.
+- `UdpGatewayServer` + `UdpGatewayProtocol` — terminates tun2proxy's badvpn-style
+  "udpgw" TCP stream on the phone, one `DatagramSocket` (bound to the chosen
+  upstream) per connection id. Carries general UDP with no VpnService, no packet
+  stack, no second ADB forward (D-024).
+- `NetworkSelector` / `UpstreamPreference` — `auto|cellular|wifi|ethernet`,
+  swappable live (`reconfigure()` rebinds without a listener teardown; open
+  sockets keep their link).
+- `RelayStats` / `RelayStatusWire` — accepted/established/rejected/active
+  counts, byte totals, last upstream, error categories, cellular
+  available/validated; surfaced via `dumpsys`.
+- `MainActivity` — port + upstream picker, start/stop, live status, "copy the
+  laptop commands" clipboard helper, notification-permission prompt.
+- Unit/integration tests for SOCKS5, udpgw framing, the udpgw server, and the
+  status wire format.
+
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-11`)
+
+- `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
+  loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
+- `Manager` — connect / disconnect / recover / reconcile / health-check /
+  upstream-switch / device approve-rename-forget / failover + auto-connect
+  toggles. Owns the `teather0` lifecycle, the tun2proxy child, the ADB forward,
+  and the ownership journal in `$XDG_RUNTIME_DIR/teather/`.
+- `NetworkManagerConnection` — creates/activates/deletes the one in-memory
+  `tun` connection for `teather0` over the system bus (`AddConnection2`
+  in-memory flag, `tun.owner` delegation, additive `ipv4.dns-priority` 32050,
+  backup default at metric 32000), plus the non-mutating `CheckConnectivity`
+  nudge (D-026).
+- `preflight` — refuses VPN/split defaults, overlapping routes, nonstandard
+  policy rules, a pre-existing `teather0`, or a default that would outrank
+  metric 32000; recognises the "standalone" (no physical default) case (D-025).
+- `dns_probe` — UDP + TCP virtual-DNS readiness check before reporting connected.
+- `AdbClient` — `devices` / `forward` / `forward --list` / `dumpsys` status /
+  relay start-stop-reconfigure, serials redacted, 10s timeouts.
+- `logging_setup` — rotating `~/.local/state/teather/teatherd.log` (0600),
+  `TEATHER_DEBUG=1` for DEBUG.
+- `dbus_service` — the `io.github.vel71184.Teather1.Manager` interface
+  (`GetStatus`, `ListDevices`, `Connect`, `Disconnect`, `ApproveDevice`,
+  `RenameDevice`, `ForgetDevice`, `SetAutoConnect`, `SetAutoFailover`,
+  `SetUpstream`, `Diagnose` + `StatusChanged`/`DevicesChanged`/`MetricsChanged`
+  signals) and the self-clearing toast notifications.
+- `cli.py` — `teather status|devices|connect|disconnect|device
+  approve|rename|forget|autoconnect|failover|upstream|diagnose|recover`, all
+  pure D-Bus clients.
+- `gui.py` — single-instance GTK3 window: device picker, connect/disconnect,
+  approve/rename/forget, auto-connect + failover checkboxes, upstream combo,
+  live metrics, diagnostics, recovery hint. AppIndicator tray when the desktop
+  supports it; closing the window never disconnects.
+- `config.py` — mode-0600 JSON, locally salted device-id hashes, never the raw
+  serial.
+- Packaging: `.deb` (`packaging/`), `systemd --user` unit with
+  `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
+  pages, `RECOVERY.md.gz`. `build-deb.sh` rebuilds `tun2proxy` with
+  `--features udpgw` as needed.
+- 72 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+
+### Historical P0
+
+The `desktop/linux/teather-p0` helper and `docs/P0_HANDOFF.md` reproduce the
+completed P0 experiment (SOCKS-only TCP over ADB). Superseded by P1; kept for
+reference.
 
 ## Next concrete actions
 
-1. **Stop for the P2 design discussion (D-018)** before any general-UDP / IPv6 /
-   broader-DNS / WireGuard / wireless-transport work. P2 = "Protocol
-   Completeness": a documented UDP relay path, explicit IPv6 policy and tests,
-   DNS A/AAAA behaviour, keepalive/backpressure, suspend/resume. Let real
-   daily-use friction inform the priorities.
-2. When the APK is next built: unify the Android launcher icon to the Linux
-   `desktop/linux/resources/icons/teather.svg` art (owner preference); update
-   any TCP-only UI strings once P2 adds UDP.
-3. Optional, if the owner wants a belt-and-suspenders safety net for bare-host
-   daily use: the standalone auto-revert / dead-man's-switch sketched in the
-   2026-08-29 conversation (not built).
+1. **E-011 TTL/JA3 half** — the primary-goal check still pending a reflector and
+   a cellular-bound request originated from the phone (which has no HTTP
+   client). This is the last piece of primary-goal verification.
+2. **Phone-reboot soak** — the one D-026 fault case not yet exercised; plus a
+   real multi-day daily-use soak.
+3. Optional: the bare-host auto-revert / dead-man's-switch (punch item 3,
+   sketched, not built) if the owner wants zero-babysit confidence beyond the
+   D-026 self-heal.
 
 `~/teather-host-evidence/` holds the host before/after network snapshots.
 Generated `__pycache__`, private VM evidence, and signing keys are not
@@ -142,28 +202,38 @@ implementation artifacts and must not be staged.
   amended by D-022).
 - The P1 route, virtual-DNS, trust, D-Bus, packaging, and recovery architecture
   is approved (D-015 through D-017).
-- Work must stop for explicit planning and approval after P1, before P2 (D-018).
+- D-018 (stop for explicit planning before P2) was **discharged** by the owner's
+  2026-08-30 post-P1 directive: a focused track (D-024 lightweight UDP, D-025
+  standalone connect, D-026 robustness, E-011 primary-goal verification) instead
+  of the full P2/P4 sequence.
 - Private P1 device testing uses debug signing; permanent signing is deferred
   until distribution is considered (D-019).
 - NetworkManager owns `teather0` as an in-memory `tun` connection
   with `tun.owner` delegation and additive DNS; there is no setuid-root helper or
   custom polkit action (D-022, supersedes D-020 and D-021).
+- General UDP is carried over tun2proxy's `udpgw` and terminated on the phone —
+  no VpnService, no packet stack (D-024).
+- Teather may be the sole internet path when armed and no other link exists
+  (D-025); an abnormal disconnect self-heals and auto-reconnects (D-026).
 
 See `docs/DECISIONS.md` for rationale and status.
 
 ## Important unknowns
 
 - Provider classification/accounting behavior is unmeasured and cannot be
-  generalized from one result.
-- Carrier classification/accounting over sustained tethering-like use is
-  unmeasured — that is the owner's daily use, not a synthetic gate. General UDP
-  and IPv6 remain P2.
-- The userspace WireGuard endpoint remains a P4 hypothesis.
+  generalized from one result. The 2026-08-30 test confirmed the egress is the
+  phone's cellular link; the TTL/JA3 half (E-011) is still pending.
+- Carrier classification/accounting over sustained daily use is unmeasured —
+  that is the owner's ongoing daily use, not a synthetic gate.
+- The userspace WireGuard endpoint remains a P4 hypothesis and is not planned
+  work right now.
+- IPv6 through Teather is unsupported and not in progress.
 - Repository license remains undecided until before public access.
 
 ## Explicitly not in progress
 
-- UDP relay
+- IPv6 through the tunnel
+- WireGuard endpoint / "become a VPN" scope
 - Polished Android onboarding
 - Local-only Wi-Fi, Wi-Fi Direct, AOA, or Bluetooth
 - Windows, macOS, Android, or iOS receivers

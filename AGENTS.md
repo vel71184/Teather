@@ -17,15 +17,13 @@ pick a reasoning mode. Just start. Ask the owner only for the things listed unde
 
 ## Current priority
 
-P0/E-001 and P1 acceptance are complete. D-022 has run live on the developer
-laptop since 2026-08-30. Debian `0.1.0-11` / Android `0.1.0-p1.2`. Uncommitted
-but deployed + live-tested on the dev host: `0.1.0-9` = D-025 (standalone
-connect); `0.1.0-11` = D-026 (self-healing after an abnormal disconnect +
-persistent `teatherd.log` + self-clearing toast notifications + single-instance
-GTK + sole-path tracking; folds in punch items 4/5/6). Fault-injection tested
-2026-08-31 (daemon restart, tun2proxy kill, `adb kill-server`, unplug/replug,
-Wi-Fi toggle, GUI). **Not committed** — offer to commit; phone-reboot soak
-deferred.
+P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
+D-022 has run live on the developer laptop since 2026-08-30. Current build:
+Debian `0.1.0-11` / Android `0.1.0-p1.2`, committed 2026-08-31 (`071e2cc`).
+Post-P1, all deployed + live-tested: D-023 (upstream switch), D-024 (udpgw UDP),
+D-025 (standalone connect), D-026 (abnormal-disconnect self-heal + auto-reconnect
++ `teatherd.log` + toast notifications + single-instance GTK + sole-path
+tracking). Fault-injection tested 2026-08-31. Deferred: the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must

@@ -43,12 +43,14 @@ traffic exits on the phone's cellular, DNS and routing fail over automatically
 when the VM's link drops and restore cleanly, and every teardown returns the
 host to exact baseline. Package lifecycle and the GTK GUI pass against
 `0.1.0-4`. The synthetic two-hour soak is deliberately skipped — the owner's
-real daily use is the sustained/live-data validation. **P1 acceptance is met;
-next is the P2 design discussion (D-018).** Permanent
-release signing is deferred by D-019. Detail in `docs/P1_HANDOFF.md`.
+real daily use is the sustained/live-data validation. **P1 acceptance is met and
+Teather is the owner's daily connection.** Permanent release signing is deferred
+by D-019. Detail in `docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
 recoverable system-wide TCP and DNS through the existing Android relay?
+**Answered — yes.** D-018's "stop for a P2 discussion" happened; the owner then
+directed the focused post-P1 track below instead of the full P2/P4 sequence.
 
 Entry gate (D-013, satisfied 2026-08-25): the owner reviewed and approved the
 Linux networking design before P1 code was written. Live host mutation is limited
@@ -67,10 +69,11 @@ Accepted operating model (D-014 as amended by D-022):
 - No persistent NetworkManager profile, no direct `/etc/resolv.conf` edit, no
   firewall change, no change to any physical link.
 
-Deliverables:
+Deliverables (delivered as Android `0.1.0-p1.2` / `versionCode 4`, Debian
+`0.1.0-4` and iterated to `0.1.0-11`):
 
-- Android `0.1.0-p1` (`versionCode = 2`) with DUMP-protected ADB start/stop
-  actions and versioned machine-readable `dumpsys` status.
+- Android with DUMP-protected `START` / `STOP` / `RECONFIGURE` actions and
+  versioned machine-readable `dumpsys` status.
 - Per-user `teatherd` with one typed D-Bus manager API, device trust, one-active-
   device selection, state/metric signals, redacted diagnostics, and a mode-0600
   ownership journal.
@@ -117,19 +120,33 @@ Exit criteria:
   uninstall, and purge semantics pass.
 - No raw ADB serial or browsing destination appears in files, D-Bus, or logs.
 
-Exit: record the P1 physical experiment, update `docs/PROJECT_STATUS.md`, then
-stop for a P2 design discussion with the owner before starting P2 work (D-018).
+Exit (met): the P1 physical experiment is recorded, `docs/PROJECT_STATUS.md` is
+current, and the D-018 stop-for-discussion happened — see below.
 
-## Post-P1 direction (2026-08-30)
+## Post-P1 direction (2026-08-30, updated 2026-08-31)
 
 After P1 acceptance the owner redirected work away from completing P2/P3/P4 as
-written. The linear phase plan below is kept for reference, but the active order
-is in `AGENTS.md`: a lightweight UDP path (done, D-024), on-hardware
-verification that relayed cellular traffic is not classifiable as tethered
-(E-011), then a robustness pass. **P3 (Wireless Relay) is deprioritised** — a
-local receiver link is invisible to the carrier and does not serve the
-primary goal. IPv6, WireGuard, and the broader "protocol completeness" scope
-are deferred, not scheduled.
+written. The linear phase plan below is kept for reference; the active order is
+in `AGENTS.md`. Done so far:
+
+- **D-024** — lightweight general UDP over tun2proxy's `udpgw` stream, phone-side
+  `UdpGatewayServer`. Live-tested; Shadow PC cloud gaming works (`0.1.0-8`).
+- **D-025** — Teather can be the *only* internet path when armed and no other
+  link exists. Live-tested (`0.1.0-9`).
+- **D-026** — abnormal-disconnect self-heal + auto-reconnect, persistent
+  `teatherd.log`, toast notifications, single-instance GTK, sole-path tracking.
+  Fault-injection tested (`0.1.0-11`).
+
+Remaining in this track:
+
+- **E-011** — the TTL / JA3 half of primary-goal verification (needs a reflector
+  and a cellular-bound request originated from the phone). The 2026-08-30 test
+  already confirmed the egress is the phone's cellular link.
+- A phone-reboot fault case and a longer daily-use soak.
+
+**P3 (Wireless Relay) is deprioritised** — a local receiver link is invisible to
+the carrier and does not serve the primary goal. IPv6, WireGuard, and the
+broader "protocol completeness" scope are deferred, not scheduled.
 
 ## P2 — Protocol Completeness
 
