@@ -299,7 +299,11 @@ the window instead of spawning another process — the multi-instance mess seen
 on 2026-08-31), closing the window never disconnects, and the window shows
 `recovery_hint` plus an explicit "closing this window does not disconnect" note.
 After a standalone armed activation the manager calls NM's `CheckConnectivity`
-so GNOME's network icon appears (punch-list item 5).
+so GNOME's network icon appears (punch-list item 5). This is a global
+NetworkManager method rather than an operation on the `teather0` connection —
+technically outside D-022's "only the one connection" scope — but it mutates
+nothing (it only re-runs NM's own connectivity probe), needs no new privilege,
+and is best-effort. Recorded in `docs/THREAT_MODEL.md`.
 
 ### Consequences
 

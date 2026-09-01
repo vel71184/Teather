@@ -149,6 +149,13 @@ Default logs may include timestamps, component, state transition, byte counts, a
 coarse error type. Destination hostnames/IP addresses and payloads should be
 redacted unless the user explicitly enables a time-limited diagnostic mode.
 
+Since D-026 the Linux daemon writes a persistent rotating log to
+`~/.local/state/teather/teatherd.log` (mode 0600) in addition to the journal;
+`TEATHER_DEBUG=1` in the service environment raises it to DEBUG (every `adb`
+argv, every poll tick). `adb` serials are redacted to `<device>`; destinations
+and resolver contents are never logged. It is the first place to look when the
+tether misbehaves.
+
 ## Dependency policy
 
 Before adding a dependency:

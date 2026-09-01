@@ -16,10 +16,16 @@ as little receiver-side software as each platform permits.
 > automatic once that link is gone (D-022), the phone's upstream transport is
 > switchable on the fly with no gap (D-023 + `ACTION_RECONFIGURE`), and general
 > UDP is carried over tun2proxy's `udpgw` and terminated on the phone (D-024).
+> Teather can also come up as the *only* internet path when the host has no other
+> link (D-025), and an abnormal disconnect — phone unplug, USB/ADB drop,
+> tun2proxy exit, a dropped forward — self-heals and auto-reconnects in a few
+> seconds, with a persistent `~/.local/state/teather/teatherd.log` and toast
+> notifications (D-026).
 > A 2026-08-30 end-to-end test on the laptop + phone covered connect, TCP on
 > cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap
-> upstream switch, and a clean teardown to byte-identical host state. Builds:
-> Debian `0.1.0-8`, Android `0.1.0-p1.2`. See `docs/PROJECT_STATUS.md` and
+> upstream switch, and a clean teardown to byte-identical host state; a
+> 2026-08-31 fault-injection pass exercised the D-026 self-heal paths. Builds:
+> Debian `0.1.0-11`, Android `0.1.0-p1.2`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source

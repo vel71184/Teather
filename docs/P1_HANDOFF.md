@@ -347,6 +347,9 @@ Results (package `0.1.0-4`, `teather.service` running):
   runtime journal.
 - `kill -9 tun2proxy` → daemon's 3 s health poll auto-disconnected
   (`tunnel-exited`), same clean baseline. `teather recover` idempotent.
+  (Superseded by D-026 / `0.1.0-11`: the same event now self-heals **and**
+  auto-reconnects within ~4 s — see the 2026-08-31 work-log entry in
+  `docs/PROJECT_STATUS.md`.)
 
 Not yet done for full P1 sign-off: a literal two-hour session, the GUI/tray and
 package upgrade/purge lifecycle against `0.1.0-4`, and the repo-wide P1 closeout

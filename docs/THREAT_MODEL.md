@@ -167,6 +167,12 @@ forward.
 - On restart, remove only state that matches a valid owned journal.
 - Never automatically delete an ambiguous interface; provide offline inspection
   and explicit recovery commands instead.
+- D-026: the self-heal / `reconcile` loop clears the ownership journal on its
+  own once the **host** side (tun2proxy + the `teather0` connection) is verified
+  released — the loopback ADB forward and the phone relay are not host state and
+  never hold recovery open. The host side stays strict: an existing `teather0`
+  that cannot be confirmed Teather-owned still stops with `ambiguous-interface`
+  and asks for a manual restart; nothing re-mutates routes/DNS on a schedule.
 
 ### Sensitive logging
 
@@ -180,6 +186,31 @@ keys, subscriber information, or device identifiers.
 - Make verbose diagnostics explicit, time-limited, and visibly enabled.
 - Provide a redacted diagnostics exporter rather than asking for whole log trees.
 - Ignore captures and local secrets in Git.
+- D-026: `teatherd` keeps a persistent rotating log at
+  `~/.local/state/teather/teatherd.log` (mode 0600, `StateDirectory=teather`,
+  ~2 MB × 5). It records the failing layer and control-plane actions only —
+  `adb` control commands (serial redacted to `<device>` by the ADB layer before
+  the record is formed), D-Bus method names, NetworkManager calls, and
+  connect/disconnect/reconcile/health steps. It never records DNS probe names,
+  resolver contents, or per-flow destinations. `TEATHER_DEBUG=1` raises it to
+  DEBUG (still no destinations).
+
+### Notifications and NetworkManager connectivity probe
+
+**Threat:** New outbound D-Bus surface and a NetworkManager call outside the
+"only the one `teather0` connection" scope.
+
+**Mitigations:**
+
+- D-026 desktop notifications are one-way `org.freedesktop.Notifications.Notify`
+  / `CloseNotification` calls carrying only Teather state text (never a
+  destination or identifier); best effort, silent if no notification service.
+- After a standalone activation the manager calls
+  `org.freedesktop.NetworkManager.CheckConnectivity`. This is a global
+  NetworkManager method rather than an operation on the `teather0` connection,
+  but it **mutates nothing** — it only asks NetworkManager to re-run its own
+  periodic connectivity check so the desktop shows a network icon. No new
+  privilege; the call is allowed for an active local session.
 
 ### Upstream leakage or fallback
 

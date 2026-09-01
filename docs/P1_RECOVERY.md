@@ -9,6 +9,24 @@ non-persistent `tun` connection. Normal disconnect, tunnel death, and the next
 `teatherd` start all remove it. It is never written to
 `/etc/NetworkManager/system-connections`.
 
+**Since D-026 (`0.1.0-11`) you rarely need any of this.** An abnormal loss of
+the connection — the phone unplugged, the USB/ADB bridge dropped, tun2proxy
+exited, NetworkManager dropped `teather0`, the relay stopped — is now detected
+within a few seconds; `teatherd` releases its own resources and reconnects on
+its own once the phone is reachable, and it clears a wedged state on its poll
+loop without a manual `teather recover`. First look at the log:
+
+```bash
+tail -n 100 ~/.local/state/teather/teatherd.log
+journalctl --user -u teather -n 100
+```
+
+`teather status` shows `recovery_hint` when there is a concrete step to take.
+The one case that still needs a hand is a `teather0` that `teatherd` cannot
+confirm it owns (`ambiguous-interface` / "needs attention" notification): try
+`systemctl --user restart teather.service` first, and only if that does not
+clear it, work through the manual steps below.
+
 First stop the per-user daemon and inspect exact Teather-owned state:
 
 ```bash
@@ -37,9 +55,11 @@ nmcli connection down teather0
 nmcli connection delete teather0
 ```
 
-`teather recover` (with the phone reconnected) does exactly this plus removes the
-ADB forward recorded in Teather's mode-0600 ownership journal. Never delete a
-`teather0` whose `tun.owner` is not you, or one that appears in
+`teather recover` (with the phone reconnected) does exactly this plus releases
+the ADB forward recorded in Teather's mode-0600 ownership journal — but note
+that since D-026 `teatherd` already runs the same routine on every poll and on
+startup, so a service restart usually suffices. Never delete a `teather0` whose
+`tun.owner` is not you, or one that appears in
 `/etc/NetworkManager/system-connections` — that is not Teather's.
 
 If the connection is already gone but `/etc/resolv.conf` still lists

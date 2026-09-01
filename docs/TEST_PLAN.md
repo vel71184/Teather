@@ -85,22 +85,33 @@ recovery, no unrelated state mutation) are unchanged.
 
 Capture relevant Linux state before and after each test.
 
+**2026-08-31 (D-026, `0.1.0-11`):** the "required recovery" for an *abnormal*
+loss is now stronger than "fails closed with recoverable state" — `teatherd`
+must detect it within a few seconds, release its owned resources to a clean
+`disconnected` state (not `error`), and let auto-connect reconnect once the
+phone is reachable, with no manual `teather recover`. The host side stays
+strict (an unverifiable `teather0` still stops with `ambiguous-interface`).
+Fault-injection tested 2026-08-31: `systemctl restart`, `kill -9 tun2proxy`,
+`adb kill-server`, phone unplug/replug, Wi-Fi off/on — all self-heal and
+auto-reconnect. Phone reboot still to do.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
 | Repeated stop | No error that prevents future start |
 | SIGINT | Same restoration as normal stop |
 | SIGTERM | Same restoration as normal stop |
-| Forced receiver crash | Next start detects and repairs owned residue |
-| Android service crash | Receiver exits or waits according to explicit policy |
-| Cable removal | Relay route is withdrawn without deleting unrelated state |
+| Forced receiver crash | Next start detects and repairs owned residue; D-026: `reconcile()` also repairs it on the running daemon |
+| Android service crash | Receiver exits or waits per policy; D-026: host detects `relay-stopped` and self-heals, prompts to restart the relay |
+| Cable removal | Relay route withdrawn without touching unrelated state; D-026: detected as `phone-disconnected`, auto-reconnects on replug |
+| tun2proxy / ADB forward drop | D-026: detected as `tunnel-exited` / `relay-unreachable`, self-heal + auto-reconnect in ~5 s |
 | Linux suspend/resume | Reconnects or fails closed with recoverable state |
 | Existing VPN active | Refuses unsafe route plan or follows documented coexistence |
 | Teather starts while Wi-Fi is active | Wi-Fi route and resolver stay preferred and fully working; its NetworkManager state is unchanged |
 | Wi-Fi is lost with failover armed | Traffic and DNS fail over to Teather automatically; no Teather-initiated change to any physical link |
 | Wi-Fi is restored | Wi-Fi route and resolver become preferred again without restarting Teather |
 | Wi-Fi is lost with failover off | Teather stays dormant (no default route, no DNS) until armed |
-| `teatherd` process is killed | Next `teatherd` start's `recover()` deletes the stale in-memory `teather0` connection |
+| `teatherd` process is killed / `systemctl restart` | Shutdown releases the host side but leaves the phone relay running; next start's session check clears residue and auto-connect adopts the relay (~5 s) |
 | NetworkManager missing or older than 1.42 | Refuse before any connection is created |
 | NetworkManager creates `teather0` with unexpected address/routes | Parity check fails; disconnect and restore owned state |
 | UDP or TCP DNS readiness fails | Never report connected; deactivate the connection |

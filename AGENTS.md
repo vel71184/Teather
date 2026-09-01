@@ -86,7 +86,7 @@ non-goal. Still discuss with the owner before starting anything outside this lis
   APIs, or device-integrity workarounds.
 - No wildcard or passwordless sudo; no new setuid helper or polkit action; no
   NetworkManager scope beyond creating/activating/deleting the one `teather0`
-  connection.
+  connection (plus the non-mutating `CheckConnectivity` nudge, D-026).
 - Linux route/DNS/firewall changes must be bounded, reversible, and restored on
   normal exit, error, signal, and next-start recovery. Treat a cleanup mismatch
   as a failure even if traffic worked.
