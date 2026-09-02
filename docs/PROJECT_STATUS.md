@@ -32,10 +32,11 @@
   `teather device install` installs/upgrades it on the phone so the two halves
   stay on the same schema. Android app has a "Get the desktop client" button
   linking to the releases page.
-- **D-030** (2026-09-01) — release signing wired (`keystore.properties` /
-  `TEATHER_KEYSTORE*`, debug fallback with a warning); supersedes D-019. The key
-  itself is the owner's to generate. First release-signed install on the pilot
-  phone needs a one-time uninstall/reinstall.
+- **D-030** (2026-09-01) — release signing done (supersedes D-019). The owner's
+  key lives at `~/.teather/teather-release.jks` (password in KeePass);
+  `keystore.properties` and `TEATHER_KEYSTORE*` configure it, with a debug
+  fallback for CI/contributors. The pilot phone's one-time debug→release
+  uninstall/reinstall is complete; the app and bundled APK are `CN=Teather`.
 - **Verification:** 80 host unit tests, 27 Android unit tests, both APKs + the
   `0.1.0-12` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
   + pilot phone: the release key was generated (D-030), the release-signed APK
