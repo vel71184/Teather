@@ -336,10 +336,34 @@ unchanged. Final cleanup left no service or ADB forward.
 
 ## Work log
 
-A short dated entry per meaningful session: what changed, how it was verified,
-and the next action. When a milestone finishes, make sure the roadmap, this
-file, `AGENTS.md`'s "Current priority", the README status line, and the next
-handoff agree — a milestone isn't done until they do.
+A short dated entry when something ships or a session ends: what changed and how
+it was verified. A "next action" line is optional — add one only when you are
+deliberately leaving a specific thread for later, not as a routine handoff. When
+a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
+priority", and the README status line agree — a milestone isn't done until they
+do. When this section runs past ~400 lines, drop the entries older than the
+current milestone; git history keeps them.
+
+### 2026-09-01 — Retire the per-turn check-in process (D-027, docs only)
+
+- **Trigger:** the owner noted that the project's Codex-era docs bake in
+  handholding — the assistant checks in at nearly every step because the
+  instructions were written that way — and asked to remove that so the assistant
+  can run longer autonomously.
+- **Change (docs only, no code):** `AGENTS.md` — trimmed the resume ritual to
+  `PROJECT_STATUS.md` alone, added a "Working autonomy" section (whole arcs, no
+  "next exact task" handoff, deferred scope is deprioritised not gated), rewrote
+  "Finishing a change" to drop the per-edit status write and the handoff line.
+  `docs/DEVELOPMENT.md` "Definition of done" — same. `docs/PROJECT_STATUS.md`
+  work-log preamble — entries on ship/session-end, "next action" optional, trim
+  past ~400 lines. `docs/P1_HANDOFF.md` — replaced the stale "stop for P2 / no
+  UDP" closeout with the discharged-D-018 state. `docs/DECISIONS.md` — D-027.
+- **Unchanged:** the Safety gates (phone, live-host network, outward actions),
+  the Hard constraints, D-009 (no stealth features), D-010 (license), D-019
+  (release signing). Those are real gates, not process ceremony.
+- **Verified:** `python3 -m pytest desktop/linux/tests/test_core.py` (unchanged,
+  passing) — no code touched. `grep` for residual "next exact action" /
+  "discuss with the owner before starting" in the live docs.
 
 ### 2026-08-31 — Self-healing, persistent logging, notifications (D-026, `0.1.0-11`)
 

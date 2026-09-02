@@ -201,6 +201,45 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-027 — Retire the per-turn check-in process
+
+**Status:** Accepted · **Date:** 2026-09-01 (owner-directed)
+
+### Decision
+
+The assistant runs whole work arcs — design, implement, test, package, reconcile
+docs, commit to a branch — without stopping to check in between steps. The
+process scaffolding this project inherited from its Codex origins is removed:
+
+- The multi-doc resume ritual is gone. `docs/PROJECT_STATUS.md` is the single
+  resume point; other docs are reference, read when the task needs them.
+- No "next exact task" handoff. `PROJECT_STATUS.md` records current state and
+  open risks, not a queue of instructions for the next session. Work-log entries
+  add a "next action" line only when a specific thread is deliberately left.
+- `PROJECT_STATUS.md` is updated at the end of a work session or when something
+  ships, not after every edit.
+- Deferred scope (multi-client, other platforms, IPv6, WireGuard, P5 polish,
+  release signing) is deprioritised, not gated. The assistant may propose and
+  start a clearly valuable slice; the owner redirects if they disagree.
+
+### What still stops the assistant
+
+Unchanged: the **Safety gates** in `AGENTS.md` (the phone, live-host network
+mutation, outward/irreversible actions), the **Hard constraints** (unrooted
+baseline, sudo/polkit/NetworkManager scope, no carrier-bypass claims, no
+stealth/DPI-evasion features per D-009), and a genuine irreversible fork the
+repo cannot answer. The license decision (D-010) and permanent release signing
+(D-019) remain owner calls.
+
+### Rationale
+
+An earlier pass (2026-08-29) removed the first-prompt classification gate,
+reasoning-mode selection, and milestone-transition protocol. This finishes that
+work: the remaining friction was the per-change documentation tax and the
+habit of ending every unit of work with a handoff, which made multi-step
+features drag across many round-trips. The owner wants decisive execution and
+minimal ceremony (recorded in assistant memory since 2026-08-30).
+
 ## D-026 — Self-heal an abnormal disconnect; persistent daemon logging
 
 **Status:** Accepted · **Date:** 2026-08-31 (owner-directed) · **Build:**

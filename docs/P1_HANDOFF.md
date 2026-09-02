@@ -394,10 +394,12 @@ the VM's new ADB key. Confirm the phone has a working data upstream.
 
 Record E-002 for system-wide TCP/DNS behavior and E-003 for cleanup/failure
 restoration in `docs/EXPERIMENTS.md`. Update `docs/PROJECT_STATUS.md` with exact
-commands, outcomes, failures, and the next action. Any cleanup mismatch,
-destination disclosure, direct resolver edit, persistent NetworkManager change,
-unapproved link mutation, competing nameserver, or DNS residue fails P1.
+commands, outcomes, and failures. Any cleanup mismatch, destination disclosure,
+direct resolver edit, persistent NetworkManager change, unapproved link
+mutation, competing nameserver, or DNS residue fails P1.
 
-After P1 acceptance, stop. D-018 requires explicit P2 design discussion and owner
-approval before general UDP, IPv6, broader DNS, suspend/resume, or protocol work.
-Permanent release signing remains a separate pre-distribution gate under D-019.
+P1 acceptance is met and D-018's stop-for-P2-discussion happened and was
+discharged (2026-08-30) — the owner then directed the focused post-P1 track in
+`AGENTS.md`. General UDP shipped (D-024). IPv6, broader DNS, suspend/resume, and
+WireGuard stay deferred by priority. Permanent release signing remains a separate
+pre-distribution gate under D-019.

@@ -5,15 +5,38 @@ history. Keep them short.
 
 ## Resuming
 
-Read `docs/PROJECT_STATUS.md` — it is the resume point (current state, what
-changed last, next action). For P1 work also read `docs/P1_HANDOFF.md` and
-`docs/P1_RECOVERY.md`. `docs/DECISIONS.md` records *why* past technical choices
-were made, so a rejected approach is not rediscovered. If a doc contradicts the
-code, the code wins for what *is*; fix the doc.
+`docs/PROJECT_STATUS.md` is the resume point — current state, what changed last,
+open risks. Read it first. Everything else is reference, pulled in only when the
+task needs it: `docs/DECISIONS.md` records *why* past technical choices were made
+(so a rejected approach is not rediscovered), `docs/ARCHITECTURE.md` is how the
+pieces fit, and the P1 handoff/recovery docs matter only when you are actually
+running an acceptance or recovery procedure. If a doc contradicts the code, the
+code wins for what *is*; fix the doc.
 
-You do not need to stop and ask permission to begin work, classify the task, or
-pick a reasoning mode. Just start. Ask the owner only for the things listed under
-**Safety gates**, or when a real decision genuinely can't be made from the repo.
+Just start. You do not need to stop and ask permission to begin work, classify
+the task, or pick a reasoning mode. Ask the owner only for a **Safety gate**
+below, or a genuinely irreversible fork the repo can't answer.
+
+## Working autonomy
+
+Work in whole arcs, not single steps. Design, implement, refactor, test,
+package, update the docs the change touched, and commit to a branch on your own
+judgement — then report what was done. Specifically:
+
+- Record a technical choice that changed in `docs/DECISIONS.md` and move on. Do
+  not wait for sign-off on it.
+- Chain the work: finish the feature, run the tests, reconcile the docs, push
+  the branch in one pass. Do not hand back after each file with a "next exact
+  task" for a future session — that queue-of-instructions habit is retired.
+- If something needs the owner, give a best-effort answer with your assumptions
+  stated and keep going.
+- Deferred scope (multi-client, other platforms, IPv6, WireGuard, P5 polish,
+  release signing) is deprioritised, not fenced off. If a slice is clearly worth
+  doing, say so and start it; the owner redirects if they disagree. The items
+  that truly need the owner first are only those in **Safety gates** and
+  **Hard constraints**.
+
+The reason to stop is a real gate or a real fork — not a status check.
 
 ## Current priority
 
@@ -45,8 +68,9 @@ follow. Status:
 4. **Robustness** — D-026 (`0.1.0-11`) implements self-healing reconciliation,
    the wider `health_check()`, persistent logging, toast notifications, the
    single-instance GTK app, the standalone connectivity re-check, and sole-path
-   tracking (punch items 4/5/6). Fault-injection tested 2026-08-31 and passing.
-   Remaining: commit it, then the phone-reboot case and a real daily-use soak.
+   tracking (punch items 4/5/6). Committed `071e2cc`; fault-injection tested
+   2026-08-31 and passing. Remaining: the phone-reboot case and a real
+   daily-use soak.
 
 The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
 (`0.1.0-7`) after a full-desktop failover exhausted the old limit, then tuned the
@@ -64,8 +88,9 @@ P3 only as a cable-free convenience if the owner asks.
 
 IPv6 and the broader "become a VPN" scope stay deferred. Do not add fingerprint
 camouflage, DPI evasion, or carrier-stealth profiles (D-009) — deliberate
-non-goal. Still discuss with the owner before starting anything outside this list
-(multi-client, other platforms, P5 polish, release signing).
+non-goal. Anything outside the current track (multi-client, other platforms, P5
+polish, release signing) is lower priority, not off-limits — see **Working
+autonomy**.
 
 ## Safety gates — ask the owner first
 
@@ -120,12 +145,16 @@ non-goal. Still discuss with the owner before starting anything outside this lis
 ## Finishing a change
 
 Run the relevant tests and say the command and result. Check nothing sensitive
-is staged. Update `docs/PROJECT_STATUS.md` (what changed, next action) and,
-where affected, `docs/DECISIONS.md` (a changed technical choice),
-`docs/THREAT_MODEL.md` (new privileged behaviour), and `docs/EXPERIMENTS.md` (a
-finished experiment). Name unresolved risks instead of quietly working around
-them. That's the whole checklist — one status file is the thing that must stay
-current; the rest is "touch it if this change touched it."
+is staged. Update `docs/PROJECT_STATUS.md` when you finish a work session or when
+something ships — not after every edit — and touch `docs/DECISIONS.md` (a changed
+technical choice), `docs/THREAT_MODEL.md` (new privileged behaviour), or
+`docs/EXPERIMENTS.md` (a finished experiment) only if this change touched what
+they cover. Name unresolved risks instead of quietly working around them.
+
+`PROJECT_STATUS.md` records what *is* — current state and open risks. Do not
+leave a "next exact task" in it unless you are genuinely stopping mid-arc with a
+specific one to note. One status file is the thing that must stay current; the
+rest is "touch it if this change touched it."
 
 ## Documentation style
 

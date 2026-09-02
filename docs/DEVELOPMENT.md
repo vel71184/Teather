@@ -176,6 +176,6 @@ A change is complete when:
 - Manual network-state restoration is verified where applicable.
 - Logs explain expected failure modes.
 - No sensitive files are staged.
-- Architecture, decision, experiment, test, and status documents are updated as
-  needed.
-- The next exact task is left in `docs/PROJECT_STATUS.md`.
+- Any doc the change actually touched (architecture, decision, experiment, test)
+  is updated, and `docs/PROJECT_STATUS.md` reflects the new state at the end of
+  the work session. No per-change status write, no "next exact task" handoff.
