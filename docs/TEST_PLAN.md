@@ -95,6 +95,16 @@ Fault-injection tested 2026-08-31: `systemctl restart`, `kill -9 tun2proxy`,
 `adb kill-server`, phone unplug/replug, Wi-Fi off/on — all self-heal and
 auto-reconnect. Phone reboot still to do.
 
+**2026-09-01 (D-028/D-029/D-030, `0.1.0-12` / `0.1.0-p1.3`):** the loopback
+SOCKS relay requires RFC 1929 auth with a per-run secret; `dumpsys` schema is 2.
+Live-verified on the pilot phone: an unauthenticated `--socks5-hostname` client
+is refused, `teather:<secret>@…` egresses on cellular (including over the
+`teather0` failover route), a schema-1 client and a schema-2 relay refuse to
+pair. `teather device install` installed the release-signed APK onto an appless
+phone (`action: installed`) and no-op'd on a re-run ("already current"). 80 host
++ 27 Android unit tests. The release APK is signed with the project key
+(`CN=Teather`), not the debug cert.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -145,8 +155,10 @@ Host-only checks cover configuration permissions (including the `auto_failover`
 setting), salted device trust, ambiguous multi-device selection, manager/CLI
 state transitions, typed D-Bus responses, route/rule/collision preflight,
 ownership journaling, redaction, the built connection dictionary, additive-vs-
-exclusive DNS, stale-connection recovery, and idempotent cleanup. Android JVM
-tests cover relay state and schema-versioned status serialization.
+exclusive DNS, stale-connection recovery, idempotent cleanup, and the D-029
+APK-lockstep logic (`android_app_state` / `install_android`). Android JVM tests
+cover relay state, schema-2 status serialization, SOCKS5 RFC 1929 auth
+(accept / reject / refuse-no-auth), and udpgw truncated-frame rejection.
 
 In a network namespace or disposable Debian 12 VM, prove:
 
@@ -263,9 +275,12 @@ non-public provider systems.
 
 Before tagging any checkpoint:
 
-- All automated tests for implemented behavior pass.
+- All automated tests for implemented behavior pass (`make check` — 80 host + 27
+  Android at `0.1.0-12` / `0.1.0-p1.3`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.
 - Diagnostics are reviewed for sensitive output.
 - Project status and decision log match the implementation.
+- A tagged release APK is signed with the project key (D-030), not the debug
+  cert; the `.deb` bundles that release APK.

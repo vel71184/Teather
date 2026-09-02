@@ -73,15 +73,19 @@ Implemented responsibilities:
 - Switch the outbound upstream live on `ACTION_RECONFIGURE` (`NetworkSelector`
   rebind + `RelayRuntime.reconfigure()`) with no listener teardown; sockets
   already open keep their link.
-- Add authenticated sessions before listening on Wi-Fi or another shared link
-  (still future — the ADB link is loopback-only).
+- Authenticate every SOCKS session with a per-run 128-bit secret (RFC 1929,
+  D-028). Android loopback is reachable by any installed app, so without this
+  the relay would be an open proxy on the phone's upstream. The secret is
+  generated per relay start and surfaced only in the `DUMP`-protected status.
 - Track connection counts and byte counters without retaining destination history.
 - Expose structured failure reasons to the UI and development log.
 - Protect the exported control service with `android.permission.DUMP` (D-016);
   ordinary applications are denied.
-- Emit `dumpsys` status schema version 1 (lifecycle, bound/configured port,
+- Emit `dumpsys` status schema version 2 (lifecycle, bound/configured port,
   configured and selected upstream, cellular availability/validation, aggregate
-  counters, coarse errors) — no destinations or device/subscriber data.
+  counters, coarse errors, and the per-run relay secret) — no destinations or
+  device/subscriber data. A schema-1 desktop client and a schema-2 relay refuse
+  to pair.
 
 Teather never uses Android `VpnService`: it is a relay server, not a capture of
 the phone's own application traffic. This is the structural reason the traffic
@@ -428,12 +432,12 @@ arguments and never enter logs, D-Bus responses, or disk.
 
 | Component | Implementation | Boundary |
 |---|---|---|
-| Control/UI | `MainActivity` | Port + upstream picker, start/stop, live status, clipboard helper |
-| Lifecycle | `RelayService`, `RelayRuntime` | `DUMP`-protected foreground service; `START`/`STOP`/`RECONFIGURE`; idempotent teardown |
+| Control/UI | `MainActivity` | Port + upstream picker, start/stop, live status, clipboard helper, "get desktop client" link |
+| Lifecycle | `RelayService`, `RelayRuntime` | `DUMP`-protected foreground service; `START`/`STOP`/`RECONFIGURE`; per-run SOCKS secret; idempotent teardown |
 | Upstream | `NetworkSelector`, `UpstreamPreference`, `AndroidNetworkConnector` | Picks a non-VPN Android `Network`; live-swappable; binds DNS + each outbound socket |
-| TCP protocol | `Socks5Protocol`, `Socks5Server` | SOCKS5 negotiation + `CONNECT` (v4/domain/v6); loopback accept, limits, timeouts, copying |
-| UDP protocol | `UdpGatewayProtocol`, `UdpGatewayServer` | badvpn udpgw framing; one `DatagramSocket` per connection id |
-| Metrics/status | `RelayStats`, `RelayStatusWire` | Aggregate counts, byte totals, error categories; `dumpsys` schema 1 |
+| TCP protocol | `Socks5Protocol`, `Socks5Server` | SOCKS5 RFC 1929 auth + `CONNECT` (v4/domain/v6); loopback accept, limits, timeouts, copying |
+| UDP protocol | `UdpGatewayProtocol`, `UdpGatewayServer` | badvpn udpgw framing; one `DatagramSocket` per connection id; bounds-checked address parse |
+| Metrics/status | `RelayStats`, `RelayStatusWire` | Aggregate counts, byte totals, error categories, per-run secret; `dumpsys` schema 2 |
 
 ### Linux (`desktop/linux/teather/`)
 
@@ -444,7 +448,8 @@ arguments and never enter logs, D-Bus responses, or disk.
 | Interface owner | `NetworkManagerConnection` | The one in-memory `tun` `teather0` connection; additive DNS; `CheckConnectivity` nudge |
 | Preflight | `preflight.py` | Refuses unsafe route/rule/interface states; recognises standalone |
 | DNS readiness | `dns_probe.py` | UDP + TCP virtual-DNS check before "connected" |
-| ADB | `AdbClient` | devices / forward / dumpsys / relay control; serials redacted |
+| ADB | `AdbClient` | devices / forward / dumpsys / relay control / `install -r`; serials redacted |
+| APK lockstep | `Manager.android_app_state` / `install_android`, `/usr/lib/teather/Teather.apk` | Bundled APK; `teather device install` keeps the phone app on the same schema (D-029) |
 | Logging | `logging_setup.py` | Rotating `~/.local/state/teather/teatherd.log` (0600) |
 | D-Bus + notify | `dbus_service.py` | `io.github.vel71184.Teather1.Manager`; self-clearing toasts |
 | CLI | `cli.py` → `teather` | Pure D-Bus client for every method |
@@ -454,7 +459,9 @@ arguments and never enter logs, D-Bus responses, or disk.
 
 D-016: the Android control service is exported in both debug and release behind
 `android.permission.DUMP` — authorized ADB shell control, ordinary applications
-denied. The data plane stays bound to `127.0.0.1`.
+denied. The data plane stays bound to `127.0.0.1` and, since D-028, requires the
+per-run SOCKS secret (which only a `DUMP`-privileged reader can learn). The
+Android build is release-signed (D-030).
 
 The permanent cross-platform networking-core language remains open under D-008.
 P1's pinned Rust packet engine does not settle that later architectural choice.

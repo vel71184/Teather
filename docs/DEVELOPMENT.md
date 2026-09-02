@@ -1,13 +1,13 @@
 # Development guide
 
-Teather has a physically validated P0 implementation and an implemented P1 Linux
-USB Desktop. D-013's source-implementation approval gate is complete. D-021's
-`Reapply` DNS mechanism was disproven against real NetworkManager on 2026-08-29;
-**D-022 (`docs/DECISIONS.md`) is now accepted and implemented (package
-`0.1.0-4`)** — NetworkManager owns `teather0` as an in-memory `tun` connection,
-the setuid-root helper is deleted, DNS is additive, and failover is automatic by
-default. Host tests pass; the disposable-VM Phase 2 matrix against `0.1.0-4` is
-the next gate. Follow `docs/P1_HANDOFF.md` rather than restarting P0.
+P1 (Linux USB Desktop) is complete and is the owner's daily connection.
+NetworkManager owns `teather0` as an in-memory `tun` connection with no
+privileged helper, additive DNS, and automatic failover (D-022). Post-P1, all
+live-verified: upstream switching (D-023), general UDP over udpgw (D-024),
+standalone connect (D-025), abnormal-disconnect self-heal (D-026), SOCKS relay
+authentication (D-028), APK bundling/install (D-029), and release signing
+(D-030). Current build: Debian `0.1.0-12` / Android `0.1.0-p1.3`
+(`versionCode 5`). `docs/PROJECT_STATUS.md` is the resume point.
 
 ## Pinned Android and P1 toolchain
 

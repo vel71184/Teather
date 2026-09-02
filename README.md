@@ -20,14 +20,18 @@ as little receiver-side software as each platform permits.
 > link (D-025), and an abnormal disconnect — phone unplug, USB/ADB drop,
 > tun2proxy exit, a dropped forward — self-heals and auto-reconnects in a few
 > seconds, with a persistent `~/.local/state/teather/teatherd.log` and toast
-> notifications (D-026).
-> A 2026-08-30 end-to-end test on the laptop + phone covered connect, TCP on
-> cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap
-> upstream switch, and a clean teardown to byte-identical host state; a
-> 2026-08-31 fault-injection pass exercised the D-026 self-heal paths. Current
-> builds: Debian `0.1.0-12`, Android `0.1.0-p1.3` (D-028 SOCKS relay
-> authentication — not yet live-tested end to end). See `docs/PROJECT_STATUS.md`
-> and `docs/DECISIONS.md`.
+> notifications (D-026). The relay authenticates the loopback SOCKS connection
+> with a per-run secret so other apps on the phone cannot use it (D-028); the
+> desktop package bundles the matching APK and can install or upgrade it on the
+> phone (D-029); the Android build is release-signed (D-030).
+> A 2026-08-30 end-to-end test covered connect, TCP on cellular, full Wi-Fi-loss
+> failover, a UDP STUN round-trip, the zero-gap upstream switch, and a clean
+> teardown; a 2026-08-31 fault-injection pass exercised the D-026 self-heal
+> paths; a 2026-09-01 pass verified D-028/D-029/D-030 live (release-signed APK
+> installed via `teather device install`, unauthenticated SOCKS refused,
+> authenticated traffic egressing on cellular). Current builds: Debian
+> `0.1.0-12`, Android `0.1.0-p1.3`. See `docs/PROJECT_STATUS.md` and
+> `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -339,14 +343,16 @@ ready.
 
 ## What runs today
 
-P1 is complete and Teather is the owner's daily connection. The APK is
-debug-signed (D-019 defers a permanent release identity during private testing).
+P1 is complete and Teather is the owner's daily connection. The Android build is
+release-signed with a project key (D-030).
 
-**Android** (`0.1.0-p1.3`): a Kotlin foreground service running a local SOCKS5
-relay plus a udpgw terminator for general UDP, with a live upstream picker
-(`auto|cellular|wifi|ethernet`) and status/metrics. The relay authenticates the
-SOCKS connection with a per-run secret (D-028) so that other apps on the phone
-cannot use it, since Android loopback is reachable by any installed app.
+**Android** (`0.1.0-p1.3`, `versionCode 5`): a Kotlin foreground service running
+a local SOCKS5 relay plus a udpgw terminator for general UDP, with a live
+upstream picker (`auto|cellular|wifi|ethernet`) and status/metrics. The relay
+authenticates the SOCKS connection with a per-run secret (D-028) so that other
+apps on the phone cannot use it, since Android loopback is reachable by any
+installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
+links to the releases page.
 
 **Linux** (Debian `0.1.0-12`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
@@ -364,17 +370,25 @@ which keeps both halves on the same protocol schema.
 
 Validated by a 2026-08-30 end-to-end test (install, connect, TCP on cellular,
 full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream switch,
-byte-identical teardown) and a 2026-08-31 fault-injection pass (daemon restart,
-tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI). See
-[the decision log](docs/DECISIONS.md) and [project status](docs/PROJECT_STATUS.md).
+byte-identical teardown), a 2026-08-31 fault-injection pass (daemon restart,
+tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI), and
+a 2026-09-01 pass for D-028/D-029/D-030 (release-signed APK pushed via `teather
+device install`, unauthenticated SOCKS refused, authenticated traffic on
+cellular over the `teather0` failover route). 80 host unit tests + 27 Android
+unit tests pass. See [the decision log](docs/DECISIONS.md) and
+[project status](docs/PROJECT_STATUS.md).
 
 Build:
 
 ```bash
-make check          # gradle test + lint + APKs, then the Linux unit tests
+make check          # gradle test + lint + debug & release APKs, then the Linux unit tests
 make android-build  # debug APK only  -> app/build/outputs/apk/debug/
-make p1-package     # Debian package  -> build/p1/teather_<version>_amd64.deb
+make p1-package     # Debian package (bundles the release APK if built) -> build/p1/
 ```
+
+A distributable `.deb` needs a release APK first: configure signing
+(`keystore.properties`, see D-030) and run `make check` or
+`./gradlew :app:assembleRelease`, then `make p1-package`.
 
 The historical P0 experiment (SOCKS-only TCP over ADB) is reproducible with
 `./desktop/linux/teather-p0 doctor|all|soak` and `docs/P0_HANDOFF.md`; it is

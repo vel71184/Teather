@@ -132,7 +132,7 @@ not in progress.
 
 ## Implemented surface (what actually exists)
 
-### Android relay — `app/` (Kotlin, `0.1.0-p1.2`, `versionCode 4`, debug-signed)
+### Android relay — `app/` (Kotlin, `0.1.0-p1.3`, `versionCode 5`, release-signed — D-030)
 
 - `RelayService` — an exported `connectedDevice` foreground service protected by
   `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
@@ -154,11 +154,12 @@ not in progress.
   available/validated, and the per-run SOCKS secret; surfaced via `dumpsys`
   (schema 2).
 - `MainActivity` — port + upstream picker, start/stop, live status, "copy the
-  laptop commands" clipboard helper, notification-permission prompt.
-- Unit/integration tests for SOCKS5, udpgw framing, the udpgw server, and the
-  status wire format.
+  laptop commands" clipboard helper, "Get the desktop client" link (D-029),
+  notification-permission prompt.
+- 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
+  (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-11`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-12`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -176,17 +177,23 @@ not in progress.
   metric 32000; recognises the "standalone" (no physical default) case (D-025).
 - `dns_probe` — UDP + TCP virtual-DNS readiness check before reporting connected.
 - `AdbClient` — `devices` / `forward` / `forward --list` / `dumpsys` status /
-  relay start-stop-reconfigure, serials redacted, 10s timeouts.
+  relay start-stop-reconfigure / `installed_version` / `install -r`, serials
+  redacted, 10s timeouts.
+- APK lockstep (D-029) — the `.deb` bundles `/usr/lib/teather/Teather.apk` + a
+  version sidecar; `Manager.android_app_state` / `install_android` and
+  `teather device install` install or upgrade the phone app so the two halves
+  stay on the same status schema.
 - `logging_setup` — rotating `~/.local/state/teather/teatherd.log` (0600),
   `TEATHER_DEBUG=1` for DEBUG.
 - `dbus_service` — the `io.github.vel71184.Teather1.Manager` interface
   (`GetStatus`, `ListDevices`, `Connect`, `Disconnect`, `ApproveDevice`,
   `RenameDevice`, `ForgetDevice`, `SetAutoConnect`, `SetAutoFailover`,
-  `SetUpstream`, `Diagnose` + `StatusChanged`/`DevicesChanged`/`MetricsChanged`
-  signals) and the self-clearing toast notifications.
+  `SetUpstream`, `AndroidAppState`, `InstallAndroid`, `Diagnose` +
+  `StatusChanged`/`DevicesChanged`/`MetricsChanged` signals) and the
+  self-clearing toast notifications.
 - `cli.py` — `teather status|devices|connect|disconnect|device
-  approve|rename|forget|autoconnect|failover|upstream|diagnose|recover`, all
-  pure D-Bus clients.
+  approve|rename|forget|install|autoconnect|failover|upstream|diagnose|recover`,
+  all pure D-Bus clients.
 - `gui.py` — single-instance GTK3 window: device picker, connect/disconnect,
   approve/rename/forget, auto-connect + failover checkboxes, upstream combo,
   live metrics, diagnostics, recovery hint. AppIndicator tray when the desktop
@@ -195,9 +202,9 @@ not in progress.
   serial.
 - Packaging: `.deb` (`packaging/`), `systemd --user` unit with
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
-  pages, `RECOVERY.md.gz`. `build-deb.sh` rebuilds `tun2proxy` with
-  `--features udpgw` as needed.
-- 72 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+  pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
+  `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
+- 80 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -248,8 +255,12 @@ implementation artifacts and must not be staged.
   2026-08-30 post-P1 directive: a focused track (D-024 lightweight UDP, D-025
   standalone connect, D-026 robustness, E-011 primary-goal verification) instead
   of the full P2/P4 sequence.
-- Private P1 device testing uses debug signing; permanent signing is deferred
-  until distribution is considered (D-019).
+- The Android build is release-signed with a project key held by the owner
+  outside the repo (D-030, supersedes D-019). `keystore.properties` /
+  `TEATHER_KEYSTORE*` configure it; a debug fallback keeps CI/contributors
+  unblocked.
+- The `.deb` bundles the matching APK and can install/upgrade it on the phone to
+  keep the two halves on one status schema (D-029).
 - NetworkManager owns `teather0` as an in-memory `tun` connection
   with `tun.owner` delegation and additive DNS; there is no setuid-root helper or
   custom polkit action (D-022, supersedes D-020 and D-021).
@@ -257,14 +268,18 @@ implementation artifacts and must not be staged.
   no VpnService, no packet stack (D-024).
 - Teather may be the sole internet path when armed and no other link exists
   (D-025); an abnormal disconnect self-heals and auto-reconnects (D-026).
+- The loopback SOCKS relay requires RFC 1929 auth with a per-run secret the
+  phone publishes only in its `DUMP`-protected status; `dumpsys` schema is 2
+  (D-028).
 
 See `docs/DECISIONS.md` for rationale and status.
 
 ## Important unknowns
 
 - Provider classification/accounting behavior is unmeasured and cannot be
-  generalized from one result. The 2026-08-30 test confirmed the egress is the
-  phone's cellular link; the TTL/JA3 half (E-011) is still pending.
+  generalized. The egress is confirmed to be the phone's cellular link; the
+  controlled TTL/JA3 comparison (E-011) is opportunistic, and E-012 records the
+  operational evidence (no tether hard-stop on a hard-stop prepaid plan).
 - Carrier classification/accounting over sustained daily use is unmeasured —
   that is the owner's ongoing daily use, not a synthetic gate.
 - The userspace WireGuard endpoint remains a P4 hypothesis and is not planned

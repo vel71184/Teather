@@ -26,9 +26,12 @@ Useful reports include:
 
 ## Particularly sensitive areas
 
-- Authentication and receiver pairing.
+- Authentication and receiver pairing. The loopback SOCKS relay requires a
+  per-run RFC 1929 secret the phone publishes only in its `DUMP`-protected
+  status (D-028); flaws in generating, comparing, or exposing that secret matter.
 - Listeners exposed beyond Android loopback.
-- SOCKS/tunnel protocol parsers.
+- SOCKS/tunnel/udpgw protocol parsers.
+- The Android release signing key (D-030) and `keystore.properties` handling.
 - Android upstream selection and leakage.
 - Linux route, DNS, firewall, and TUN cleanup.
 - The NetworkManager connection scope Teather requests (it must stay limited to

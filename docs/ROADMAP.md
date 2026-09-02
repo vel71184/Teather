@@ -70,8 +70,8 @@ Accepted operating model (D-014 as amended by D-022):
 - No persistent NetworkManager profile, no direct `/etc/resolv.conf` edit, no
   firewall change, no change to any physical link.
 
-Deliverables (delivered as Android `0.1.0-p1.2` / `versionCode 4`, Debian
-`0.1.0-4` and iterated to `0.1.0-11`):
+Deliverables (delivered as Android `0.1.0-p1` / `versionCode 2`, Debian
+`0.1.0-4`, iterated to Android `0.1.0-p1.3` / `versionCode 5`, Debian `0.1.0-12`):
 
 - Android with DUMP-protected `START` / `STOP` / `RECONFIGURE` actions and
   versioned machine-readable `dumpsys` status.
@@ -124,7 +124,7 @@ Exit criteria:
 Exit (met): the P1 physical experiment is recorded, `docs/PROJECT_STATUS.md` is
 current, and the D-018 stop-for-discussion happened — see below.
 
-## Post-P1 direction (2026-08-30, updated 2026-08-31)
+## Post-P1 direction (2026-08-30, updated 2026-09-01)
 
 After P1 acceptance the owner redirected work away from completing P2/P3/P4 as
 written. The linear phase plan below is kept for reference; the active order is
@@ -137,12 +137,16 @@ in `AGENTS.md`. Done so far:
 - **D-026** — abnormal-disconnect self-heal + auto-reconnect, persistent
   `teatherd.log`, toast notifications, single-instance GTK, sole-path tracking.
   Fault-injection tested (`0.1.0-11`).
+- **D-028/D-029/D-030** — SOCKS relay authentication (per-run secret, schema 2),
+  the `.deb` bundling and installing the matching APK, and release signing.
+  Live-verified (`0.1.0-12` / `0.1.0-p1.3`, 2026-09-01).
+- **E-012** — operational carrier evidence recorded (no tether hard-stop on a
+  hard-stop prepaid plan under heavy daily use).
 
 Remaining in this track:
 
-- **E-011** — the TTL / JA3 half of primary-goal verification (needs a reflector
-  and a cellular-bound request originated from the phone). The 2026-08-30 test
-  already confirmed the egress is the phone's cellular link.
+- **E-011** — the controlled TTL / JA3 network-layer comparison, now
+  opportunistic (needs a reflector reachable from the phone's cellular).
 - A phone-reboot fault case and a longer daily-use soak.
 
 **P3 (Wireless Relay) is deprioritised** — a local receiver link is invisible to
