@@ -39,12 +39,22 @@ flowchart TD
 
 **Mitigations:**
 
-- Bind P0 only to Android loopback and reach it through ADB forwarding.
-- Treat P0 no-auth SOCKS as a controlled debug experiment, not a releasable
-  authentication design. Android loopback is also reachable by other local apps.
-- Protect the exported release lifecycle service with the signature-level
-  `android.permission.DUMP` permission. Authorized ADB shell can control it;
-  ordinary applications cannot.
+- Bind the relay only to Android loopback and reach it through ADB forwarding.
+- **Authenticate the SOCKS connection (D-028).** The relay requires SOCKS5
+  username/password auth (RFC 1929) with a 128-bit secret the phone generates
+  per run. Android loopback is reachable by every installed app regardless of
+  its permissions, so without this any of them — including an app with no
+  `INTERNET` permission — could use the relay as an open proxy on the phone's
+  upstream. The secret is published only in the `DUMP`-protected status, so only
+  `adb`/root can read it; `teatherd` reads it and configures `tun2proxy`.
+  Residual: on a multi-user Linux host the secret is visible in `teatherd`'s
+  `/proc/<pid>/cmdline` (tun2proxy takes the proxy URL only on the command
+  line), and the forwarded loopback port is reachable by any local user there
+  regardless — multi-user desktops rely on ADB authorization and physical
+  control.
+- Protect the exported lifecycle service with the signature-level
+  `android.permission.DUMP` permission. Authorized ADB shell can control it and
+  read its status (including the relay secret); ordinary applications cannot.
 - Limit P0 to 64 sessions with handshake, connect, and idle timeouts.
 - Require explicit pairing before any shared-link or post-P0 daily-driver use.
 - Give every receiver a distinct revocable identity.
@@ -63,11 +73,12 @@ link security.
 - Never design custom cryptographic primitives.
 - Bind identity to the pairing confirmation.
 
-ADB P0 relies on ADB host authorization and physical control but should not be
-mistaken for the final shared-link security model. Its no-auth loopback listener
-does not exclude other applications already running on the phone. Use only a
-development phone state the owner trusts, stop it after testing, and add receiver
-authentication before promoting the path beyond P0.
+The USB/ADB path relies on ADB host authorization and physical control and
+should not be mistaken for the final shared-link security model. Since D-028 the
+loopback listener authenticates the SOCKS connection, so it is no longer usable
+by other apps on the phone, but a shared-link (P3) deployment still needs a
+per-receiver identity and session encryption on top. Use only a phone state the
+owner trusts and stop the relay after use.
 
 ### Malicious protocol input
 
@@ -76,7 +87,10 @@ flows, or pathological fragmentation to crash or exhaust the phone.
 
 **Mitigations:**
 
-- Strict parsing and bounded allocations.
+- Strict parsing and bounded allocations. The SOCKS5, udpgw, and virtual-DNS
+  parsers bounds-check every length field and cap allocations at the wire
+  maximum; a truncated udpgw address block raises a protocol error rather than
+  an unchecked exception (D-028 hardening).
 - Per-receiver flow and memory limits.
 - Timeouts and backpressure.
 - Fuzz protocol parsers once stable.

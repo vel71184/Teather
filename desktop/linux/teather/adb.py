@@ -93,6 +93,42 @@ class AdbClient:
         output = self._run(["shell", "pm", "path", APP_ID], serial=serial, check=False)
         return output.startswith("package:")
 
+    def installed_version(self, serial: str) -> tuple[int, str] | None:
+        """``(versionCode, versionName)`` for the Teather app on ``serial``, or
+        ``None`` if it is not installed. Used to keep the phone app in lockstep
+        with this desktop package (D-029)."""
+
+        output = self._run(["shell", "dumpsys", "package", APP_ID], serial=serial, check=False)
+        code = re.search(r"versionCode=(\d+)", output)
+        name = re.search(r"versionName=(\S+)", output)
+        if not code:
+            return None
+        return int(code.group(1)), (name.group(1) if name else "")
+
+    def install_apk(self, serial: str, apk_path: str) -> None:
+        """``adb install -r`` the bundled APK. Reinstall in place needs the same
+        signing key already on the device; a key mismatch surfaces as
+        ``android-install-signature`` so the caller can tell the user to remove
+        the old app first."""
+
+        output = self._run(["install", "-r", apk_path], serial=serial, check=False)
+        if "Success" in output:
+            return
+        lowered = output.lower()
+        if "signatures do not match" in lowered or "update_incompatible" in lowered:
+            raise TeatherError(
+                "android-install-signature",
+                "The phone has a Teather build signed with a different key; uninstall it first "
+                "(adb uninstall " + APP_ID + "), then install again.",
+            )
+        if "version_downgrade" in lowered or "older" in lowered:
+            raise TeatherError(
+                "android-install-downgrade",
+                "The phone already has a newer Teather app than this package bundles.",
+            )
+        detail = re.sub(r"[A-Za-z0-9._:/-]{16,}", "<redacted>", output.strip())
+        raise TeatherError("android-install", detail[:240] or "adb install failed")
+
     def status(self, serial: str) -> AndroidStatus:
         output = self._run(
             ["shell", "dumpsys", "activity", "service", SERVICE_COMPONENT],

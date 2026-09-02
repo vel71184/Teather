@@ -20,6 +20,8 @@ INTROSPECTION_XML = f"""
     <method name="SetAutoConnect"><arg type="s" direction="in"/><arg type="b" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="SetAutoFailover"><arg type="b" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="SetUpstream"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
+    <method name="AndroidAppState"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
+    <method name="InstallAndroid"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="Diagnose"><arg type="a{{sv}}" direction="out"/></method>
     <signal name="StatusChanged"><arg type="a{{sv}}"/></signal>
     <signal name="DevicesChanged"><arg type="aa{{sv}}"/></signal>
@@ -177,6 +179,10 @@ class ManagerDbusService:
                 "SetAutoConnect": lambda: self.manager.set_auto_connect(arguments[0], arguments[1]),
                 "SetAutoFailover": lambda: self.manager.set_auto_failover(arguments[0]),
                 "SetUpstream": lambda: self.manager.set_upstream(arguments[0]),
+                "AndroidAppState": lambda: self.manager.android_app_state(arguments[0]),
+                "InstallAndroid": lambda: (
+                    self.manager.note_user_intent(), self.manager.install_android(arguments[0])
+                )[1],
                 "Diagnose": self.manager.diagnose,
             }
             result = methods[method]()

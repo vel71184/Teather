@@ -9,6 +9,7 @@ import io.github.vel71184.teather.relay.RelayStats
 import io.github.vel71184.teather.relay.RelayStatsSnapshot
 import io.github.vel71184.teather.relay.Socks5Server
 import io.github.vel71184.teather.relay.UdpGatewayServer
+import java.security.SecureRandom
 
 data class RelayConfiguration(
     val port: Int = DEFAULT_PORT,
@@ -37,6 +38,12 @@ data class RelayStatus(
     val stats: RelayStatsSnapshot?,
     val failureCategory: String?,
     val controlError: String? = null,
+    /**
+     * Per-run secret the desktop client authenticates the SOCKS connection with.
+     * Only ever surfaced through the DUMP-protected relay status, so a local app
+     * without adb/root cannot learn it. Null while stopped.
+     */
+    val secret: String? = null,
 )
 
 object RelayRuntime {
@@ -61,6 +68,9 @@ object RelayRuntime {
     @Volatile
     private var networks: NetworkSelector? = null
 
+    @Volatile
+    private var secret: String? = null
+
     @Synchronized
     fun start(context: Context, requested: RelayConfiguration): RelayStatus {
         when (RelayStartPolicy.decide(lifecycle, configuration, requested)) {
@@ -79,6 +89,7 @@ object RelayRuntime {
         configuration = requested
         failureCategory = null
         controlError = null
+        secret = newSecret()
 
         return try {
             val stats = RelayStats()
@@ -101,6 +112,7 @@ object RelayRuntime {
                 connector = connector,
                 stats = stats,
                 udpGateway = udpGateway,
+                secret = secret,
                 logger = { category -> Log.i(LOG_TAG, category) },
             )
             val actualPort = newServer.start()
@@ -159,6 +171,7 @@ object RelayRuntime {
         stats = server?.stats?.snapshot(),
         failureCategory = failureCategory,
         controlError = controlError,
+        secret = secret,
     )
 
     private fun stopLocked() {
@@ -169,7 +182,14 @@ object RelayRuntime {
         configuration = null
         failureCategory = null
         controlError = null
+        secret = null
         lifecycle = RelayLifecycle.STOPPED
+    }
+
+    private fun newSecret(): String {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     private const val LOG_TAG = "Teather"

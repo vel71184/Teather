@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .constants import RELAY_PORT, STATUS_SCHEMA
+
+_SECRET_RE = re.compile(r"[0-9a-f]{16,64}")
 
 # Android upstream transports Teather can bind the relay to. The Android app
 # (UpstreamPreference) already supports all four; "auto" lets Android pick.
@@ -29,6 +32,7 @@ class AndroidStatus:
     failure_category: str = "none"
     last_error_category: str = "none"
     control_error: str = "none"
+    secret: str = ""
 
     @property
     def running(self) -> bool:
@@ -54,10 +58,16 @@ def parse_android_status(output: str) -> AndroidStatus:
         if "=" not in line:
             continue
         key, value = line.strip().split("=", 1)
-        if key == "teather.status.version" or key in AndroidStatus.__dataclass_fields__:
+        if (
+            key in ("teather.status.version", "teather.status.secret")
+            or key in AndroidStatus.__dataclass_fields__
+        ):
             values[key] = value
     if "teather.status.version" not in values:
         return AndroidStatus()
+
+    raw_secret = values.get("teather.status.secret", "")
+    secret = raw_secret if _SECRET_RE.fullmatch(raw_secret) else ""
 
     def integer(name: str) -> int:
         try:
@@ -87,4 +97,5 @@ def parse_android_status(output: str) -> AndroidStatus:
         failure_category=values.get("failure_category", "none"),
         last_error_category=values.get("last_error_category", "none"),
         control_error=values.get("control_error", "none"),
+        secret=secret,
     )

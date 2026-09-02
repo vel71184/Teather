@@ -43,11 +43,12 @@ PHYSICAL_RESOLVER = "nameserver 10.0.2.3\n"
 
 def compatible_status(**changes):
     values = {
-        "schema": 1,
+        "schema": 2,
         "lifecycle": "running",
         "bound_port": 1080,
         "configured_port": 1080,
         "configured_upstream": "cellular",
+        "secret": "0123456789abcdef0123456789abcdef",
     }
     values.update(changes)
     return AndroidStatus(**values)
@@ -71,6 +72,9 @@ class FakeAdb:
         self.upstreams = []
         self.present = True          # False simulates the phone being unplugged
         self.forward_ports = []       # local ports currently "forwarded"
+        self.app_version = (4, "0.1.0-p1.2")  # None simulates the app not installed
+        self.installs = []            # (serial, apk_path) for each install_apk call
+        self.fail_install = False
 
     def devices(self):
         if not self.present:
@@ -88,7 +92,16 @@ class FakeAdb:
         return self.states[serial]
 
     def package_installed(self, _serial):
-        return True
+        return self.app_version is not None
+
+    def installed_version(self, _serial):
+        return self.app_version
+
+    def install_apk(self, serial, apk_path):
+        self.installs.append((serial, apk_path))
+        if self.fail_install:
+            raise TeatherError("android-install-signature", "simulated key mismatch")
+        self.app_version = (99, "0.1.0-test")
 
     def start_relay(self, serial, upstream="cellular"):
         self.started.append(serial)
@@ -435,11 +448,22 @@ class StatusAndPreflightTests(unittest.TestCase):
 
     def test_status_parser_ignores_surrounding_dumpsys_text(self):
         status = parse_android_status(
-            "header\nteather.status.version=1\nlifecycle=running\nbound_port=1080\n"
+            "header\nteather.status.version=2\n"
+            "teather.status.secret=00112233445566778899aabbccddeeff\n"
+            "lifecycle=running\nbound_port=1080\n"
             "configured_port=1080\nconfigured_upstream=cellular\nbytes_internet_to_client=42\n"
         )
         self.assertTrue(status.compatible)
         self.assertEqual(status.bytes_internet_to_client, 42)
+        self.assertEqual(status.secret, "00112233445566778899aabbccddeeff")
+
+    def test_status_parser_rejects_a_non_hex_relay_secret(self):
+        status = parse_android_status(
+            "teather.status.version=2\nteather.status.secret=not-a-real-secret\n"
+            "lifecycle=running\nbound_port=1080\nconfigured_port=1080\n"
+            "configured_upstream=cellular\n"
+        )
+        self.assertEqual(status.secret, "")
 
     def test_status_compatibility_includes_requested_upstream(self):
         self.assertFalse(compatible_status(configured_upstream="default").compatible)
@@ -517,10 +541,14 @@ class StatusAndPreflightTests(unittest.TestCase):
         self.assertIn(sentinel, route)
         self.assertNotIn(sentinel, pool)
         command = Manager(config=_scratch_config()).\
-            _tunnel_command(45678)
+            _tunnel_command(45678, "00112233445566778899aabbccddeeff")
         self.assertIn("--virtual-dns-pool", command)
         self.assertIn(VIRTUAL_DNS_POOL, command)
         self.assertIn("teather0", command)
+        # The relay secret authenticates the SOCKS connection (D-028).
+        self.assertIn(
+            "socks5://teather:00112233445566778899aabbccddeeff@127.0.0.1:45678", command
+        )
         # UDP gateway sentinel is a CONNECT target, so it must not fall inside
         # the range tun2proxy routes into the tun.
         self.assertIn("--udpgw-server", command)
@@ -730,6 +758,93 @@ class ManagerTests(unittest.TestCase):
             with self.assertRaises(TeatherError) as caught:
                 manager.connect()
             self.assertEqual(caught.exception.category, "selection-required")
+
+    def _with_bundled_apk(self, directory, version_code=99, version_name="0.1.0-test"):
+        apk = Path(directory) / "Teather.apk"
+        apk.write_bytes(b"PK\x03\x04 fake apk")
+        ver = Path(directory) / "Teather.apk.version"
+        ver.write_text(f"{version_code}\n{version_name}\n")
+        return patch.multiple(
+            "teather.manager", BUNDLED_APK=str(apk), BUNDLED_APK_VERSION=str(ver)
+        )
+
+    def test_android_app_state_reports_outdated_then_install_upgrades(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            adb.app_version = (4, "0.1.0-p1.2")  # older than the bundled 99
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory):
+                state = manager.android_app_state("")
+                self.assertEqual(state["status"], "outdated")
+                self.assertEqual(state["installed_version_code"], 4)
+                self.assertEqual(state["bundled_version_code"], 99)
+
+                result = manager.install_android("")
+                self.assertEqual(adb.installs, [(SERIAL_ONE, str(Path(directory) / "Teather.apk"))])
+                self.assertEqual(result["action"], "reinstalled")
+                self.assertEqual(manager.android_app_state("")["status"], "current")
+
+    def test_install_android_installs_when_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            adb.app_version = None
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory):
+                self.assertEqual(manager.android_app_state("")["status"], "missing")
+                result = manager.install_android("")
+                self.assertEqual(result["action"], "installed")
+                self.assertEqual(len(adb.installs), 1)
+
+    def test_install_android_needs_a_connected_device(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            adb.present = False
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory):
+                with self.assertRaises(TeatherError) as caught:
+                    manager.install_android("")
+            self.assertEqual(caught.exception.category, "device-unavailable")
+
+    def test_install_android_without_a_bundled_apk_is_a_clear_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = self.make_manager(directory, FakeAdb())
+            with patch.multiple(
+                "teather.manager", BUNDLED_APK=str(Path(directory) / "absent.apk"),
+                BUNDLED_APK_VERSION=str(Path(directory) / "absent.version"),
+            ):
+                with self.assertRaises(TeatherError) as caught:
+                    manager.install_android("")
+            self.assertEqual(caught.exception.category, "no-bundled-apk")
+
+    def test_a_signature_mismatch_on_install_surfaces_its_own_category(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            adb.app_version = None
+            adb.fail_install = True
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory):
+                with self.assertRaises(TeatherError) as caught:
+                    manager.install_android("")
+            self.assertEqual(caught.exception.category, "android-install-signature")
+
+    def test_connect_refuses_a_relay_that_provides_no_session_secret(self):
+        with tempfile.TemporaryDirectory() as directory:
+            # schema/port fine but no usable secret (e.g. a malformed one the
+            # parser dropped, or an app too old to publish it).
+            adb = FakeAdb({SERIAL_ONE: compatible_status(secret="")})
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            with self.assertRaises(TeatherError) as caught:
+                manager.connect(device_id)
+            self.assertEqual(caught.exception.category, "android-incompatible")
+            # nothing left dangling
+            self.assertEqual(manager.get_status()["state"], "error")
+            self.assertIsNone(manager._tunnel)
+
+    def test_tunnel_command_rejects_a_non_hex_secret(self):
+        manager = Manager(config=_scratch_config())
+        with self.assertRaises(TeatherError):
+            manager._tunnel_command(45678, "; rm -rf /")
 
     def test_attach_to_manual_relay_does_not_stop_android(self):
         with tempfile.TemporaryDirectory() as directory:

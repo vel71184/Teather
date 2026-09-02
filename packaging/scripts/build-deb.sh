@@ -2,13 +2,35 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.1.0-11
+version=0.1.0-12
 source_date_epoch=1787788800
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT HUP INT TERM
 root="$stage/teather_${version}_amd64"
 tunnel="$repo/build/p1/tun2proxy"
 package="$repo/build/p1/teather_${version}_amd64.deb"
+
+# The desktop package bundles the matching Android APK so the client can install
+# or upgrade it on the phone (D-029). Prefer a release-signed build; fall back to
+# the debug APK for private testing. The expected version comes straight from the
+# Gradle config so this needs no Android SDK tool.
+apk_release="$repo/app/build/outputs/apk/release/app-release.apk"
+apk_debug="$repo/app/build/outputs/apk/debug/app-debug.apk"
+if [ -f "$apk_release" ]; then
+  apk="$apk_release"
+elif [ -f "$apk_debug" ]; then
+  apk="$apk_debug"
+  echo "note: bundling the DEBUG-signed APK; build a release APK before distributing" >&2
+else
+  echo "no APK found — run 'make android-build' (or a release build) first" >&2
+  exit 1
+fi
+apk_version_code=$(sed -n 's/.*versionCode *= *\([0-9][0-9]*\).*/\1/p' "$repo/app/build.gradle.kts")
+apk_version_name=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' "$repo/app/build.gradle.kts")
+[ -n "$apk_version_code" ] && [ -n "$apk_version_name" ] || {
+  echo "could not read versionCode/versionName from app/build.gradle.kts" >&2
+  exit 1
+}
 
 [ "$(dpkg --print-architecture)" = amd64 ] || {
   echo "P1 packaging currently supports only an amd64 build host" >&2
@@ -38,6 +60,9 @@ install -m 0755 "$repo/desktop/linux/bin/teatherd" "$root/usr/bin/teatherd"
 install -m 0755 "$repo/desktop/linux/bin/teather-gtk" "$root/usr/bin/teather-gtk"
 install -m 0755 "$tunnel" "$root/usr/lib/teather/tun2proxy"
 strip --remove-section=.comment "$root/usr/lib/teather/tun2proxy"
+install -m 0644 "$apk" "$root/usr/lib/teather/Teather.apk"
+printf '%s\n%s\n' "$apk_version_code" "$apk_version_name" > "$root/usr/lib/teather/Teather.apk.version"
+chmod 0644 "$root/usr/lib/teather/Teather.apk.version"
 install -m 0644 "$repo/packaging/teather.desktop" "$root/usr/share/applications/teather.desktop"
 install -m 0644 "$repo/desktop/linux/resources/icons/teather.svg" \
   "$root/usr/share/icons/hicolor/scalable/apps/teather.svg"

@@ -201,6 +201,150 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-030 — Create a permanent release signing key (supersedes D-019's deferral)
+
+**Status:** Accepted · **Date:** 2026-09-01
+
+### Context
+
+D-019 deferred a permanent Android signing identity "until the owner is
+considering distribution." That point has arrived: the desktop package now
+bundles and installs the APK (D-029), the app links to a public releases page,
+and the project is heading for a public repo. In-place `adb install -r` (D-029's
+upgrade path) only works when every build shares one signing key — a per-machine
+debug key makes "offer to upgrade" unreliable.
+
+### Decision
+
+Teather gets one long-lived release keystore, created and held by the owner,
+never in the repo.
+
+- Generated with
+  `keytool -genkeypair -v -keystore <path>/teather-release.jks -alias teather
+  -keyalg RSA -keysize 4096 -validity 10000`, stored outside the repo and backed
+  up. A lost release key cannot be recovered or rotated for installed users.
+- `app/build.gradle.kts` reads `keystore.properties` (gitignored, at the repo
+  root) or `TEATHER_KEYSTORE*` env vars. When neither is present the release
+  build falls back to the debug key and logs a warning, so contributors and CI
+  are not blocked — that fallback APK is explicitly not for distribution.
+- `.gitignore` already covers `*.jks`/`*.keystore`/`keystore.properties`; a
+  `keystore.properties.example` documents the four keys.
+- `packaging/scripts/build-deb.sh` prefers `app-release.apk`; it warns when it
+  falls back to the debug APK.
+
+### One-time transition cost
+
+The pilot phone currently runs a debug-signed `0.1.0-p1.2`. The first
+release-signed install needs `adb uninstall io.github.vel71184.teather` then a
+fresh install (not `-r`) — D-019 already recorded accepting this. The only local
+state lost is the port/upstream picker in SharedPreferences.
+
+### Still deferred
+
+Play Store account, Play App Signing, and any reproducible-APK work remain out
+of scope until there is a reason for them.
+
+## D-029 — The desktop package bundles and installs the Android APK
+
+**Status:** Accepted · **Date:** 2026-09-01 · **Build:** Debian `0.1.0-12`
+
+### Context
+
+The two halves of Teather share a status schema (D-028) and must stay in
+lockstep — a client upgraded past the phone's app fails the compatibility gate.
+Until now the APK was sideloaded by hand and version drift was invisible until a
+connect failed with a confusing error.
+
+### Decision
+
+The `.deb` ships the matching APK at `/usr/lib/teather/Teather.apk` with a
+two-line `Teather.apk.version` sidecar (versionCode, versionName) written by
+`build-deb.sh` from the Gradle config.
+
+- `teatherd` gains `AndroidAppState` (compares the phone's installed versionCode
+  against the bundled one — `current` / `missing` / `outdated` / `ahead` /
+  `no-bundle` / `no-device`) and `InstallAndroid` (`adb install -r` the bundled
+  APK).
+- `teather device install [id] [--yes]` is the user-facing entry point. It
+  prints the state and does nothing when the app is already current or newer;
+  otherwise it confirms (like `device approve`) and installs. The daemon never
+  installs on its own.
+- `connect()`'s `android-app-missing` error now points at `teather device
+  install` when an APK is bundled.
+- A signing-key mismatch on `adb install -r` surfaces as
+  `android-install-signature` with "uninstall the old app first" guidance
+  (D-030 makes this rare).
+
+### Rejected
+
+- **Bundling the desktop client inside the APK** to install onto the PC. The
+  phone cannot push to or execute on the host — ADB is host-initiated. The APK
+  instead links to the project's releases page so the user downloads the build
+  for whatever machine they are relaying from. The APK carries no desktop
+  payload.
+
+## D-028 — Authenticate the SOCKS relay with a per-run secret
+
+**Status:** Accepted · **Date:** 2026-09-01 · **Build:** Android `0.1.0-p1.3`
+(`versionCode 5`), Debian `0.1.0-12`
+
+### Context
+
+The Android relay's SOCKS5 listener binds the phone's loopback and, through P1,
+accepted connections with no authentication. On Android, loopback is reachable
+by **every installed app** regardless of the permissions it holds. A no-auth
+listener therefore lets any app on the phone — including one with no `INTERNET`
+permission — use the relay as an open TCP/UDP proxy that egresses on the phone's
+chosen upstream with the phone's own network identity. `docs/THREAT_MODEL.md`
+already recorded this ("its no-auth loopback listener does not exclude other
+applications already running on the phone") and flagged it as not releasable.
+This closes it — the biggest item between the current state and a public repo.
+
+### Decision
+
+The relay requires SOCKS5 username/password authentication (RFC 1929). The
+username is ignored; the password is a secret the phone generates.
+
+- The phone generates a fresh 128-bit secret (hex) each time `RelayRuntime`
+  starts the relay. A live upstream rebind (`ACTION_RECONFIGURE`, same port)
+  keeps the existing secret so an attached `tun2proxy` is not disturbed; a port
+  change or a fresh start rotates it.
+- The secret is surfaced **only** in the relay's status wire
+  (`teather.status.secret`), which is emitted by the `DUMP`-protected
+  `RelayService.dump()`. Reading it requires `android.permission.DUMP`, i.e.
+  `adb`/shell or system — the same trust level Teather already depends on for
+  control. A plain app on the phone cannot call `dumpsys` on the service.
+- `teatherd` reads the secret from the status it already polls and passes it to
+  `tun2proxy` as `--proxy socks5://teather:<secret>@127.0.0.1:<port>`. The
+  password comparison on the phone is constant-time (`MessageDigest.isEqual`).
+- The status schema goes to **2**. A schema-1 relay (no auth, no secret) and a
+  schema-2 client will not pair — the existing compatibility gate makes the
+  mismatch fail cleanly instead of a confusing tunnel-start error.
+
+### Limits (recorded, not fixed here)
+
+- On a **multi-user Linux host**, the secret appears in `teatherd`'s process
+  arguments (`/proc/<pid>/cmdline`, world-readable by default), so another local
+  user can read it — and the forwarded loopback port is reachable by any local
+  user anyway. tun2proxy 0.8.3 offers no way to pass the proxy URL off the
+  command line. On the owner's single-user desktop this is a non-issue;
+  multi-user hosts should rely on the ADB authorization and physical control the
+  threat model already names.
+- This does not defend against an attacker who is already `root` on the phone or
+  the desktop.
+- Application-layer properties are unchanged; per D-009 no undetectability claim
+  is made.
+
+### Alternatives rejected
+
+- **teatherd generates the secret and pushes it in the `ACTION_START` intent.**
+  Fails the "adopt an already-running relay" case (a relay started from the
+  phone UI, or left running across a `teatherd` restart) without rotating the
+  secret out from under whoever started it. Phone-generated + read-back handles
+  every start path uniformly.
+- **A fixed shared secret in the APK.** Extractable from the APK by anyone;
+  no per-session isolation.
+
 ## D-027 — Retire the per-turn check-in process
 
 **Status:** Accepted · **Date:** 2026-09-01 (owner-directed)
@@ -1099,7 +1243,7 @@ go-ahead. See `AGENTS.md` "Current priority" and `docs/PROJECT_STATUS.md`.
 
 ## D-019 — Defer permanent release signing during private P1 testing
 
-**Status:** Accepted · **Date:** 2026-08-27
+**Status:** Superseded by D-030 (2026-09-01) · **Date:** 2026-08-27
 
 ### Decision
 

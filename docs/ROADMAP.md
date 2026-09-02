@@ -44,8 +44,9 @@ when the VM's link drops and restore cleanly, and every teardown returns the
 host to exact baseline. Package lifecycle and the GTK GUI pass against
 `0.1.0-4`. The synthetic two-hour soak is deliberately skipped — the owner's
 real daily use is the sustained/live-data validation. **P1 acceptance is met and
-Teather is the owner's daily connection.** Permanent release signing is deferred
-by D-019. Detail in `docs/P1_HANDOFF.md`.
+Teather is the owner's daily connection.** Release signing is wired (D-030,
+supersedes D-019) — the key is the owner's to generate. Detail in
+`docs/P1_HANDOFF.md`.
 
 **Question:** Can an installable Debian desktop client provide understandable,
 recoverable system-wide TCP and DNS through the existing Android relay?
@@ -265,14 +266,19 @@ requires a feasibility decision before implementation.
 
 ## Before making the repository public
 
-- Select and add an explicit license.
+- Select and add an explicit license (D-010, still open).
 - Remove private device/provider details and captures from history, not merely the
   current tree.
 - Add reproducible build instructions.
 - Pin dependencies and run vulnerability/license checks.
-- Establish a vulnerability-reporting channel.
+- Establish a vulnerability-reporting channel (`SECURITY.md`).
+- Generate the release signing key and cut a first tagged release with the APK +
+  deb attached, so the app's "Get the desktop client" link and `teather device
+  install` have something to point at (D-029, D-030 — wiring done).
 - State supported and unsupported devices honestly.
 - Document provider/accounting uncertainty without advertising guaranteed evasion.
+- Relay authentication is done (D-028); the loopback SOCKS listener is no longer
+  an open proxy for other apps on the phone.
 - Decide whether binaries or only source will be published.
 
 ## Parking lot

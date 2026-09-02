@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import signal
 import socket
 import subprocess
@@ -13,6 +14,8 @@ from typing import Callable
 from .adb import AdbClient, AdbDevice
 from .config import ConfigStore
 from .constants import (
+    BUNDLED_APK,
+    BUNDLED_APK_VERSION,
     INTERFACE_ADDRESS,
     INTERFACE_NAME,
     RELAY_PORT,
@@ -297,13 +300,26 @@ class Manager:
             time.sleep(0.1)
         raise TeatherError("tunnel-start", "Teather interface did not become ready") from last_error
 
-    def _tunnel_command(self, local_port: int) -> list[str]:
+    def _tunnel_command(self, local_port: int, secret: str = "") -> list[str]:
         # No --setup: NetworkManager already owns teather0's address, routes, and
         # DNS. tun2proxy only attaches to the tun.owner-delegated device and
         # moves packets, which needs no privilege.
+        #
+        # The relay authenticates the SOCKS connection with a per-run secret
+        # (D-028): loopback on the phone is reachable by every installed app, so
+        # without this any of them could use the relay. The secret is hex, so it
+        # needs no percent-encoding in the URL; reject anything else rather than
+        # build a malformed --proxy argument.
+        if secret and not re.fullmatch(r"[0-9a-f]{16,64}", secret):
+            raise TeatherError("android-incompatible", "Android relay returned an unusable session secret")
+        proxy = (
+            f"socks5://teather:{secret}@127.0.0.1:{local_port}"
+            if secret
+            else f"socks5://127.0.0.1:{local_port}"
+        )
         return [
             self.tunnel_path,
-            "--proxy", f"socks5://127.0.0.1:{local_port}",
+            "--proxy", proxy,
             "--tun", INTERFACE_NAME,
             "--dns", "virtual",
             "--virtual-dns-pool", VIRTUAL_DNS_POOL,
@@ -384,7 +400,15 @@ class Manager:
                 selected_id, device = self._select(device_id)
                 serial = device.serial
                 if not self.adb.package_installed(serial):
-                    raise TeatherError("android-app-missing", "Teather is not installed on the selected phone")
+                    hint = (
+                        "  Install it:  teather device install"
+                        if Path(BUNDLED_APK).exists()
+                        else ""
+                    )
+                    raise TeatherError(
+                        "android-app-missing",
+                        "The Teather app is not installed on the selected phone." + hint,
+                    )
                 android = self.adb.status(serial)
                 if android.running and not android.compatible:
                     raise TeatherError(
@@ -402,6 +426,12 @@ class Manager:
                     android = self.adb.start_relay(serial, upstream)
                 if not android.compatible:
                     raise TeatherError("android-not-ready", "Android relay did not report compatible ready status")
+                relay_secret = android.secret
+                if not relay_secret:
+                    raise TeatherError(
+                        "android-incompatible",
+                        "The Teather app on the phone is too old to authenticate the relay; update it on the phone.",
+                    )
                 local_port = self.adb.add_forward(serial)
                 self.journal.save(Ownership(selected_id, local_port, android_started))
                 self._active_local_port = local_port
@@ -409,7 +439,7 @@ class Manager:
                 self._armed = armed
                 self._wait_interface_snapshot(armed)
                 self._tunnel = self.process_factory(
-                    self._tunnel_command(local_port),
+                    self._tunnel_command(local_port, relay_secret),
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
@@ -749,6 +779,80 @@ class Manager:
             result = self.diagnose()
             result["recovery_pending"] = not clean
             return result
+
+    # -- Android app install / upgrade (D-029) --------------------------
+
+    def _bundled_apk_version(self) -> tuple[int, str] | None:
+        try:
+            lines = Path(BUNDLED_APK_VERSION).read_text(encoding="utf-8").split()
+        except OSError:
+            return None
+        if not lines or not lines[0].isdigit():
+            return None
+        return int(lines[0]), (lines[1] if len(lines) > 1 else "")
+
+    def android_app_state(self, device_id: str = "") -> dict:
+        """Compare the phone's Teather app against the APK this package bundles.
+
+        ``status`` is one of ``current`` / ``missing`` / ``outdated`` / ``ahead``
+        / ``no-bundle`` / ``no-device``. The two halves share a status schema
+        (D-028), so a client that has just been upgraded uses this to offer the
+        matching APK.
+        """
+
+        bundled = self._bundled_apk_version()
+        self.discover()
+        device = self._devices.get(device_id) if device_id else (
+            next(iter(self._devices.values()), None) if len(self._devices) == 1 else None
+        )
+        result = {
+            "bundled_version_code": bundled[0] if bundled else 0,
+            "bundled_version_name": bundled[1] if bundled else "",
+            "installed_version_code": 0,
+            "installed_version_name": "",
+            "status": "no-bundle" if bundled is None else "no-device",
+        }
+        if device is None or bundled is None:
+            return result
+        installed = self.adb.installed_version(device.serial)
+        if installed is None:
+            result["status"] = "missing"
+            return result
+        result["installed_version_code"], result["installed_version_name"] = installed
+        if installed[0] == bundled[0]:
+            result["status"] = "current"
+        elif installed[0] < bundled[0]:
+            result["status"] = "outdated"
+        else:
+            result["status"] = "ahead"
+        return result
+
+    def install_android(self, device_id: str = "") -> dict:
+        """Push the bundled APK to the phone (install if missing, reinstall in
+        place if outdated). The caller (CLI/GUI) owns user consent, like
+        ``approve_device``."""
+
+        with self._lock:
+            if self._state in {"connecting", "connected"}:
+                raise TeatherError("busy", "Disconnect before changing the phone app")
+            if not Path(BUNDLED_APK).exists():
+                raise TeatherError("no-bundled-apk", "This package does not bundle a Teather APK")
+            self.discover()
+            device = self._devices.get(device_id) if device_id else (
+                next(iter(self._devices.values()), None) if len(self._devices) == 1 else None
+            )
+            if device is None:
+                raise TeatherError("device-unavailable", "Connect exactly one phone (or pass its id) to install onto")
+            before = self.adb.installed_version(device.serial)
+            self.adb.install_apk(device.serial, BUNDLED_APK)
+            after = self.adb.installed_version(device.serial)
+            self.discover()
+            return {
+                "device_id": self.config.device_id(device.serial),
+                "action": "installed" if before is None else "reinstalled",
+                "version_code": after[0] if after else 0,
+                "version_name": after[1] if after else "",
+            }
 
     def approve_device(self, device_id: str) -> dict:
         self.discover()

@@ -35,6 +35,11 @@ Set the local display name for a remembered phone.
 .B device forget DEVICE_ID
 Remove a remembered phone and its preferences.
 .TP
+.B device install [DEVICE_ID] [--yes]
+Install the Teather app on a connected phone, or upgrade it when the phone's app
+is older than the one this package bundles. Does nothing when the app is already
+current or newer. Confirms first unless \fB--yes\fR.
+.TP
 .B autoconnect on|off DEVICE_ID
 Set safe auto-connect for an approved phone. Auto-connect never starts a stopped Android relay.
 .TP

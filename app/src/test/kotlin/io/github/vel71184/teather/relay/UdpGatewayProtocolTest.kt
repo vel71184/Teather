@@ -86,4 +86,25 @@ class UdpGatewayProtocolTest {
             UdpGatewayProtocol.read(ByteArrayInputStream(byteArrayOf(0x00, 0x00)))
         }
     }
+
+    @Test
+    fun `a data frame with a truncated address block is an IOException not a crash`() {
+        // LEN=4, flags=DATA, conn_id=0x0001, ATYP=IPv4 but no address/port bytes.
+        val frame = byteArrayOf(0x00, 0x04, UdpGatewayProtocol.FLAG_DATA.toByte(), 0x00, 0x01, 0x01)
+        assertThrows(java.io.IOException::class.java) {
+            UdpGatewayProtocol.read(ByteArrayInputStream(frame))
+        }
+    }
+
+    @Test
+    fun `a data frame with a domain length past the frame end is an IOException`() {
+        // LEN=6; body = flags(DATA), conn_id(2), ATYP=domain, domain-len=0x40
+        // (claims 64 bytes that are not there), one trailing byte.
+        val frame = byteArrayOf(
+            0x00, 0x06, UdpGatewayProtocol.FLAG_DATA.toByte(), 0x00, 0x00, 0x03, 0x40, 0x00,
+        )
+        assertThrows(java.io.IOException::class.java) {
+            UdpGatewayProtocol.read(ByteArrayInputStream(frame))
+        }
+    }
 }

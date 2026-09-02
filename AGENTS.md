@@ -41,12 +41,20 @@ The reason to stop is a real gate or a real fork — not a status check.
 ## Current priority
 
 P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
-D-022 has run live on the developer laptop since 2026-08-30. Current build:
-Debian `0.1.0-11` / Android `0.1.0-p1.2`, committed 2026-08-31 (`071e2cc`).
-Post-P1, all deployed + live-tested: D-023 (upstream switch), D-024 (udpgw UDP),
-D-025 (standalone connect), D-026 (abnormal-disconnect self-heal + auto-reconnect
-+ `teatherd.log` + toast notifications + single-instance GTK + sole-path
-tracking). Fault-injection tested 2026-08-31. Deferred: the phone-reboot soak.
+D-022 has run live on the developer laptop since 2026-08-30. Current committed
+build: Debian `0.1.0-12` / Android `0.1.0-p1.3`. Deployed + live-tested through
+`0.1.0-11`: D-023 (upstream switch), D-024 (udpgw UDP), D-025 (standalone
+connect), D-026 (abnormal-disconnect self-heal + auto-reconnect + `teatherd.log`
++ toast notifications + single-instance GTK + sole-path tracking; fault-injection
+tested 2026-08-31). **D-028/D-029/D-030 (`0.1.0-12` / Android `0.1.0-p1.3`, 2026-09-01, unit-tested,
+not yet live):** D-028 — the SOCKS relay requires RFC 1929 auth with a per-run
+secret the phone publishes only in its `DUMP`-protected status (closes "any app
+on the phone can use the loopback relay"; schema → 2). D-029 — the deb bundles
+the APK and `teather device install` keeps the phone app in lockstep. D-030 —
+release signing wired (`keystore.properties` / env, debug fallback), supersedes
+D-019; the owner generates the key. SDK is now at `~/Android/Sdk`. Still to do:
+live D-028 handshake + D-029 install against the new APK (needs the new
+`teatherd`), then the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
@@ -60,11 +68,16 @@ follow. Status:
    `VpnService`, no packet stack. **Done + live-tested** 2026-08-30 (STUN
    round-trip through `teather0`). The Debian build rebuilds tun2proxy with
    `--features udpgw` automatically.
-3. **Primary-goal verification (E-011).** The re-origination that keeps cellular
-   traffic from looking tethered is already built — the phone opens every socket
-   itself. The 2026-08-30 test confirmed the egress is genuinely the phone's
-   cellular link; the **TTL / JA3 half is still pending** a reflector and a
-   cellular-bound request from the phone (which has no HTTP client). **Next.**
+3. **Primary-goal verification.** The re-origination that keeps cellular traffic
+   from looking tethered is already built — the phone opens every socket itself,
+   and the 2026-08-30 test confirmed the egress is genuinely the phone's cellular
+   link. **Operational evidence (E-012):** on a prepaid Straight Talk plan where
+   exceeding the tether allowance is a hard stop, sustained daily Teather use —
+   including a ~4-hour heavy session — has drawn no tether hard-stop and no
+   carrier notice. Recorded as observation, not proof (D-009). The controlled
+   network-layer check (E-011: TTL / JA3 via a reflector + a cellular-bound
+   request from the phone) is now **opportunistic** — run it when a reflector
+   host is available; it is no longer blocking.
 4. **Robustness** — D-026 (`0.1.0-11`) implements self-healing reconciliation,
    the wider `health_check()`, persistent logging, toast notifications, the
    single-instance GTK app, the standalone connectivity re-check, and sole-path
@@ -89,8 +102,8 @@ P3 only as a cable-free convenience if the owner asks.
 IPv6 and the broader "become a VPN" scope stay deferred. Do not add fingerprint
 camouflage, DPI evasion, or carrier-stealth profiles (D-009) — deliberate
 non-goal. Anything outside the current track (multi-client, other platforms, P5
-polish, release signing) is lower priority, not off-limits — see **Working
-autonomy**.
+polish) is lower priority, not off-limits — see **Working autonomy**. Release
+signing is wired (D-030); the owner generates the key.
 
 ## Safety gates — ask the owner first
 

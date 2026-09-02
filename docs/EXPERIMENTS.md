@@ -400,13 +400,60 @@ the re-origination holds in practice on real hardware.
   residual**, not failures — this experiment does not try to make them match and
   a pass is not a claim of undetectability.
 
+## E-012 — Operational observation: carrier metering of relayed traffic
+
+**Date:** 2026-09-01 · **Status:** ongoing observation (not a controlled test)
+
+Records the owner's real-world usage evidence bearing on the primary goal
+(THREAT_MODEL "Carrier tethering classification"). This is operational
+observation, not a measurement — E-011 is the controlled network-layer check.
+
+### Setup
+
+- Pilot device: Samsung on Straight Talk (prepaid MVNO on Verizon's network).
+- Plan property: exceeding the mobile-hotspot / tether allowance is a **hard
+  stop** — hotspot access is cut with no throttle-down grace and, in the owner's
+  experience, no advance SMS.
+- Teather has been the daily desktop uplink since 2026-08-30, upstream
+  `cellular`.
+
+### Observations (owner-reported, 2026-09-01)
+
+- No hotspot/tether hard-stop while using Teather, including one day with roughly
+  four hours of sustained use (mostly Claude Code CLI traffic).
+- No carrier SMS or notification about hotspot/tether usage.
+- That billing cycle ended with under 5 GB of plan data remaining and was not
+  cut off early.
+- On-device Settings → data-usage attribution: **not yet checked** — would show
+  whether the relayed volume is booked against the Teather app as ordinary
+  cellular data.
+
+### Interpretation
+
+Consistent with the carrier metering the relayed traffic as ordinary on-device
+cellular use rather than tethering, which is what the re-origination design
+intends. It is **not proof**: the carrier could classify the traffic differently
+and simply not enforce in this window, could reconcile later, or could change
+detection at any time. Volume-based metering against the plan's general data
+allowance is unaffected and expected. Per D-009 no claim of guaranteed
+undetectability is made.
+
+### Follow-ups
+
+- Check per-app cellular data usage on the phone after a heavy session.
+- Keep logging heavy sessions and any carrier contact, over multiple billing
+  cycles.
+- E-011 (network-layer equivalence) remains the controlled check — now
+  opportunistic, not blocking.
+
 ## Planned experiment queue
 
 | ID | Question | Milestone |
 |---|---|---|
 | E-002 | Can a non-persistent Teather backup interface provide TCP/DNS after the owner disables Wi-Fi without mutating the Wi-Fi connection? | P1 |
 | E-003 | Does every failure path restore Linux routes and DNS? | P1 |
-| E-011 | Is relayed cellular traffic network-layer equivalent to the phone's own? | primary-goal verification |
+| E-011 | Is relayed cellular traffic network-layer equivalent to the phone's own? | primary-goal verification (opportunistic — see E-012) |
+| E-012 | Does the carrier meter relayed traffic as on-device use? (ongoing operational observation; no tether hard-stop or notice so far on a hard-stop prepaid plan) | primary-goal verification |
 | E-004 | Can the udpgw UDP path carry representative UDP traffic? (D-024; 2026-08-30: a STUN round-trip through `teather0` succeeded, and on `0.1.0-8` Shadow PC — a UDP cloud-gaming stream — launched and was usable with the whole desktop on `teather0`. Pass for functionality; stream bitrate/latency not measured.) | owner-directed track 2 |
 | E-006 | Does Android Doze/screen-off interrupt the relay? | robustness |
 | E-005 | What explicit IPv6 policy is correct for the target environment? | deferred |

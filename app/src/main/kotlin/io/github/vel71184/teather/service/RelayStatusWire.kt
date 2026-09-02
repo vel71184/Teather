@@ -33,10 +33,14 @@ object AndroidRelayStatus {
 
 /** Stable line-oriented status consumed by the P1 desktop client. */
 object RelayStatusWire {
-    const val SCHEMA_VERSION = 1
+    // 2: the relay now requires SOCKS username/password auth and publishes the
+    // per-run secret here, so a desktop client that predates the auth handshake
+    // must not attach.
+    const val SCHEMA_VERSION = 2
 
     fun serialize(status: RelayStatus, cellular: CellularStatus): String = buildString {
         appendLine("teather.status.version=$SCHEMA_VERSION")
+        appendLine("teather.status.secret=${status.secret ?: "none"}")
         appendLine("lifecycle=${status.lifecycle.name.lowercase()}")
         appendLine("bound_port=${status.boundPort ?: 0}")
         appendLine("configured_port=${status.configuration?.port ?: 0}")

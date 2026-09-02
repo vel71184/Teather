@@ -19,7 +19,9 @@ the next gate. Follow `docs/P1_HANDOFF.md` rather than restarting P0.
 | Gradle wrapper | 9.3.1 |
 | JDK | 17 |
 | Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
-| P1 Android version | `versionCode 4` / `0.1.0-p1.2` (ACTION_RECONFIGURE, UdpGatewayServer, Linux-matched icon, 256-flow ceiling) |
+| P1 Android version | `versionCode 5` / `0.1.0-p1.3` (SOCKS relay auth — D-028, status schema 2; "get desktop client" button — D-029) |
+| Android SDK | `~/Android/Sdk` (`local.properties`, gitignored) — `platforms/android-37`, `build-tools/37.0.0` |
+| Release signing | D-030: `keystore.properties` at the repo root (gitignored) or `TEATHER_KEYSTORE*` env; debug-key fallback with a warning |
 | P1 Linux target | Debian 12 GNOME amd64 |
 | P1 desktop stack | Python 3.11, PyGObject, GTK 3, Ayatana AppIndicator |
 | Packet engine | tun2proxy 0.8.3 plus audited Linux packet-information and TCP virtual-DNS patches with a checked-in Cargo lock; run as `--tun teather0` |
@@ -87,6 +89,11 @@ NetworkManager, or change host routes. P1 GUI, package-lifecycle, and physical
 validation is separate and must follow `docs/P1_HANDOFF.md`. The P0 helper
 additionally provides `status`, `logs`, and the historical 30-minute `soak`
 gate.
+
+Since D-029, `make p1-package` bundles the Android APK into the `.deb`, so build
+it first (`make android-build`, or an `assembleRelease` once a release key is
+configured — `build-deb.sh` prefers `app-release.apk` and warns when it falls
+back to the debug APK).
 
 ## Branches and commits
 

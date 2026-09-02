@@ -1,3 +1,32 @@
+teather (0.1.0-12) unstable; urgency=medium
+
+  * The Android relay now requires SOCKS5 username/password authentication
+    (RFC 1929) with a per-run secret (D-028). The relay listens on the phone's
+    loopback, which every installed app can reach regardless of its permissions;
+    without auth any of them could use the relay as an open proxy on the phone's
+    cellular link (including apps with no INTERNET permission). The phone
+    generates a fresh 128-bit secret each time the relay starts and publishes it
+    only in the DUMP-protected status, so only adb/root can learn it. teatherd
+    reads it and hands it to tun2proxy. Status schema is now 2; a schema-1 relay
+    and this client will not pair. Requires the Teather app at versionCode 5 /
+    0.1.0-p1.3.
+  * Hardened the udpgw frame parser: a data frame with a truncated address block
+    now raises a clean protocol error instead of an unchecked exception.
+  * Fixed a race in the relay's shutdown that could throw (and leave sockets
+    open) when the last session closed concurrently with Socks5Server.close().
+  * The package now bundles the matching Android APK (D-029). 'teather device
+    install' installs it on a connected phone, or upgrades it when the phone's
+    app is older than the one this package carries — which keeps the two halves
+    on the same status schema. The daemon never installs on its own; the CLI
+    confirms first. New D-Bus methods AndroidAppState and InstallAndroid.
+  * The Android app has a "Get the desktop client" button that opens the
+    project's releases page.
+  * Release signing is now wired (D-030): app/build.gradle.kts uses a gitignored
+    keystore.properties or TEATHER_KEYSTORE* env vars, falling back to the debug
+    key with a warning. build-deb.sh prefers a release-signed APK.
+
+ -- Teather Project <noreply@example.invalid>  Mon, 01 Sep 2026 12:00:00 +0000
+
 teather (0.1.0-11) unstable; urgency=medium
 
   * Self-healing after an abnormal disconnect (D-026). If the phone is

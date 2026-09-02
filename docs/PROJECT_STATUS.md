@@ -1,6 +1,6 @@
 # Project status
 
-- **Snapshot date:** 2026-08-31
+- **Snapshot date:** 2026-09-01
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop. **Complete and daily-driven.**
   D-022 (NetworkManager owns `teather0`, additive DNS, automatic failover) is
@@ -21,13 +21,36 @@
     persistent `teatherd.log`, self-clearing toast notifications,
     single-instance GTK, sole-path tracking. Fault-injection tested 2026-08-31
     (daemon restart, tun2proxy kill, `adb kill-server`, unplug/replug, Wi-Fi
-    toggle, GUI). Phone-reboot case deferred. 72 host unit tests pass.
-- **Remaining:** the E-011 TTL/JA3 half of primary-goal verification (needs a
-  reflector + a cellular-bound request from the phone); the phone-reboot soak;
-  a longer daily-use soak.
-- **Runnable build:** Android `0.1.0-p1.2` (`versionCode 4`); Debian package
-  `0.1.0-11` (D-026 self-healing + logging; `0.1.0-9` D-025 standalone connect;
-  `0.1.0-8` added the udpgw tuning;
+    toggle, GUI). Phone-reboot case deferred.
+- **D-028** (`0.1.0-12` / Android `0.1.0-p1.3`, 2026-09-01) — the SOCKS relay
+  now requires RFC 1929 username/password auth with a per-run 128-bit secret the
+  phone publishes only in its `DUMP`-protected status. Closes the "any app on
+  the phone can use the loopback relay" gap the threat model had flagged as
+  not-releasable. Status schema → 2. Also hardened the udpgw address parser.
+  From a whole-tree security review — the only finding above defense-in-depth.
+- **D-029** (`0.1.0-12`, 2026-09-01) — the `.deb` bundles the matching APK;
+  `teather device install` installs/upgrades it on the phone so the two halves
+  stay on the same schema. Android app has a "Get the desktop client" button
+  linking to the releases page.
+- **D-030** (2026-09-01) — release signing wired (`keystore.properties` /
+  `TEATHER_KEYSTORE*`, debug fallback with a warning); supersedes D-019. The key
+  itself is the owner's to generate. First release-signed install on the pilot
+  phone needs a one-time uninstall/reinstall.
+- **Verification:** 80 host unit tests pass (`test_core.py`); 27 Android unit
+  tests pass (`:app:testDebugUnitTest`, SDK at `~/Android/Sdk`); both APKs and
+  the `0.1.0-12` deb build. D-028's parser + version-gate confirmed against a
+  real schema-1 relay on the pilot phone. **Not yet done:** the live D-028 auth
+  handshake and D-029 install flow against the new APK (needs the new `teatherd`
+  running — i.e. the deb installed, which is the owner's call on this host).
+- **Remaining:** nothing blocking. Primary-goal verification has operational
+  support (E-012: no tether hard-stop or carrier notice on a hard-stop prepaid
+  plan under heavy daily use); the controlled E-011 network-layer check is
+  opportunistic, pending a reflector host. Plus the phone-reboot fault case and
+  an ongoing daily-use soak.
+- **Runnable build:** Android `0.1.0-p1.3` (`versionCode 5`, SOCKS relay auth —
+  D-028, status schema 2); Debian package `0.1.0-12` (D-028 relay auth + udpgw
+  parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
+  standalone connect; `0.1.0-8` added the udpgw tuning;
   `0.1.0-7` raised the 64->256 flow ceiling). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
   `tun` connection, no setuid helper or polkit action, additive DNS, automatic
   failover). `0.1.0-5` adds D-023 (`teather upstream auto|cellular|wifi|
@@ -35,9 +58,10 @@
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 72 host
-  unit tests (4 for D-025, 20 for D-026) + Android unit tests (incl. 10 udpgw
-  tests) + D-Bus smoke pass.
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 80 host
+  unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029) + D-Bus smoke
+  pass; 27 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
+  `~/Android/Sdk` (`local.properties` corrected).
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
   (see the work-log entry): install, connect, TCP, full Wi-Fi-loss failover,
   UDP via udpgw (STUN round-trip), zero-gap `teather upstream` switch, and a
@@ -92,11 +116,16 @@ must not be classified as tethered. The re-origination that serves that goal is
 already built (the phone opens every socket itself); the 2026-08-30 test
 confirmed the egress is genuinely the phone's cellular link.
 
-**Remaining:** the E-011 TTL/JA3 half (needs a reflector + a cellular-bound
-request from the phone, which has no HTTP client); the phone-reboot soak;
-committing nothing further is pending. IPv6, multi-client, other platforms, and
-the WireGuard endpoint (P4) stay deferred. IPv6 and "become a VPN" scope are not
-in progress.
+**Operational evidence (E-012, 2026-09-01):** on the owner's prepaid Straight
+Talk plan, where exceeding the tether allowance is a hard stop, sustained daily
+Teather use — including a ~4-hour heavy session — has produced no tether
+hard-stop and no carrier notice. Recorded as observation, not proof (D-009).
+The controlled network-layer comparison (E-011) is now opportunistic, pending a
+reflector host reachable from the phone's cellular.
+
+**Remaining:** the phone-reboot fault case; an ongoing daily-use soak. IPv6,
+multi-client, other platforms, and the WireGuard endpoint (P4) stay deferred and
+not in progress.
 
 ## Implemented surface (what actually exists)
 
@@ -105,9 +134,11 @@ in progress.
 - `RelayService` — an exported `connectedDevice` foreground service protected by
   `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
   `ACTION_RECONFIGURE` intents carrying `relay_port` + `relay_upstream`.
-- `Socks5Server` — SOCKS5 no-auth, TCP `CONNECT` for IPv4 / domain / literal
-  IPv6 targets, bound strictly to `127.0.0.1`; per-connection outbound socket
-  opened by `AndroidNetworkConnector` on the selected `Network`.
+- `Socks5Server` — SOCKS5 with RFC 1929 username/password auth (D-028: a per-run
+  128-bit secret the phone publishes only in its `DUMP`-protected status), TCP
+  `CONNECT` for IPv4 / domain / literal IPv6 targets, bound strictly to
+  `127.0.0.1`; per-connection outbound socket opened by `AndroidNetworkConnector`
+  on the selected `Network`.
 - `UdpGatewayServer` + `UdpGatewayProtocol` — terminates tun2proxy's badvpn-style
   "udpgw" TCP stream on the phone, one `DatagramSocket` (bound to the chosen
   upstream) per connection id. Carries general UDP with no VpnService, no packet
@@ -117,7 +148,8 @@ in progress.
   sockets keep their link).
 - `RelayStats` / `RelayStatusWire` — accepted/established/rejected/active
   counts, byte totals, last upstream, error categories, cellular
-  available/validated; surfaced via `dumpsys`.
+  available/validated, and the per-run SOCKS secret; surfaced via `dumpsys`
+  (schema 2).
 - `MainActivity` — port + upstream picker, start/stop, live status, "copy the
   laptop commands" clipboard helper, notification-permission prompt.
 - Unit/integration tests for SOCKS5, udpgw framing, the udpgw server, and the
@@ -170,16 +202,30 @@ The `desktop/linux/teather-p0` helper and `docs/P0_HANDOFF.md` reproduce the
 completed P0 experiment (SOCKS-only TCP over ADB). Superseded by P1; kept for
 reference.
 
-## Next concrete actions
+## Open threads (none blocking)
 
-1. **E-011 TTL/JA3 half** — the primary-goal check still pending a reflector and
-   a cellular-bound request originated from the phone (which has no HTTP
-   client). This is the last piece of primary-goal verification.
-2. **Phone-reboot soak** — the one D-026 fault case not yet exercised; plus a
-   real multi-day daily-use soak.
-3. Optional: the bare-host auto-revert / dead-man's-switch (punch item 3,
+1. **E-012 follow-ups** — check per-app cellular data-usage attribution on the
+   phone after a heavy session; keep logging heavy sessions and any carrier
+   contact across billing cycles.
+2. **E-011 (opportunistic)** — the controlled TTL/JA3 comparison, when a
+   reflector host reachable from the phone's cellular is available. A
+   ready-to-deploy reflector can be built ahead of the host.
+3. **Phone-reboot fault case** — the one D-026 fault not yet exercised; plus the
+   ongoing daily-use soak.
+4. **Live-test `0.1.0-12` / `0.1.0-p1.3` end to end (D-028 + D-029).** Unit
+   tests pass on both sides and the D-028 version-gate is confirmed against the
+   real schema-1 relay. Still to do on the pilot phone: install the new APK,
+   confirm the real SOCKS auth handshake, exercise `teather device install`,
+   and one clean connect through the new `teatherd`. Needs the `0.1.0-12` deb
+   installed on a host (the owner's call for the dev laptop).
+5. **Generate the release signing key (D-030)** and do the one-time
+   uninstall/reinstall on the pilot phone; then `build-deb.sh` bundles a
+   release-signed APK.
+6. Optional: the bare-host auto-revert / dead-man's-switch (punch item 3,
    sketched, not built) if the owner wants zero-babysit confidence beyond the
    D-026 self-heal.
+7. Remaining pre-public items (roadmap): explicit license (D-010), a
+   vulnerability-reporting channel.
 
 `~/teather-host-evidence/` holds the host before/after network snapshots.
 Generated `__pycache__`, private VM evidence, and signing keys are not
@@ -343,6 +389,86 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-01 — Security review of the tree; SOCKS relay authentication (D-028, `0.1.0-12`)
+
+- **Trigger:** the owner asked for a full security review + hardening pass now
+  that the feature set is stable and public release is a goal.
+- **Review:** read the whole tree (Android relay + parsers, Linux `teatherd` +
+  D-Bus + all subprocess construction, config/journal handling, DNS probe,
+  packaging/supply chain). The code is well-hardened — `O_NOFOLLOW`/mode/uid
+  checks on state files, list-form subprocess with a fixed `PATH` everywhere, no
+  `eval`/`pickle`/`shell=True`, checksummed tun2proxy source + `Cargo.lock`,
+  NM-ownership verification before any `teather0` delete, bounds-checked
+  parsers. **Nothing HIGH or MEDIUM.** One real finding (already noted in the
+  threat model as not-releasable): the phone-side SOCKS listener was no-auth and
+  Android loopback is reachable by every installed app, so any app — even one
+  with no `INTERNET` permission — could use the relay as an open proxy on the
+  phone's upstream. Plus one LOW: a truncated udpgw address block threw an
+  unchecked exception instead of a protocol error.
+- **Fix (D-028):** the relay now requires SOCKS5 username/password auth
+  (RFC 1929). `RelayRuntime` generates a fresh 128-bit hex secret per start
+  (kept across a same-port live rebind), exposed only in the `DUMP`-protected
+  status wire (`teather.status.secret`); `teatherd` reads it and passes
+  `--proxy socks5://teather:<secret>@127.0.0.1:<port>` to tun2proxy. Constant-time
+  compare on the phone. Status schema → 2 so a schema-1 relay and this client
+  refuse to pair. udpgw `readTarget` now bounds-checks and raises `IOException`.
+- **Files:** `app/.../relay/{Socks5Protocol,Socks5Server,UdpGatewayProtocol}.kt`,
+  `app/.../service/{RelayRuntime,RelayStatusWire}.kt`, `app/build.gradle.kts`
+  (`versionCode 5` / `0.1.0-p1.3`); `desktop/linux/teather/{constants,
+  android_status,manager}.py`; `packaging/{debian/control,debian/changelog,
+  scripts/build-deb.sh}` (`0.1.0-12`); Android + Linux tests; `docs/{DECISIONS
+  (D-028),THREAT_MODEL,DEVELOPMENT}.md`.
+- **Verified:** `test_core.py` 72 → 80; `:app:testDebugUnitTest` 27, both APKs
+  and the `0.1.0-12` deb build (SDK installed at `~/Android/Sdk` during this
+  session; `local.properties` corrected from a stale `/tmp/android-sdk`). D-028's
+  parser + schema-2 gate confirmed against a real schema-1 `dumpsys` from the
+  pilot phone. Live D-028 handshake + D-029 install flow against the new APK
+  still pending (needs the new `teatherd`).
+
+### 2026-09-01 — Desktop bundles/installs the APK (D-029); release signing wired (D-030)
+
+- **Trigger:** the owner asked whether the two halves could be packaged so one
+  can provide/install the other, and whether to move to a real signing key.
+- **D-029:** the `.deb` bundles `Teather.apk` + a `Teather.apk.version` sidecar
+  (`build-deb.sh` reads the version from `app/build.gradle.kts`, prefers a
+  release APK). `teatherd` gains `AndroidAppState` / `InstallAndroid`; the CLI
+  gains `teather device install [id] [--yes]` (confirms, no-ops when current or
+  newer, `adb install -r` otherwise). `connect()`'s app-missing error points at
+  it. The Android app got a "Get the desktop client" button → releases page.
+  Rejected: bundling the desktop client in the APK — the phone can't push to the
+  host.
+- **D-030:** `app/build.gradle.kts` reads a gitignored `keystore.properties` (or
+  `TEATHER_KEYSTORE*` env), falling back to the debug key with a warning.
+  `keystore.properties.example` + `.gitignore` entry added. Supersedes D-019.
+  The keystore is the owner's to create; the pilot phone needs one
+  uninstall/reinstall on the debug→release transition.
+- **Files:** `app/build.gradle.kts`, `app/.../MainActivity.kt`,
+  `app/src/main/res/values/strings.xml`, `keystore.properties.example`,
+  `.gitignore`; `desktop/linux/teather/{constants,adb,manager,dbus_service,
+  cli}.py`; `packaging/{scripts/build-deb.sh,debian/changelog,man/teather.1}`;
+  tests; `docs/{DECISIONS,PROJECT_STATUS,README,...}`.
+- **Verified:** 80 host tests, 27 Android tests, deb built and inspected
+  (`Teather.apk` + `Teather.apk.version` present, sidecar reads `5 / 0.1.0-p1.3`).
+
+### 2026-09-01 — Record operational carrier evidence; E-011 becomes opportunistic (E-012)
+
+- **Trigger:** the owner pointed out real-world evidence for the primary goal —
+  on a prepaid Straight Talk plan where exceeding the tether allowance is a hard
+  stop, heavy daily Teather use (incl. a ~4-hour session, mostly Claude Code CLI)
+  has never tripped the tether hard-stop or drawn a carrier notice.
+- **Change (docs only):** added `docs/EXPERIMENTS.md` **E-012** (ongoing
+  operational observation, hedged per D-009 — consistent with on-device metering,
+  not proof), queue row, and reprioritised **E-011** (the controlled TTL/JA3
+  reflector comparison) from "next / blocking" to opportunistic. Propagated to
+  `AGENTS.md` "Current priority" item 3, `docs/PROJECT_STATUS.md` top block +
+  Current objective + Open threads.
+- **Note:** clarified that the phone's *built-in tethering monitor* staying flat
+  is expected by construction (Teather never touches Android's hotspot subsystem)
+  and is not itself evidence. The over-allowance usage with no hard-stop is the
+  real signal. E-012 follow-up: check per-app cellular data attribution on the
+  phone.
+- **Verified:** docs only, no code. `grep` for stale "E-011 ... Next" framing.
 
 ### 2026-09-01 — Retire the per-turn check-in process (D-027, docs only)
 

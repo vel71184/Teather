@@ -35,6 +35,13 @@ class Socks5Server(
     private val relayIdleTimeoutMs: Int = RELAY_IDLE_TIMEOUT_MS,
     private val idleCheckIntervalMs: Int = IDLE_CHECK_INTERVAL_MS,
     private val udpGateway: UdpGatewayServer? = null,
+    /**
+     * Per-session secret the desktop client must present as its SOCKS password
+     * (RFC 1929). Loopback on Android is reachable by every installed app, so a
+     * null secret — no authentication — is for tests only; [RelayRuntime] always
+     * sets one in production.
+     */
+    private val secret: String? = null,
     private val logger: (category: String) -> Unit = {},
 ) : Closeable {
     private val running = AtomicBoolean(false)
@@ -114,7 +121,7 @@ class Socks5Server(
         var remote: Socket? = null
         try {
             client.soTimeout = HANDSHAKE_TIMEOUT_MS
-            Socks5Protocol.negotiate(client.getInputStream(), client.getOutputStream())
+            Socks5Protocol.negotiate(client.getInputStream(), client.getOutputStream(), secret)
             val destination = Socks5Protocol.readConnectRequest(client.getInputStream())
             requestRead = true
 
@@ -257,7 +264,10 @@ class Socks5Server(
     override fun close() {
         running.set(false)
         serverSocket?.closeQuietly()
-        sockets.toList().forEach { it.closeQuietly() }
+        // Iterate the concurrent set directly. `toList()` takes a size==1 fast
+        // path that calls `iterator().next()` with no `hasNext()`, which races a
+        // session thread removing the last socket and throws NoSuchElementException.
+        sockets.forEach { it.closeQuietly() }
         shutdown(acceptExecutor)
         shutdown(sessionExecutor)
         shutdown(transferExecutor)

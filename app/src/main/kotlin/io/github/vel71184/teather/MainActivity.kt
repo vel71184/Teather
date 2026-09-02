@@ -4,8 +4,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -163,6 +165,13 @@ class MainActivity : Activity() {
             topMargin = dp(10)
         })
 
+        content.addView(Button(this).apply {
+            text = getString(R.string.get_desktop_client)
+            setOnClickListener { openDownloadPage() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(10)
+        })
+
         content.addView(fieldLabel(R.string.status_label).apply { setPadding(0, dp(24), 0, dp(8)) })
         statusText = TextView(this).apply {
             text = getString(R.string.status_stopped)
@@ -219,6 +228,22 @@ class MainActivity : Activity() {
         val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("Teather relay commands", commands))
         Toast.makeText(this, R.string.commands_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * The client for the desktop is not bundled here — it is per-distro and
+     * carries a compiled tunnel binary. Send the user to the project's releases
+     * page to pick the build for whatever machine they want to relay from.
+     */
+    private fun openDownloadPage() {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.download_url)))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.no_browser, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun restoreConfiguration() {

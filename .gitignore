@@ -80,3 +80,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Release signing (D-030) — never commit the real one
+keystore.properties

@@ -24,9 +24,10 @@ as little receiver-side software as each platform permits.
 > A 2026-08-30 end-to-end test on the laptop + phone covered connect, TCP on
 > cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap
 > upstream switch, and a clean teardown to byte-identical host state; a
-> 2026-08-31 fault-injection pass exercised the D-026 self-heal paths. Builds:
-> Debian `0.1.0-11`, Android `0.1.0-p1.2`. See `docs/PROJECT_STATUS.md` and
-> `docs/DECISIONS.md`.
+> 2026-08-31 fault-injection pass exercised the D-026 self-heal paths. Current
+> builds: Debian `0.1.0-12`, Android `0.1.0-p1.3` (D-028 SOCKS relay
+> authentication — not yet live-tested end to end). See `docs/PROJECT_STATUS.md`
+> and `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
 repository, but broad distribution, app-store submission, and commercial support
@@ -62,15 +63,20 @@ NAT/forwarding gateway:
 - A receiver (Linux today) sends its traffic to that relay over a local
   transport; the transport can change without changing the relay's core
   behavior.
-- From the carrier network's point of view, the resulting traffic is
-  indistinguishable from the phone's own app traffic, because it genuinely is
-  the phone's own app traffic — there is no second device's packets being
-  forwarded through the phone's IP stack for the network to fingerprint.
+- At the network layer, the resulting traffic carries the phone's own identity
+  (TTL/hop limit, IP/TCP stack fingerprint, resolver origin), because it
+  genuinely is the phone's own app traffic — there is no second device's packets
+  being forwarded through the phone's IP stack. Application-layer fingerprints
+  (TLS/JA3, User-Agent, traffic volume and destinations) still pass through
+  unchanged; see `docs/THREAT_MODEL.md`.
 
 That last property is structural, not a built-in evasion feature: it falls out
 of choosing an application relay over a NAT/hotspot design, and it is the same
 underlying reason earlier tools built for a similar purpose (for example,
 PdaNet+) have generally not been classified as tethering by carrier networks.
+As of September 2026, sustained daily use on a prepaid plan that hard-stops at
+its tether allowance has not triggered that stop or any carrier notice — logged
+as an observation in `docs/EXPERIMENTS.md` (E-012), not a guarantee.
 
 Teather will not turn this into a guaranteed promise. Carrier detection methods
 are outside the application's control, vary by carrier and plan, and change over
@@ -336,11 +342,13 @@ ready.
 P1 is complete and Teather is the owner's daily connection. The APK is
 debug-signed (D-019 defers a permanent release identity during private testing).
 
-**Android** (`0.1.0-p1.2`): a Kotlin foreground service running a local SOCKS5
+**Android** (`0.1.0-p1.3`): a Kotlin foreground service running a local SOCKS5
 relay plus a udpgw terminator for general UDP, with a live upstream picker
-(`auto|cellular|wifi|ethernet`) and status/metrics.
+(`auto|cellular|wifi|ethernet`) and status/metrics. The relay authenticates the
+SOCKS connection with a per-run secret (D-028) so that other apps on the phone
+cannot use it, since Android loopback is reachable by any installed app.
 
-**Linux** (Debian `0.1.0-11`): a per-user `teatherd` D-Bus service, a `teather`
+**Linux** (Debian `0.1.0-12`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
 is automatic when Wi-Fi/Ethernet is lost, and Teather can also come up as the
@@ -350,7 +358,9 @@ stream, terminated on the phone (D-024) — enough for Shadow PC cloud gaming.
 An abnormal disconnect (phone unplug, USB/ADB drop, tun2proxy crash, a dropped
 forward) is detected in seconds and auto-reconnects, with a persistent
 `~/.local/state/teather/teatherd.log` and self-clearing toast notifications
-(D-026).
+(D-026). The package bundles the matching APK — `teather device install` puts it
+on the phone, or upgrades it when the phone's app is behind this package (D-029),
+which keeps both halves on the same protocol schema.
 
 Validated by a 2026-08-30 end-to-end test (install, connect, TCP on cellular,
 full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream switch,

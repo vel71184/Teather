@@ -28,6 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     rename.add_argument("name")
     forget = device.add_parser("forget", help="forget a phone")
     forget.add_argument("device_id")
+    install = device.add_parser(
+        "install",
+        help="install or upgrade the Teather app on the phone from the APK this package bundles",
+    )
+    install.add_argument("device_id", nargs="?", default="")
+    install.add_argument("--yes", action="store_true")
     autoconnect = commands.add_parser("autoconnect", help="enable or disable safe auto-connect")
     autoconnect.add_argument("setting", choices=("on", "off"))
     autoconnect.add_argument("device_id")
@@ -110,6 +116,36 @@ def main(argv: list[str] | None = None) -> int:
             result = client.call("ApproveDevice", "(s)", (arguments.device_id,))
         elif arguments.device_command == "rename":
             result = client.call("RenameDevice", "(ss)", (arguments.device_id, arguments.name))
+        elif arguments.device_command == "install":
+            state = client.call("AndroidAppState", "(s)", (arguments.device_id,))
+            status = state.get("status")
+            if status == "current":
+                print(
+                    f"The phone already has the matching Teather app "
+                    f"(versionCode {state.get('installed_version_code')})."
+                )
+                return 0
+            if status == "no-bundle":
+                raise RuntimeError("this package does not bundle a Teather APK")
+            if status == "no-device":
+                raise RuntimeError("connect exactly one phone, or pass its id")
+            if status == "ahead":
+                print(
+                    "The phone has a newer Teather app "
+                    f"(versionCode {state.get('installed_version_code')}) than this package bundles "
+                    f"({state.get('bundled_version_code')}); leaving it alone."
+                )
+                return 0
+            verb = "Install" if status == "missing" else "Upgrade"
+            if not arguments.yes:
+                answer = input(
+                    f"{verb} the Teather app on this phone to versionCode "
+                    f"{state.get('bundled_version_code')}? [y/N] "
+                )
+                if answer.strip().lower() not in {"y", "yes"}:
+                    print("Cancelled", file=sys.stderr)
+                    return 2
+            result = client.call("InstallAndroid", "(s)", (arguments.device_id,))
         else:
             result = client.call("ForgetDevice", "(s)", (arguments.device_id,))
         _print(result, getattr(arguments, "json", False))

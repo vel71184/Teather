@@ -8,6 +8,7 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.security.MessageDigest
 
 data class SocksDestination(
     val host: String? = null,
@@ -38,13 +39,28 @@ object Socks5Protocol {
 
     private const val VERSION = 0x05
     private const val METHOD_NO_AUTHENTICATION = 0x00
+    private const val METHOD_USERNAME_PASSWORD = 0x02
     private const val METHOD_NOT_ACCEPTABLE = 0xff
+    // RFC 1929 username/password sub-negotiation.
+    private const val AUTH_VERSION = 0x01
+    private const val AUTH_SUCCESS = 0x00
+    private const val AUTH_FAILURE = 0x01
     private const val COMMAND_CONNECT = 0x01
     private const val ADDRESS_IPV4 = 0x01
     private const val ADDRESS_DOMAIN = 0x03
     private const val ADDRESS_IPV6 = 0x04
 
-    fun negotiate(input: InputStream, output: OutputStream) {
+    /**
+     * Method negotiation (RFC 1928) and, when [secret] is non-null, the
+     * username/password sub-negotiation (RFC 1929).
+     *
+     * The relay listens on the phone's loopback, which every app on the device
+     * can reach regardless of its permissions. When a [secret] is configured the
+     * desktop client must present it as the SOCKS password; the value is only
+     * learnable by a DUMP-privileged reader (adb / teatherd) from the relay's
+     * status. A null [secret] keeps the no-auth path and is used only by tests.
+     */
+    fun negotiate(input: InputStream, output: OutputStream, secret: String? = null) {
         val version = input.readRequired()
         if (version != VERSION) {
             throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "Unsupported SOCKS version")
@@ -52,20 +68,45 @@ object Socks5Protocol {
 
         val methodCount = input.readRequired()
         if (methodCount == 0) {
-            output.write(byteArrayOf(VERSION.toByte(), METHOD_NOT_ACCEPTABLE.toByte()))
-            output.flush()
+            writeMethodChoice(output, METHOD_NOT_ACCEPTABLE)
             throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "Client supplied no methods")
         }
+        val methods = input.readExactly(methodCount).mapTo(HashSet<Int>()) { it.toInt() and 0xff }
 
-        val methods = input.readExactly(methodCount)
-        if (methods.none { it.toInt() and 0xff == METHOD_NO_AUTHENTICATION }) {
-            output.write(byteArrayOf(VERSION.toByte(), METHOD_NOT_ACCEPTABLE.toByte()))
-            output.flush()
-            throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "No supported authentication method")
+        if (secret == null) {
+            if (METHOD_NO_AUTHENTICATION !in methods) {
+                writeMethodChoice(output, METHOD_NOT_ACCEPTABLE)
+                throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "No supported authentication method")
+            }
+            writeMethodChoice(output, METHOD_NO_AUTHENTICATION)
+            return
         }
 
-        output.write(byteArrayOf(VERSION.toByte(), METHOD_NO_AUTHENTICATION.toByte()))
+        if (METHOD_USERNAME_PASSWORD !in methods) {
+            writeMethodChoice(output, METHOD_NOT_ACCEPTABLE)
+            throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "Client cannot authenticate to the relay")
+        }
+        writeMethodChoice(output, METHOD_USERNAME_PASSWORD)
+        authenticate(input, output, secret)
+    }
+
+    private fun writeMethodChoice(output: OutputStream, method: Int) {
+        output.write(byteArrayOf(VERSION.toByte(), method.toByte()))
         output.flush()
+    }
+
+    private fun authenticate(input: InputStream, output: OutputStream, secret: String) {
+        if (input.readRequired() != AUTH_VERSION) {
+            throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "Unsupported authentication version")
+        }
+        input.readExactly(input.readRequired()) // username: unused, the secret is the whole credential
+        val password = input.readExactly(input.readRequired())
+        val accepted = MessageDigest.isEqual(password, secret.toByteArray(Charsets.US_ASCII))
+        output.write(byteArrayOf(AUTH_VERSION.toByte(), (if (accepted) AUTH_SUCCESS else AUTH_FAILURE).toByte()))
+        output.flush()
+        if (!accepted) {
+            throw SocksProtocolException(REPLY_GENERAL_FAILURE, false, "Relay authentication failed")
+        }
     }
 
     fun readConnectRequest(input: InputStream): SocksDestination {

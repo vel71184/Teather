@@ -98,6 +98,70 @@ class Socks5ServerIntegrationTest {
     }
 
     @Test
+    fun `an authenticated CONNECT relays after the RFC 1929 handshake`() {
+        val secret = "00112233445566778899aabbccddeeff"
+        val loopback = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
+        val echo = taggingEchoService("E")
+
+        val server = Socks5Server(port = 0, connector = loopbackConnector(), secret = secret)
+        val relayPort = server.start()
+
+        try {
+            Socket(loopback, relayPort).use { client ->
+                client.soTimeout = 5_000
+                val input = DataInputStream(client.getInputStream())
+                val output = client.getOutputStream()
+
+                // method negotiation: offer username/password
+                output.write(byteArrayOf(0x05, 0x01, 0x02)); output.flush()
+                assertArrayEquals(byteArrayOf(0x05, 0x02), input.readBytes(2))
+
+                // RFC 1929 sub-negotiation: ver=1, ulen=1, uname='t', plen, passwd
+                val pass = secret.toByteArray(Charsets.US_ASCII)
+                output.write(byteArrayOf(0x01, 0x01, 't'.code.toByte(), pass.size.toByte()))
+                output.write(pass)
+                output.flush()
+                assertArrayEquals(byteArrayOf(0x01, 0x00), input.readBytes(2))
+
+                // CONNECT to the echo service
+                val port = echo.localPort
+                output.write(
+                    byteArrayOf(0x05, 0x01, 0x00, 0x01, 127, 0, 0, 1, ((port ushr 8) and 0xff).toByte(), (port and 0xff).toByte()),
+                )
+                output.flush()
+                assertEquals(0x05, input.readUnsignedByte())
+                assertEquals(Socks5Protocol.REPLY_SUCCEEDED, input.readUnsignedByte())
+                input.readUnsignedByte()
+                input.readBytes(if (input.readUnsignedByte() == 0x04) 16 else 4)
+                input.readUnsignedShort()
+
+                output.write("ping".toByteArray()); output.flush()
+                assertArrayEquals("E:ping".toByteArray(), input.readBytes(6))
+            }
+        } finally {
+            server.close()
+            echo.close()
+        }
+    }
+
+    @Test
+    fun `an unauthenticated client is refused when a secret is set`() {
+        val server = Socks5Server(port = 0, connector = loopbackConnector(), secret = "00112233445566778899aabbccddeeff")
+        val relayPort = server.start()
+        try {
+            Socket(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), relayPort).use { client ->
+                client.soTimeout = 5_000
+                val input = DataInputStream(client.getInputStream())
+                client.getOutputStream().write(byteArrayOf(0x05, 0x01, 0x00)) // only no-auth
+                client.getOutputStream().flush()
+                assertArrayEquals(byteArrayOf(0x05, 0xff.toByte()), input.readBytes(2))
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun `connection-wide idle timeout permits a one-way active stream`() {
         val loopback = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
         val streamListener = ServerSocket(0, 1, loopback)

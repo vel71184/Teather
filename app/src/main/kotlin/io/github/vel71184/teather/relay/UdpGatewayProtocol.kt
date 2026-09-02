@@ -126,23 +126,31 @@ object UdpGatewayProtocol {
         val atyp = body[offset++].toInt() and 0xff
         return when (atyp) {
             ATYP_IPV4 -> {
+                requireRemaining(body, offset, 4 + 2)
                 val raw = body.copyOfRange(offset, offset + 4); offset += 4
                 val port = readPort(body, offset); offset += 2
                 Target.Ip(InetSocketAddress(InetAddress.getByAddress(raw), port)) to offset
             }
             ATYP_IPV6 -> {
+                requireRemaining(body, offset, 16 + 2)
                 val raw = body.copyOfRange(offset, offset + 16); offset += 16
                 val port = readPort(body, offset); offset += 2
                 Target.Ip(InetSocketAddress(InetAddress.getByAddress(raw), port)) to offset
             }
             ATYP_DOMAIN -> {
+                if (offset >= body.size) throw IOException("udpgw address truncated")
                 val len = body[offset++].toInt() and 0xff
+                requireRemaining(body, offset, len + 2)
                 val host = String(body, offset, len, Charsets.US_ASCII); offset += len
                 val port = readPort(body, offset); offset += 2
                 Target.Domain(host, port) to offset
             }
             else -> throw IOException("udpgw address type $atyp unsupported")
         }
+    }
+
+    private fun requireRemaining(body: ByteArray, offset: Int, needed: Int) {
+        if (offset + needed > body.size) throw IOException("udpgw address truncated")
     }
 
     private fun writeTarget(body: ByteArray, start: Int, target: Target): Int {

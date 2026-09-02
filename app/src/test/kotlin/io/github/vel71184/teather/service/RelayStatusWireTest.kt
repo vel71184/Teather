@@ -16,11 +16,13 @@ class RelayStatusWireTest {
             boundPort = 1080,
             stats = RelayStatsSnapshot(2, 1, 1, 1, 120, 240, "cellular (validated)", "timeout", 4),
             failureCategory = null,
+            secret = "00112233445566778899aabbccddeeff",
         )
 
         val wire = RelayStatusWire.serialize(status, CellularStatus(true, true))
 
-        assertTrue(wire.startsWith("teather.status.version=1\n"))
+        assertTrue(wire.startsWith("teather.status.version=2\n"))
+        assertTrue(wire.contains("teather.status.secret=00112233445566778899aabbccddeeff\n"))
         assertTrue(wire.contains("lifecycle=running\n"))
         assertTrue(wire.contains("selected_upstream=cellular_(validated)\n"))
         assertTrue(wire.contains("bytes_internet_to_client=240\n"))
@@ -28,6 +30,22 @@ class RelayStatusWireTest {
         assertFalse(wire.contains("serial"))
         assertFalse(wire.contains("subscriber"))
         assertFalse(wire.contains("device_id"))
+    }
+
+    @Test
+    fun secretLineReadsNoneWhenTheRelayIsStopped() {
+        val status = RelayStatus(
+            lifecycle = RelayLifecycle.STOPPED,
+            configuration = null,
+            boundPort = null,
+            stats = null,
+            failureCategory = null,
+            secret = null,
+        )
+
+        val wire = RelayStatusWire.serialize(status, CellularStatus(false, false))
+
+        assertTrue(wire.contains("teather.status.secret=none\n"))
     }
 
     @Test

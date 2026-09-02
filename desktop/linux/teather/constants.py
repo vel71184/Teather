@@ -10,8 +10,18 @@ ACTION_RECONFIGURE = f"{APP_ID}.action.RECONFIGURE"
 # instead of dialing out. It is never placed in a routing table. Must match
 # UdpGatewayServer.SENTINEL_HOST/PORT in the Android app.
 UDPGW_SENTINEL = "240.0.0.1:1"
-STATUS_SCHEMA = 1
+# 2: the Android relay requires SOCKS username/password auth (RFC 1929) and
+# publishes its per-run secret in the status wire. A schema-1 relay has no
+# secret and no auth, so the two must not be paired.
+STATUS_SCHEMA = 2
 RELAY_PORT = 1080
+
+# The desktop package bundles the matching Android APK so the client can install
+# or upgrade it on the phone (D-029) — the two halves share a status schema and
+# must stay in lockstep. `Teather.apk.version` is a two-line sidecar written by
+# build-deb.sh: versionCode, then versionName.
+BUNDLED_APK = "/usr/lib/teather/Teather.apk"
+BUNDLED_APK_VERSION = "/usr/lib/teather/Teather.apk.version"
 
 BUS_NAME = "io.github.vel71184.Teather1"
 OBJECT_PATH = "/io/github/vel71184/Teather1"
