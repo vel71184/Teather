@@ -36,12 +36,15 @@
   `TEATHER_KEYSTORE*`, debug fallback with a warning); supersedes D-019. The key
   itself is the owner's to generate. First release-signed install on the pilot
   phone needs a one-time uninstall/reinstall.
-- **Verification:** 80 host unit tests pass (`test_core.py`); 27 Android unit
-  tests pass (`:app:testDebugUnitTest`, SDK at `~/Android/Sdk`); both APKs and
-  the `0.1.0-12` deb build. D-028's parser + version-gate confirmed against a
-  real schema-1 relay on the pilot phone. **Not yet done:** the live D-028 auth
-  handshake and D-029 install flow against the new APK (needs the new `teatherd`
-  running — i.e. the deb installed, which is the owner's call on this host).
+- **Verification:** 80 host unit tests, 27 Android unit tests, both APKs + the
+  `0.1.0-12` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
+  + pilot phone: the release key was generated (D-030), the release-signed APK
+  reached the phone via `teather device install` (D-029; the no-op "already
+  current" path also confirmed), and `teather connect` through the new
+  `teatherd` brought up the armed backup — an unauthenticated SOCKS client is
+  now refused (`000`), an authenticated one egresses on Verizon cellular
+  (`203.0.113.11`), including over the real `teather0` failover route (D-028).
+  The phone app and the bundled APK are both release-signed (`CN=Teather`).
 - **Remaining:** nothing blocking. Primary-goal verification has operational
   support (E-012: no tether hard-stop or carrier notice on a hard-stop prepaid
   plan under heavy daily use); the controlled E-011 network-layer check is
@@ -212,20 +215,13 @@ reference.
    ready-to-deploy reflector can be built ahead of the host.
 3. **Phone-reboot fault case** — the one D-026 fault not yet exercised; plus the
    ongoing daily-use soak.
-4. **Live-test `0.1.0-12` / `0.1.0-p1.3` end to end (D-028 + D-029).** Unit
-   tests pass on both sides and the D-028 version-gate is confirmed against the
-   real schema-1 relay. Still to do on the pilot phone: install the new APK,
-   confirm the real SOCKS auth handshake, exercise `teather device install`,
-   and one clean connect through the new `teatherd`. Needs the `0.1.0-12` deb
-   installed on a host (the owner's call for the dev laptop).
-5. **Generate the release signing key (D-030)** and do the one-time
-   uninstall/reinstall on the pilot phone; then `build-deb.sh` bundles a
-   release-signed APK.
-6. Optional: the bare-host auto-revert / dead-man's-switch (punch item 3,
+4. Optional: the bare-host auto-revert / dead-man's-switch (punch item 3,
    sketched, not built) if the owner wants zero-babysit confidence beyond the
    D-026 self-heal.
-7. Remaining pre-public items (roadmap): explicit license (D-010), a
-   vulnerability-reporting channel.
+5. Remaining pre-public items (roadmap): explicit license (D-010), a
+   vulnerability-reporting channel (`SECURITY.md`), and a first tagged release
+   with the APK + deb attached (the app's download button and `teather device
+   install` want something to point at).
 
 `~/teather-host-evidence/` holds the host before/after network snapshots.
 Generated `__pycache__`, private VM evidence, and signing keys are not
@@ -425,6 +421,24 @@ current milestone; git history keeps them.
   parser + schema-2 gate confirmed against a real schema-1 `dumpsys` from the
   pilot phone. Live D-028 handshake + D-029 install flow against the new APK
   still pending (needs the new `teatherd`).
+
+### 2026-09-01 (later) — D-028/D-029/D-030 live-verified end to end
+
+- Owner generated the release key (`~/.teather/teather-release.jks`, KeePass);
+  `keystore.properties` filled in. `assembleRelease` now signs with `CN=Teather`
+  (SHA-256 `5416ff96…78f7f4`); `build-deb.sh` bundles it with no debug warning.
+- Sequence on the dev laptop + pilot phone: `adb uninstall` the debug build →
+  `dpkg -i` the `0.1.0-12` deb (daemon already on the new code) → `teather
+  device install --yes` installed the release-signed APK (`action: installed`);
+  a second `teather device install` reported "already current" → `teather
+  connect` → `state: connected`, armed, `dns_ready`.
+- D-028 confirmed live through the real `teatherd`: an unauthenticated
+  `--socks5-hostname` curl is refused (`000`); `teather:<secret>@…` egresses on
+  Verizon cellular (`203.0.113.11`), including over the `teather0` failover
+  route. `tun2proxy` runs with `--proxy socks5://teather:<secret>@…`; the relay
+  shows `accepted_clients=2` (SOCKS + udpgw, both authenticated).
+- End state: connected as the armed backup, Wi-Fi primary — the owner's normal
+  daily config, now fully on schema 2 + the release key.
 
 ### 2026-09-01 — Desktop bundles/installs the APK (D-029); release signing wired (D-030)
 

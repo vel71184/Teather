@@ -46,15 +46,15 @@ build: Debian `0.1.0-12` / Android `0.1.0-p1.3`. Deployed + live-tested through
 `0.1.0-11`: D-023 (upstream switch), D-024 (udpgw UDP), D-025 (standalone
 connect), D-026 (abnormal-disconnect self-heal + auto-reconnect + `teatherd.log`
 + toast notifications + single-instance GTK + sole-path tracking; fault-injection
-tested 2026-08-31). **D-028/D-029/D-030 (`0.1.0-12` / Android `0.1.0-p1.3`, 2026-09-01, unit-tested,
-not yet live):** D-028 — the SOCKS relay requires RFC 1929 auth with a per-run
+tested 2026-08-31). **D-028/D-029/D-030 (`0.1.0-12` / Android `0.1.0-p1.3`, live-verified
+2026-09-01):** D-028 — the SOCKS relay requires RFC 1929 auth with a per-run
 secret the phone publishes only in its `DUMP`-protected status (closes "any app
 on the phone can use the loopback relay"; schema → 2). D-029 — the deb bundles
-the APK and `teather device install` keeps the phone app in lockstep. D-030 —
-release signing wired (`keystore.properties` / env, debug fallback), supersedes
-D-019; the owner generates the key. SDK is now at `~/Android/Sdk`. Still to do:
-live D-028 handshake + D-029 install against the new APK (needs the new
-`teatherd`), then the phone-reboot soak.
+the APK; `teather device install` keeps the phone app in lockstep. D-030 —
+release signing done; the release key lives at `~/.teather/teather-release.jks`
+(`keystore.properties`, both gitignored). The pilot phone + dev laptop are fully
+migrated: release-signed `CN=Teather` app, authenticated relay, cellular egress
+confirmed. SDK at `~/Android/Sdk`. Deferred: the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
