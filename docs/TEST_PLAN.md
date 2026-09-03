@@ -105,6 +105,17 @@ phone (`action: installed`) and no-op'd on a re-run ("already current"). 80 host
 + 27 Android unit tests. The release APK is signed with the project key
 (`CN=Teather`), not the debug cert.
 
+**2026-09-03 (`0.1.0-13`):** self-heal wedge fix. After a reboot with a stale
+DNS sentinel in `resolv.conf` and no `teather0` connection, a failed
+auto-connect latched `_error_category = "dns-residue"`; the poll-loop reconcile
+only re-ran on `"recovery-pending"`, so it went dormant and the daemon stayed in
+`error` with no automatic recovery. Reconcile now self-heals on any error state,
+and `recover()` clears an orphaned sentinel via a NetworkManager DNS reload
+(`Reload(0x2)`). Live: `teather recover` on the running daemon unwedged it
+(`state: connected`, `standalone: true`, cellular egress). 82 host unit tests
+(2 new). Regression to add to the fault matrix: reboot while a sentinel is
+stranded in `resolv.conf`.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -275,8 +286,8 @@ non-public provider systems.
 
 Before tagging any checkpoint:
 
-- All automated tests for implemented behavior pass (`make check` — 80 host + 27
-  Android at `0.1.0-12` / `0.1.0-p1.3`).
+- All automated tests for implemented behavior pass (`make check` — 82 host + 27
+  Android at `0.1.0-13` / `0.1.0-p1.3`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

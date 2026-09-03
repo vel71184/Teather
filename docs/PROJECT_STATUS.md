@@ -1,6 +1,6 @@
 # Project status
 
-- **Snapshot date:** 2026-09-01
+- **Snapshot date:** 2026-09-03
 - **Lifecycle:** implementation / pre-alpha
 - **Active milestone:** P1 — Linux USB Desktop. **Complete and daily-driven.**
   D-022 (NetworkManager owns `teather0`, additive DNS, automatic failover) is
@@ -37,8 +37,16 @@
   `keystore.properties` and `TEATHER_KEYSTORE*` configure it, with a debug
   fallback for CI/contributors. The pilot phone's one-time debug→release
   uninstall/reinstall is complete; the app and bundled APK are `CN=Teather`.
-- **Verification:** 80 host unit tests, 27 Android unit tests, both APKs + the
-  `0.1.0-12` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
+- **`0.1.0-13`** (2026-09-03) — self-heal wedge fix. A failed auto-connect
+  latched the raw error category (`dns-residue`) instead of `recovery-pending`,
+  which the poll-loop reconcile did not recognise, so the daemon stayed stuck in
+  `error` after a reboot with a stale DNS sentinel — no automatic recovery until
+  a manual restart. Reconcile now self-heals on any error state, and `recover()`
+  clears an orphaned sentinel via a NetworkManager DNS reload. Also: the GTK
+  window now carries the Teather icon in the Wayland/X11 switcher. See the
+  2026-09-03 worklog entry.
+- **Verification:** 82 host unit tests, 27 Android unit tests, both APKs + the
+  `0.1.0-13` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
   + pilot phone: the release key was generated (D-030), the release-signed APK
   reached the phone via `teather device install` (D-029; the no-op "already
   current" path also confirmed), and `teather connect` through the new
@@ -52,7 +60,8 @@
   opportunistic, pending a reflector host. Plus the phone-reboot fault case and
   an ongoing daily-use soak.
 - **Runnable build:** Android `0.1.0-p1.3` (`versionCode 5`, SOCKS relay auth —
-  D-028, status schema 2); Debian package `0.1.0-12` (D-028 relay auth + udpgw
+  D-028, status schema 2); Debian package `0.1.0-13` (self-heal wedge fix +
+  orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
   `0.1.0-7` raised the 64->256 flow ceiling). `0.1.0-4` = D-022 (NetworkManager owns `teather0` as an in-memory
@@ -62,8 +71,9 @@
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 80 host
-  unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029) + D-Bus smoke
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 82 host
+  unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029, 2 for the
+  `0.1.0-13` self-heal fix) + D-Bus smoke
   pass; 27 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
   `~/Android/Sdk` (`local.properties` corrected).
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
@@ -160,7 +170,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-12`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-13`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -205,7 +215,7 @@ not in progress.
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
   pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
   `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
-- 80 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+- 82 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -401,6 +411,40 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-03 — Self-heal wedge fix; orphaned DNS sentinel; GTK icon (`0.1.0-13`)
+
+- **Trigger:** daily use — after a reboot the daemon was stuck in `state=error`
+  / `dns-residue`, looping "The Teather DNS sentinel is already present" and
+  never recovering on its own. The Sep 2 shutdown had left `198.19.0.1` in
+  `resolv.conf` with no `teather0` connection (adb server had died mid-teardown:
+  `shutdown teardown incomplete: ['networkmanager-connection']`); at boot
+  `teatherd` started before NetworkManager regenerated `resolv.conf`.
+- **Root cause:** two compounding gaps. (1) `Manager._reconcile_locked`'s
+  `needs` predicate only self-healed while `_error_category == "recovery-pending"`.
+  A failed `maybe_auto_connect` runs through `connect()` → `preflight()`, which
+  raises `dns-residue`; the except handler latches that raw category. The poll
+  loop then saw a category it did not recognise, went dormant, and never
+  re-checked — even after NM cleared the stale `resolv.conf` ~60 s later.
+  `maybe_auto_connect` is separately gated on `_state in {disconnected,detected}`,
+  so it was dormant too. Fully wedged until a manual restart. (2)
+  `NetworkManagerConnection.recover()` raised `dns-residue` on an orphaned
+  sentinel (sentinel present, no `teather0` to delete) with no way to act on it.
+- **Fix:** `desktop/linux/teather/manager.py` — reconcile self-heals on any
+  `_state == "error"`. `desktop/linux/teather/networkmanager.py` — new
+  `transport.reload_dns()` (NM `Reload(0x2)`, the D-Bus form of
+  `nmcli general reload dns-rc`); `recover()` calls it when the sentinel is
+  orphaned, then re-checks. `desktop/linux/teather/gui.py` — window
+  `set_icon_name("teather")` + `GLib.set_prgname("teather")` so the Wayland
+  shell / X11 switcher shows the Teather icon; `packaging/teather.desktop`
+  gained `StartupWMClass=teather`.
+- **Verified:** 82 host unit tests (2 new — `test_reconcile_self_heals_an_error_
+  latched_by_a_failed_connect`, `test_recover_clears_an_orphaned_dns_sentinel_via_
+  networkmanager_reload`). Live: `teather recover` on the running (old-code)
+  daemon unwedged it — `state: connected`, `standalone: true`, egress
+  `203.0.113.12` (Verizon cellular), `teather0` activated, DNS ready. The code
+  fix ships in the `0.1.0-13` deb; install it to make the self-heal automatic.
+- **Next action:** rebuild + `sudo dpkg -i` the `0.1.0-13` deb (owner's step).
 
 ### 2026-09-01 — Security review of the tree; SOCKS relay authentication (D-028, `0.1.0-12`)
 

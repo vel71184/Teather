@@ -12,6 +12,7 @@ class TeatherWindow:
         self.app = None
         self.client = DbusClient()
         self.window = Gtk.Window(title="Teather")
+        self.window.set_icon_name("teather")
         self.window.set_default_size(520, 430)
         self.window.connect("delete-event", self._delete)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=16)
@@ -303,6 +304,13 @@ class TeatherApplication:
 
 def main() -> int:
     import sys
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import GLib
+    # Match the Wayland app_id / X11 WM_CLASS to teather.desktop so the shell's
+    # window switcher and dock find our icon instead of the generic fallback.
+    # Without this the id defaults to the "teather-gtk" binary name.
+    GLib.set_prgname("teather")
     return TeatherApplication().run(sys.argv)
 
 

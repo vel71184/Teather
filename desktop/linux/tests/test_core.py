@@ -289,6 +289,16 @@ class FakeNmTransport:
         self.deleted.append(settings_path)
         self._connections.pop(settings_path, None)
 
+    def reload_dns(self):
+        self.dns_reloads = getattr(self, "dns_reloads", 0) + 1
+        if not self.resolver.exists():
+            return
+        kept = [
+            line for line in self.resolver.read_text().splitlines()
+            if line.strip() != f"nameserver {DNS_SENTINEL}"
+        ]
+        self.resolver.write_text("".join(f"{line}\n" for line in kept))
+
 
 def make_nm(resolver, interface_path, **transport_kwargs):
     return NetworkManagerConnection(
@@ -669,6 +679,19 @@ class NetworkManagerConnectionTests(unittest.TestCase):
             nm.recover()
             self.assertNotIn(DNS_SENTINEL, resolver.read_text())
             self.assertTrue(nm.transport.deleted)
+
+    def test_recover_clears_an_orphaned_dns_sentinel_via_networkmanager_reload(self):
+        # An unclean shutdown can leave the sentinel in resolv.conf with no
+        # teather0 connection behind it (a stale file NM has not regenerated).
+        # recover() must ask NM to rewrite resolv.conf, not fail forever.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resolver = root / "resolv.conf"
+            resolver.write_text(PHYSICAL_RESOLVER + f"nameserver {DNS_SENTINEL}\n")
+            nm = make_nm(resolver, root / "teather0")
+            nm.recover()
+            self.assertNotIn(DNS_SENTINEL, resolver.read_text())
+            self.assertEqual(nm.transport.dns_reloads, 1)
 
     def test_recheck_connectivity_calls_networkmanager_and_never_raises(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1250,6 +1273,31 @@ class SelfHealTests(unittest.TestCase):
             self.assertEqual(manager.get_status()["state"], "disconnected")
             self.assertIsNone(manager.journal.load())
             self.assertEqual(manager.nm.recovered, 1)
+
+    def test_reconcile_self_heals_an_error_latched_by_a_failed_connect(self):
+        # A failed (auto-)connect records the raw category it hit — e.g.
+        # "dns-residue" from preflight — not "recovery-pending". The poll-loop
+        # self-heal must still clear it once the residue is gone, otherwise the
+        # daemon stays wedged in "error" forever: reconcile and auto-connect are
+        # both gated off that state.
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            device_id = manager.discover()[0]["device_id"]
+            manager.approve_device(device_id)
+            manager.set_auto_connect(device_id, True)
+
+            manager._state = "error"
+            manager._error_category = "dns-residue"
+            manager._message = "The Teather DNS sentinel is already present; run teather recover"
+
+            manager.reconcile()
+
+            self.assertEqual(manager.get_status()["state"], "disconnected")
+            self.assertEqual(manager.get_status()["error_category"], "none")
+
+            manager.maybe_auto_connect()
+            self.assertEqual(manager.get_status()["state"], "connected")
 
     def test_auto_connect_backs_off_after_repeated_failures_then_a_replug_resumes(self):
         with tempfile.TemporaryDirectory() as directory:

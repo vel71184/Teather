@@ -67,6 +67,12 @@ STATE_ACTIVATED = 2
 ADD2_IN_MEMORY = 0x2
 ADD2_BLOCK_AUTOCONNECT = 0x20
 
+# NMManagerReloadFlags: rewrite /etc/resolv.conf from NetworkManager's current
+# state (the D-Bus equivalent of `nmcli general reload dns-rc`). Used to clear a
+# stale Teather DNS sentinel left in resolv.conf by an unclean shutdown when no
+# teather0 connection remains for recover() to delete.
+RELOAD_DNS_RC = 0x2
+
 MINIMUM_VERSION = (1, 42)
 
 
@@ -94,6 +100,8 @@ class NetworkManagerTransport(Protocol):
     def delete_connection(self, settings_path: str) -> None: ...
 
     def check_connectivity(self) -> int: ...
+
+    def reload_dns(self) -> None: ...
 
 
 def _plain(value):
@@ -254,6 +262,16 @@ class GioNetworkManagerTransport:
 
     def delete_connection(self, settings_path: str) -> None:
         self._call(settings_path, SETTINGS_CONNECTION_INTERFACE, "Delete", None, "()")
+
+    def reload_dns(self) -> None:
+        _Gio, GLib = self._gi()
+        self._call(
+            NETWORKMANAGER_PATH,
+            NETWORKMANAGER_INTERFACE,
+            "Reload",
+            GLib.Variant("(u)", (RELOAD_DNS_RC,)),
+            "()",
+        )
 
 
 class NetworkManagerConnection:
@@ -595,6 +613,17 @@ class NetworkManagerConnection:
         self._active_path = ""
         self._settings_path = ""
         self._armed = False
+        if self.resolver_has_sentinel() and not (device or settings_path):
+            # No teather0 connection remains, yet the sentinel is still in
+            # resolv.conf: a stale file NetworkManager has not regenerated (for
+            # example teatherd started at boot before NM rewrote resolv.conf
+            # after an unclean shutdown). Ask NM to rewrite it from live state.
+            try:
+                self.transport.reload_dns()
+                self._wait_resolver(sentinel_present=False)
+                log.info("recover: cleared a stale Teather DNS sentinel via NetworkManager reload")
+            except TeatherError as error:
+                log.warning("recover: DNS reload did not clear the sentinel: %s", error)
         if self.resolver_has_sentinel():
             raise TeatherError("dns-residue", "The Teather DNS sentinel remains after recovery")
         if device or settings_path:

@@ -1,3 +1,23 @@
+teather (0.1.0-13) unstable; urgency=medium
+
+  * Fixed a self-heal wedge: after a failed connect or auto-connect the daemon
+    latched the raw error category it hit (for example "dns-residue" from
+    preflight) rather than "recovery-pending". The poll-loop reconcile only
+    re-ran while the category was "recovery-pending", so it went dormant and the
+    daemon stayed stuck in "error" indefinitely — even once the underlying
+    residue had cleared — until a manual service restart. Reconcile now self-
+    heals on any error state.
+  * recover() can now clear an orphaned Teather DNS sentinel. When resolv.conf
+    still lists 198.19.0.1 but no teather0 connection remains (a stale file
+    NetworkManager had not regenerated after an unclean shutdown), recover()
+    asks NetworkManager to rewrite resolv.conf instead of failing until NM
+    happens to refresh it on its own.
+  * The GTK window now sets its icon name and app id ("teather") so the Wayland
+    shell / X11 window switcher shows the Teather icon instead of the generic
+    fallback; teather.desktop gained a matching StartupWMClass.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 12:00:00 +0000
+
 teather (0.1.0-12) unstable; urgency=medium
 
   * The Android relay now requires SOCKS5 username/password authentication

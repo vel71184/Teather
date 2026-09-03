@@ -707,8 +707,14 @@ class Manager:
         if self._state in {"connecting", "connected"}:
             return
         interface_path = getattr(self.nm, "interface_path", None)
+        # Any latched error while nothing is connected warrants a self-heal pass,
+        # not only "recovery-pending". A failed (auto-)connect records the raw
+        # error category it hit ("dns-residue", "interface-collision", ...); if
+        # the poll loop only reconciled on "recovery-pending" it would go
+        # permanently dormant after such a failure, even once the underlying
+        # residue clears itself.
         needs = (
-            self._error_category == "recovery-pending"
+            self._state == "error"
             or self._load_journal_safe() is not None
             or bool(interface_path and interface_path.exists())
         )
