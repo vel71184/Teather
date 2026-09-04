@@ -1,6 +1,46 @@
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+
 from .dbus_client import DbusClient
+
+THEME_CHOICES = ("system", "light", "dark")
+THEME_LABELS = {"system": "Follow system", "light": "Light", "dark": "Dark"}
+
+
+def _gui_prefs_path() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    return Path(base) / "teather" / "gui.json"
+
+
+def _load_gui_prefs() -> dict:
+    try:
+        data = json.loads(_gui_prefs_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_gui_prefs(prefs: dict) -> None:
+    path = _gui_prefs_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(prefs, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _read_theme() -> str:
+    theme = _load_gui_prefs().get("theme", "system")
+    return theme if theme in THEME_CHOICES else "system"
+
+
+def _write_theme(theme: str) -> None:
+    prefs = _load_gui_prefs()
+    prefs["theme"] = theme if theme in THEME_CHOICES else "system"
+    _save_gui_prefs(prefs)
 
 
 class TeatherWindow:
@@ -11,6 +51,8 @@ class TeatherWindow:
         self.GLib, self.Gtk = GLib, Gtk
         self.app = None
         self.client = DbusClient()
+        self._theme_guard = False
+        self._apply_theme(_read_theme())
         self.window = Gtk.Window(title="Teather")
         self.window.set_icon_name("teather")
         self.window.set_default_size(520, 430)
@@ -81,6 +123,16 @@ class TeatherWindow:
         self.upstream.connect("changed", self._set_upstream)
         upstream_row.pack_start(self.upstream, False, False, 0)
         box.pack_start(upstream_row, False, False, 0)
+
+        appearance_row = Gtk.Box(spacing=8)
+        appearance_row.pack_start(Gtk.Label(label="Appearance:", xalign=0), False, False, 0)
+        self.theme = Gtk.ComboBoxText()
+        for name in THEME_CHOICES:
+            self.theme.append(name, THEME_LABELS[name])
+        self.theme.set_active_id(_read_theme())
+        self.theme.connect("changed", self._set_theme)
+        appearance_row.pack_start(self.theme, False, False, 0)
+        box.pack_start(appearance_row, False, False, 0)
 
         self.hint = Gtk.Label(xalign=0, wrap=True, selectable=True)
         self.hint.get_style_context().add_class("dim-label")
@@ -207,6 +259,24 @@ class TeatherWindow:
         name = widget.get_active_text()
         if name:
             self._call("SetUpstream", "(s)", (name,))
+
+    def _apply_theme(self, theme):
+        settings = self.Gtk.Settings.get_default()
+        if settings is None:
+            return
+        if theme == "dark":
+            settings.set_property("gtk-application-prefer-dark-theme", True)
+        elif theme == "light":
+            settings.set_property("gtk-application-prefer-dark-theme", False)
+        else:
+            settings.reset_property("gtk-application-prefer-dark-theme")
+
+    def _set_theme(self, widget):
+        if self._theme_guard:
+            return
+        theme = widget.get_active_id() or "system"
+        _write_theme(theme)
+        self._apply_theme(theme)
 
     def refresh(self):
         try:

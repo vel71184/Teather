@@ -6,8 +6,8 @@ privileged helper, additive DNS, and automatic failover (D-022). Post-P1, all
 live-verified: upstream switching (D-023), general UDP over udpgw (D-024),
 standalone connect (D-025), abnormal-disconnect self-heal (D-026), SOCKS relay
 authentication (D-028), APK bundling/install (D-029), and release signing
-(D-030). Current build: Debian `0.1.0-13` / Android `0.1.0-p1.3`
-(`versionCode 5`). `docs/PROJECT_STATUS.md` is the resume point.
+(D-030). Current build: Debian `0.1.0-14` / Android `0.1.0-p1.4`
+(`versionCode 6`). `docs/PROJECT_STATUS.md` is the resume point.
 
 ## Pinned Android and P1 toolchain
 
@@ -19,7 +19,7 @@ authentication (D-028), APK bundling/install (D-029), and release signing
 | Gradle wrapper | 9.3.1 |
 | JDK | 17 |
 | Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
-| P1 Android version | `versionCode 5` / `0.1.0-p1.3` (SOCKS relay auth — D-028, status schema 2; "get desktop client" button — D-029) |
+| P1 Android version | `versionCode 6` / `0.1.0-p1.4` (SOCKS relay auth — D-028, status schema 2; "get desktop client" button — D-029; appearance setting) |
 | Android SDK | `~/Android/Sdk` (`local.properties`, gitignored) — `platforms/android-37`, `build-tools/37.0.0` |
 | Release signing | D-030: `keystore.properties` at the repo root (gitignored) or `TEATHER_KEYSTORE*` env; debug-key fallback with a warning |
 | P1 Linux target | Debian 12 GNOME amd64 |

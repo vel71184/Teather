@@ -45,8 +45,14 @@
   clears an orphaned sentinel via a NetworkManager DNS reload. Also: the GTK
   window now carries the Teather icon in the Wayland/X11 switcher. See the
   2026-09-03 worklog entry.
-- **Verification:** 82 host unit tests, 27 Android unit tests, both APKs + the
-  `0.1.0-13` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
+- **`0.1.0-14` / Android `0.1.0-p1.4` (`versionCode 6`)** (2026-09-03) — an
+  Appearance setting (Follow system / Light / Dark) on both the GTK client
+  (persisted to `~/.config/teather/gui.json`) and the phone app (no AppCompat —
+  the activity overrides its base configuration + ships `-night` resources).
+  Status schema unchanged (2); p1.3 and p1.4 pair identically. The phone app is
+  built but **not yet installed** on the pilot phone.
+- **Verification:** 84 host unit tests, 30 Android unit tests, both APKs + the
+  `0.1.0-14` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
   + pilot phone: the release key was generated (D-030), the release-signed APK
   reached the phone via `teather device install` (D-029; the no-op "already
   current" path also confirmed), and `teather connect` through the new
@@ -59,8 +65,9 @@
   plan under heavy daily use); the controlled E-011 network-layer check is
   opportunistic, pending a reflector host. Plus the phone-reboot fault case and
   an ongoing daily-use soak.
-- **Runnable build:** Android `0.1.0-p1.3` (`versionCode 5`, SOCKS relay auth —
-  D-028, status schema 2); Debian package `0.1.0-13` (self-heal wedge fix +
+- **Runnable build:** Android `0.1.0-p1.4` (`versionCode 6`, appearance setting;
+  `0.1.0-p1.3` SOCKS relay auth — D-028, status schema 2); Debian package
+  `0.1.0-14` (appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -71,10 +78,10 @@
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 82 host
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 84 host
   unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029, 2 for the
-  `0.1.0-13` self-heal fix) + D-Bus smoke
-  pass; 27 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
+  `0.1.0-13` self-heal fix, 2 for the appearance setting) + D-Bus smoke
+  pass; 30 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
   `~/Android/Sdk` (`local.properties` corrected).
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
   (see the work-log entry): install, connect, TCP, full Wi-Fi-loss failover,
@@ -143,7 +150,7 @@ not in progress.
 
 ## Implemented surface (what actually exists)
 
-### Android relay — `app/` (Kotlin, `0.1.0-p1.3`, `versionCode 5`, release-signed — D-030)
+### Android relay — `app/` (Kotlin, `0.1.0-p1.4`, `versionCode 6`, release-signed — D-030)
 
 - `RelayService` — an exported `connectedDevice` foreground service protected by
   `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
@@ -170,7 +177,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-13`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-14`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -215,7 +222,7 @@ not in progress.
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
   pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
   `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
-- 82 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+- 84 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -411,6 +418,33 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-03 — Appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`)
+
+- **Trigger:** the owner asked for a dark mode with a toggle, first on the GTK
+  client and then "the same for the app" (phone app built, not installed yet).
+- **GTK client:** an "Appearance" combo (Follow system / Light / Dark) in the
+  window. Persisted to `~/.config/teather/gui.json` (a GUI-local file — the
+  daemon's `config.json` stays its own domain), applied with
+  `GtkSettings.gtk-application-prefer-dark-theme` (`reset_property` for "follow
+  system"). `desktop/linux/teather/gui.py`.
+- **Android app:** matching setting, no AppCompat (keeps the app light —
+  `teather-keep-android-lightweight`). `ThemePreference` enum + a pure
+  `applyNightMode(pref, uiMode)`; `MainActivity.attachBaseContext` hands the
+  activity a base `Configuration` with forced night bits and `recreate()`s on
+  change; `res/values-night/{styles,colors}.xml` added; the one hardcoded
+  status-box colour moved to `@color/status_background`. Works on the full
+  minSdk 26+ range. `versionCode 6` / `0.1.0-p1.4`.
+- **Packaging:** `0.1.0-14` deb bundles the `p1.4` APK. Status schema unchanged
+  (2) — `p1.3` and `p1.4` pair identically, so no forced upgrade.
+- **Verified:** 84 host unit tests (2 new for the GUI prefs round-trip), 30
+  Android unit tests (3 new for `ThemePreference`), `assembleRelease` +
+  `lintVitalRelease` clean, `0.1.0-14` deb built and its bundled
+  `Teather.apk.version` reads `6 / 0.1.0-p1.4`. The GTK theme API was
+  smoke-checked live (`set_property` / `reset_property` both work). Not yet seen
+  running in a real window — the owner tests that after installing.
+- **Next action:** `sudo dpkg -i` the `0.1.0-14` deb; optionally
+  `teather device install` to push `p1.4` to the phone.
 
 ### 2026-09-03 — Self-heal wedge fix; orphaned DNS sentinel; GTK icon (`0.1.0-13`)
 

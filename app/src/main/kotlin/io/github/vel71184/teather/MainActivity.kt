@@ -2,11 +2,13 @@ package io.github.vel71184.teather
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.graphics.Typeface
 import android.os.Build
@@ -37,6 +39,7 @@ import java.util.Locale
 class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var upstreamSpinner: Spinner
+    private lateinit var themeSpinner: Spinner
     private lateinit var portInput: EditText
     private lateinit var statusText: TextView
 
@@ -47,11 +50,25 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Honour the saved [ThemePreference] without AppCompat: hand the activity a
+     * base context whose Configuration forces the night-mode bits, so the
+     * `-night` resources resolve to the user's choice. [recreate] re-runs this.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        val current = newBase.resources.configuration
+        val overridden = Configuration(current).apply {
+            uiMode = ThemePreference.applyNightMode(ThemePreference.read(newBase), current.uiMode)
+        }
+        super.attachBaseContext(newBase.createConfigurationContext(overridden))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildContent())
         restoreConfiguration()
         installUpstreamListener()
+        installThemeListener()
     }
 
     /**
@@ -85,6 +102,24 @@ class MainActivity : Activity() {
                     getString(R.string.upstream_switched, upstreamDisplayName(upstream)),
                     Toast.LENGTH_SHORT,
                 ).show()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    /**
+     * Attached after [restoreConfiguration] so setting the saved selection does
+     * not fire it. A real change is persisted and the activity recreated so
+     * [attachBaseContext] re-applies with the new choice.
+     */
+    private fun installThemeListener() {
+        themeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val choice = ThemePreference.entries[position]
+                if (choice == ThemePreference.read(this@MainActivity)) return
+                ThemePreference.write(this@MainActivity, choice)
+                recreate()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -172,6 +207,19 @@ class MainActivity : Activity() {
             topMargin = dp(10)
         })
 
+        content.addView(fieldLabel(R.string.theme_label).apply { setPadding(0, dp(24), 0, dp(6)) })
+        themeSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                ThemePreference.entries.map(::themeDisplayName),
+            )
+        }
+        content.addView(
+            themeSpinner,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+        )
+
         content.addView(fieldLabel(R.string.status_label).apply { setPadding(0, dp(24), 0, dp(8)) })
         statusText = TextView(this).apply {
             text = getString(R.string.status_stopped)
@@ -179,7 +227,7 @@ class MainActivity : Activity() {
             typeface = Typeface.MONOSPACE
             setTextIsSelectable(true)
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            setBackgroundColor(0xffeeeaf8.toInt())
+            setBackgroundColor(resources.getColor(R.color.status_background, theme))
         }
         content.addView(
             statusText,
@@ -253,6 +301,7 @@ class MainActivity : Activity() {
         )
         portInput.setText(port.toString())
         upstreamSpinner.setSelection(UpstreamPreference.entries.indexOf(upstream))
+        themeSpinner.setSelection(ThemePreference.entries.indexOf(ThemePreference.read(this)))
     }
 
     private fun renderStatus(status: RelayStatus) {
@@ -290,6 +339,14 @@ class MainActivity : Activity() {
             UpstreamPreference.CELLULAR -> R.string.upstream_cellular
             UpstreamPreference.WIFI -> R.string.upstream_wifi
             UpstreamPreference.ETHERNET -> R.string.upstream_ethernet
+        },
+    )
+
+    private fun themeDisplayName(preference: ThemePreference): String = getString(
+        when (preference) {
+            ThemePreference.SYSTEM -> R.string.theme_system
+            ThemePreference.LIGHT -> R.string.theme_light
+            ThemePreference.DARK -> R.string.theme_dark
         },
     )
 

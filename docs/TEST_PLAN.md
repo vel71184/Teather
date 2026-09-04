@@ -116,6 +116,13 @@ and `recover()` clears an orphaned sentinel via a NetworkManager DNS reload
 (2 new). Regression to add to the fault matrix: reboot while a sentinel is
 stranded in `resolv.conf`.
 
+**2026-09-03 (`0.1.0-14` / `0.1.0-p1.4`):** appearance setting (Follow system /
+Light / Dark) on the GTK client and the phone app. No behaviour change to the
+relay, routing, or the status wire (schema still 2). 84 host + 30 Android unit
+tests; `assembleRelease` and `lintVitalRelease` clean. Manual check still
+pending: the GTK combo and the phone spinner switching themes in a live window
+(owner does this after install).
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -286,8 +293,8 @@ non-public provider systems.
 
 Before tagging any checkpoint:
 
-- All automated tests for implemented behavior pass (`make check` — 82 host + 27
-  Android at `0.1.0-13` / `0.1.0-p1.3`).
+- All automated tests for implemented behavior pass (`make check` — 84 host + 30
+  Android at `0.1.0-14` / `0.1.0-p1.4`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

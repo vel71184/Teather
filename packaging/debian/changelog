@@ -1,3 +1,16 @@
+teather (0.1.0-14) unstable; urgency=medium
+
+  * GTK client: an Appearance setting (Follow system / Light / Dark), persisted
+    to ~/.config/teather/gui.json and applied via GtkSettings. Also sets the
+    Wayland app id / X11 WM_CLASS to "teather" so the shell shows the app icon.
+  * Bundles the Android app at 0.1.0-p1.4 / versionCode 6, which adds a matching
+    Appearance setting on the phone (system/light/dark, no AppCompat — the
+    activity overrides its base configuration and the app ships -night
+    resources). Status schema is unchanged (2); the p1.3 and p1.4 apps pair
+    identically with this client.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 18:00:00 +0000
+
 teather (0.1.0-13) unstable; urgency=medium
 
   * Fixed a self-heal wedge: after a failed connect or auto-connect the daemon

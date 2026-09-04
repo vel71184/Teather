@@ -25,4 +25,8 @@
     <string name="upstream_wifi">Wi-Fi</string>
     <string name="upstream_ethernet">Ethernet</string>
     <string name="upstream_switched">Upstream switched to %1$s</string>
+    <string name="theme_label">Appearance</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
 </resources>

@@ -1445,5 +1445,27 @@ class InterfaceParityTests(unittest.TestCase):
                 parser.parse_args(arguments)
 
 
+class GuiThemePreferenceTests(unittest.TestCase):
+    def test_theme_round_trips_and_rejects_unknown_values(self):
+        from teather import gui
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}):
+                self.assertEqual(gui._read_theme(), "system")  # default, no file yet
+                gui._write_theme("dark")
+                self.assertEqual(gui._read_theme(), "dark")
+                gui._write_theme("nonsense")
+                self.assertEqual(gui._read_theme(), "system")
+
+    def test_unrelated_gui_prefs_survive_a_theme_write(self):
+        from teather import gui
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}):
+                gui._save_gui_prefs({"window_width": 640})
+                gui._write_theme("light")
+                self.assertEqual(gui._load_gui_prefs(), {"window_width": 640, "theme": "light"})
+
+
 if __name__ == "__main__":
     unittest.main()
