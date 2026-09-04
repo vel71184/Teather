@@ -22,15 +22,17 @@ as little receiver-side software as each platform permits.
 > seconds, with a persistent `~/.local/state/teather/teatherd.log` and toast
 > notifications (D-026). The relay authenticates the loopback SOCKS connection
 > with a per-run secret so other apps on the phone cannot use it (D-028); the
-> desktop package bundles the matching APK and can install or upgrade it on the
-> phone (D-029); the Android build is release-signed (D-030).
+> desktop package bundles the matching APK and a GTK button installs or updates
+> it on the phone, with a stronger prompt for security-relevant releases (D-029,
+> D-031); the Android build is release-signed (D-030). The GTK window also has a
+> Light/Dark/Follow-system Appearance setting.
 > A 2026-08-30 end-to-end test covered connect, TCP on cellular, full Wi-Fi-loss
 > failover, a UDP STUN round-trip, the zero-gap upstream switch, and a clean
 > teardown; a 2026-08-31 fault-injection pass exercised the D-026 self-heal
-> paths; a 2026-09-01 pass verified D-028/D-029/D-030 live (release-signed APK
-> installed via `teather device install`, unauthenticated SOCKS refused,
-> authenticated traffic egressing on cellular). Current builds: Debian
-> `0.1.0-17`, Android `0.1.0-p1.5`. See `docs/PROJECT_STATUS.md` and
+> paths; a 2026-09-01 pass verified D-028/D-029/D-030 live; a 2026-09-03 pass
+> verified the self-heal wedge fix (`0.1.0-13`), the Appearance setting, and the
+> D-031 security-version layer on the dev laptop + pilot phone. Current builds:
+> Debian `0.1.0-17`, Android `0.1.0-p1.5`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
@@ -364,23 +366,22 @@ stream, terminated on the phone (D-024) — enough for Shadow PC cloud gaming.
 An abnormal disconnect (phone unplug, USB/ADB drop, tun2proxy crash, a dropped
 forward) is detected in seconds and auto-reconnects, with a persistent
 `~/.local/state/teather/teatherd.log` and self-clearing toast notifications
-(D-026). The package bundles the matching APK — `teather device install` puts it
-on the phone, or upgrades it when the phone's app is behind this package (D-029),
-which keeps both halves on the same protocol schema.
+(D-026). The package bundles the matching APK — a GTK button (or `teather device
+install`) puts it on the phone, or updates it when the phone's app is behind,
+with a stronger prompt for security-relevant releases (D-029, D-031). The GTK
+window also has a Light/Dark/Follow-system Appearance setting.
 
 Validated by a 2026-08-30 end-to-end test (install, connect, TCP on cellular,
 full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream switch,
 byte-identical teardown), a 2026-08-31 fault-injection pass (daemon restart,
-tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI), and
-a 2026-09-01 pass for D-028/D-029/D-030 (release-signed APK pushed via `teather
+tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI), a
+2026-09-01 pass for D-028/D-029/D-030 (release-signed APK pushed via `teather
 device install`, unauthenticated SOCKS refused, authenticated traffic on
-cellular over the `teather0` failover route), and a 2026-09-03 self-heal fix
-(`0.1.0-13`: the poll-loop reconcile could go dormant after a failed
-auto-connect and leave the daemon wedged in `error` after a reboot), and a
-Light/Dark/system appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`),
-and a security-version layer that prompts to update the phone app on a
-security-relevant release (D-031, `0.1.0-16` / `0.1.0-p1.5`).
-88 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
+cellular over the `teather0` failover route), and a 2026-09-03 pass for the
+self-heal fix (`0.1.0-13`), the appearance setting, and the D-031
+security-version layer — all live on the dev laptop + pilot phone, ending with
+the GTK button pushing `p1.5` and the daemon reporting a matched security
+version. 88 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
 [project status](docs/PROJECT_STATUS.md).
 
 Build:

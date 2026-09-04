@@ -18,8 +18,9 @@ RELAY_PORT = 1080
 
 # The desktop package bundles the matching Android APK so the client can install
 # or upgrade it on the phone (D-029) — the two halves share a status schema and
-# must stay in lockstep. `Teather.apk.version` is a two-line sidecar written by
-# build-deb.sh: versionCode, then versionName.
+# must stay in lockstep. `Teather.apk.version` is a three-line sidecar written by
+# build-deb.sh: versionCode, versionName, then securityVersion (D-031; a legacy
+# two-line file reports security version 0).
 BUNDLED_APK = "/usr/lib/teather/Teather.apk"
 BUNDLED_APK_VERSION = "/usr/lib/teather/Teather.apk.version"
 

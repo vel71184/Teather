@@ -63,7 +63,10 @@ startup, so a service restart usually suffices. Never delete a `teather0` whose
 `/etc/NetworkManager/system-connections` — that is not Teather's.
 
 If the connection is already gone but `/etc/resolv.conf` still lists
-`198.19.0.1`, ask NetworkManager to regenerate its resolver file:
+`198.19.0.1`, ask NetworkManager to regenerate its resolver file. Since
+`0.1.0-13` `teatherd`'s own `recover()` does this automatically when the
+sentinel is orphaned (no `teather0` to delete), so a service restart normally
+clears it; the manual form is:
 
 ```bash
 nmcli general reload dns-rc

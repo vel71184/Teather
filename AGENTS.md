@@ -41,20 +41,26 @@ The reason to stop is a real gate or a real fork — not a status check.
 ## Current priority
 
 P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
-D-022 has run live on the developer laptop since 2026-08-30. Current committed
-build: Debian `0.1.0-12` / Android `0.1.0-p1.3`. Deployed + live-tested through
-`0.1.0-11`: D-023 (upstream switch), D-024 (udpgw UDP), D-025 (standalone
-connect), D-026 (abnormal-disconnect self-heal + auto-reconnect + `teatherd.log`
-+ toast notifications + single-instance GTK + sole-path tracking; fault-injection
-tested 2026-08-31). **D-028/D-029/D-030 (`0.1.0-12` / Android `0.1.0-p1.3`, live-verified
-2026-09-01):** D-028 — the SOCKS relay requires RFC 1929 auth with a per-run
-secret the phone publishes only in its `DUMP`-protected status (closes "any app
-on the phone can use the loopback relay"; schema → 2). D-029 — the deb bundles
-the APK; `teather device install` keeps the phone app in lockstep. D-030 —
-release signing done; the release key lives at `~/.teather/teather-release.jks`
-(`keystore.properties`, both gitignored). The pilot phone + dev laptop are fully
-migrated: release-signed `CN=Teather` app, authenticated relay, cellular egress
-confirmed. SDK at `~/Android/Sdk`. Deferred: the phone-reboot soak.
+D-022 has run live on the developer laptop since 2026-08-30. Current installed +
+committed build: Debian `0.1.0-17` / Android `0.1.0-p1.5` (`versionCode 7`).
+Deployed + live-tested through `0.1.0-11`: D-023 (upstream switch), D-024 (udpgw
+UDP), D-025 (standalone connect), D-026 (abnormal-disconnect self-heal +
+auto-reconnect + `teatherd.log` + toast notifications + single-instance GTK +
+sole-path tracking; fault-injection tested 2026-08-31). **D-028/D-029/D-030
+(`0.1.0-12` / Android `0.1.0-p1.3`, live-verified 2026-09-01):** D-028 — the
+SOCKS relay requires RFC 1929 auth with a per-run secret the phone publishes
+only in its `DUMP`-protected status (closes "any app on the phone can use the
+loopback relay"; schema → 2). D-029 — the deb bundles the APK;
+`teather device install` (or a GTK button) keeps the phone app in lockstep.
+D-030 — release signing done; the release key lives at
+`~/.teather/teather-release.jks` (`keystore.properties`, both gitignored). SDK
+at `~/Android/Sdk`. **2026-09-03 (`0.1.0-13`..`0.1.0-17`, live-verified):** a
+self-heal wedge fix (reconcile went dormant on a non-`recovery-pending` latched
+error after a reboot with a stale DNS sentinel); a Light/Dark/Follow-system
+Appearance setting on both halves; a state-driven GTK phone-app install button;
+**D-031** — an advisory `teather.status.security` version (separate from the
+pairing schema) with a GTK update prompt; and a GTK window that replaces a
+stale instance on relaunch. Deferred: the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must

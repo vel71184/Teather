@@ -451,11 +451,11 @@ arguments and never enter logs, D-Bus responses, or disk.
 | Preflight | `preflight.py` | Refuses unsafe route/rule/interface states; recognises standalone |
 | DNS readiness | `dns_probe.py` | UDP + TCP virtual-DNS check before "connected" |
 | ADB | `AdbClient` | devices / forward / dumpsys / relay control / `install -r`; serials redacted |
-| APK lockstep | `Manager.android_app_state` / `install_android`, `/usr/lib/teather/Teather.apk` | Bundled APK; `teather device install` keeps the phone app on the same schema (D-029) |
+| APK lockstep | `Manager.android_app_state` / `install_android`, `/usr/lib/teather/Teather.apk` | Bundled APK; `teather device install` or the GTK button keeps the phone app on the same schema (D-029); `android_security` / `security_update_available` drive an update prompt (D-031) |
 | Logging | `logging_setup.py` | Rotating `~/.local/state/teather/teatherd.log` (0600) |
 | D-Bus + notify | `dbus_service.py` | `io.github.vel71184.Teather1.Manager`; self-clearing toasts |
 | CLI | `cli.py` → `teather` | Pure D-Bus client for every method |
-| GUI | `gui.py` → `teather-gtk` | Single-instance GTK3 window + optional tray |
+| GUI | `gui.py` → `teather-gtk` | GTK3 window + optional tray; a relaunch replaces a running instance (so a package upgrade takes effect); Appearance (theme) setting in `~/.config/teather/gui.json` |
 | Config | `config.py` | Mode-0600 JSON; salted device-id hashes, never raw serials |
 | Historical | `desktop/linux/teather-p0` | P0 ADB-forward + smoke/soak helper (superseded) |
 

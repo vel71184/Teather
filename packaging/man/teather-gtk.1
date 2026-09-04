@@ -1,4 +1,4 @@
-.TH TEATHER-GTK 1 "August 2026" "Teather 0.1.0" "User Commands"
+.TH TEATHER-GTK 1 "September 2026" "Teather 0.1.0" "User Commands"
 .SH NAME
 teather-gtk \- graphical Teather Linux USB desktop client
 .SH SYNOPSIS
@@ -7,8 +7,14 @@ teather-gtk \- graphical Teather Linux USB desktop client
 .B teather-gtk
 opens the focused GTK 3 interface for device approval and selection, connection
 state, counters, diagnostics, auto-connect, and remembered-device management.
-When Ayatana AppIndicator is available it also provides a tray menu. The main
-window remains functional without tray integration.
+It also offers an Appearance setting (follow system / light / dark, stored in
+.IR ~/.config/teather/gui.json )
+and a button that installs or updates the phone app from the copy this package
+bundles. When Ayatana AppIndicator is available it also provides a tray menu;
+the main window remains functional without tray integration. Launching
+.B teather-gtk
+again takes over any running window rather than re-presenting it, so a window
+left open across a package upgrade is replaced by one running the new code.
 .SH SEE ALSO
 .BR teather (1),
 .BR teatherd (1)

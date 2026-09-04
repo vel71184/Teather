@@ -32,6 +32,8 @@ Useful reports include:
 - Listeners exposed beyond Android loopback.
 - SOCKS/tunnel/udpgw protocol parsers.
 - The Android release signing key (D-030) and `keystore.properties` handling.
+- The `teather.status.security` comparison (D-031): a wrong result suppresses
+  the prompt that tells a user to install a security update.
 - Android upstream selection and leakage.
 - Linux route, DNS, firewall, and TUN cleanup.
 - The NetworkManager connection scope Teather requests (it must stay limited to

@@ -119,9 +119,9 @@ stranded in `resolv.conf`.
 **2026-09-03 (`0.1.0-14` / `0.1.0-p1.4`):** appearance setting (Follow system /
 Light / Dark) on the GTK client and the phone app. No behaviour change to the
 relay, routing, or the status wire (schema still 2). 84 host + 30 Android unit
-tests; `assembleRelease` and `lintVitalRelease` clean. Manual check still
-pending: the GTK combo and the phone spinner switching themes in a live window
-(owner does this after install).
+tests; `assembleRelease` and `lintVitalRelease` clean. Verified live 2026-09-03
+(installed via `0.1.0-17` / `p1.5`): the GTK Appearance dropdown switches
+themes.
 
 **2026-09-03 (`0.1.0-16` / `0.1.0-p1.5`, D-031):** security-version layer. The
 app reports `teather.status.security` (level 1); the wire schema is unchanged
@@ -129,8 +129,16 @@ app reports `teather.status.security` (level 1); the wire schema is unchanged
 `security_update_available` in `GetStatus`; the GTK phone-app button is
 state-driven and a one-time prompt fires when the bundle is ahead on security
 version. 88 host (4 new) + 30 Android unit tests; `assembleRelease` /
-`lintVitalRelease` clean. Manual check pending: the button states and the
-security prompt against a real phone that is a version behind.
+`lintVitalRelease` clean. Verified live 2026-09-03: with the phone on `p1.3`
+(no security field) the button read "Update app (v5→v7)" and installed `p1.5`;
+the daemon then reported `android_security: 1` / `security_update_available:
+false`.
+
+**2026-09-03 (`0.1.0-17`):** the GTK window takes over a running instance on
+relaunch (`ALLOW_REPLACEMENT | REPLACE`) plus a "restart this window" banner on
+an in-place upgrade — fixes a stale window keeping pre-upgrade code after the
+tray-hide/reinstall/reopen sequence. `gui.py` only; 88 host tests. Verified
+live: after `dpkg -i` the relaunched window ran the new code.
 
 | Failure event | Required recovery |
 |---|---|

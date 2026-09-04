@@ -45,21 +45,25 @@
   clears an orphaned sentinel via a NetworkManager DNS reload. Also: the GTK
   window now carries the Teather icon in the Wayland/X11 switcher. See the
   2026-09-03 worklog entry.
-- **`0.1.0-14` / Android `0.1.0-p1.4` (`versionCode 6`)** (2026-09-03) — an
-  Appearance setting (Follow system / Light / Dark) on both the GTK client
-  (persisted to `~/.config/teather/gui.json`) and the phone app (no AppCompat —
-  the activity overrides its base configuration + ships `-night` resources).
-  Status schema unchanged (2); p1.3 and p1.4 pair identically. The phone app is
-  built but **not yet installed** on the pilot phone.
+- **`0.1.0-14`–`0.1.0-17` / Android `0.1.0-p1.4`–`0.1.0-p1.5`** (2026-09-03) —
+  an Appearance setting (Follow system / Light / Dark) on both halves
+  (`0.1.0-14` / `p1.4`); a state-driven "Phone app" install/update button in
+  the GTK client (`0.1.0-15`); the D-031 security-version layer with a
+  security-update prompt (`0.1.0-16` / `p1.5`, `versionCode 7`); and the GTK
+  window replacing a stale instance on relaunch instead of re-showing
+  pre-upgrade code (`0.1.0-17`). Status schema unchanged (2) throughout — every
+  `p1.x` pairs with every desktop build.
 - **Verification:** 88 host unit tests, 30 Android unit tests, both APKs + the
-  `0.1.0-14` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
-  + pilot phone: the release key was generated (D-030), the release-signed APK
-  reached the phone via `teather device install` (D-029; the no-op "already
-  current" path also confirmed), and `teather connect` through the new
-  `teatherd` brought up the armed backup — an unauthenticated SOCKS client is
-  now refused (`000`), an authenticated one egresses on Verizon cellular
-  (`203.0.113.11`), including over the real `teather0` failover route (D-028).
-  The phone app and the bundled APK are both release-signed (`CN=Teather`).
+  `0.1.0-17` deb build. **Live end to end on the dev laptop + pilot phone.**
+  2026-09-01: release key generated (D-030), release-signed APK pushed via
+  `teather device install` (D-029), `teather connect` through the new `teatherd`
+  — unauthenticated SOCKS refused (`000`), authenticated egress on Verizon
+  cellular over the real `teather0` failover route (D-028), both APKs
+  `CN=Teather`. 2026-09-03: `0.1.0-13` self-heal fix recovered a real wedged
+  daemon; `0.1.0-17` + `p1.5` installed, the GTK "Update app (v5→v7)" button
+  pushed the new APK, and the daemon now reports `android_security: 1` /
+  `security_update_available: false` (matched) — confirmed by the owner as
+  "all working".
 - **Remaining:** nothing blocking. Primary-goal verification has operational
   support (E-012: no tether hard-stop or carrier notice on a hard-stop prepaid
   plan under heavy daily use); the controlled E-011 network-layer check is
@@ -460,9 +464,9 @@ current milestone; git history keeps them.
 - **Verified:** 88 host unit tests (4 new), 30 Android unit tests,
   `assembleRelease` + `lintVitalRelease` clean, `0.1.0-16` deb's sidecar reads
   `7 / 0.1.0-p1.5 / 1`. See `docs/DECISIONS.md` D-031.
-- **Next action:** `sudo dpkg -i` the `0.1.0-16` deb; the phone-app button and
-  the security prompt want a real test against a phone that is a version behind
-  (install `p1.5` after, or test the button while the phone still has `p1.3`).
+- **Done 2026-09-03:** `0.1.0-17` installed; the GTK "Update app (v5→v7)" button
+  pushed `p1.5` to the pilot phone; the daemon then reported `android_security:
+  1` / `security_update_available: false`. Owner confirmed "all working".
 
 ### 2026-09-03 — Appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`)
 
@@ -486,10 +490,9 @@ current milestone; git history keeps them.
   Android unit tests (3 new for `ThemePreference`), `assembleRelease` +
   `lintVitalRelease` clean, `0.1.0-14` deb built and its bundled
   `Teather.apk.version` reads `6 / 0.1.0-p1.4`. The GTK theme API was
-  smoke-checked live (`set_property` / `reset_property` both work). Not yet seen
-  running in a real window — the owner tests that after installing.
-- **Next action:** `sudo dpkg -i` the `0.1.0-14` deb; optionally
-  `teather device install` to push `p1.4` to the phone.
+  smoke-checked live (`set_property` / `reset_property` both work).
+- **Done 2026-09-03:** superseded on the phone by `p1.5`; the Appearance
+  dropdown is live in the installed GTK client (`0.1.0-17`).
 
 ### 2026-09-03 — Self-heal wedge fix; orphaned DNS sentinel; GTK icon (`0.1.0-13`)
 
@@ -521,9 +524,9 @@ current milestone; git history keeps them.
   latched_by_a_failed_connect`, `test_recover_clears_an_orphaned_dns_sentinel_via_
   networkmanager_reload`). Live: `teather recover` on the running (old-code)
   daemon unwedged it — `state: connected`, `standalone: true`, egress
-  `203.0.113.12` (Verizon cellular), `teather0` activated, DNS ready. The code
-  fix ships in the `0.1.0-13` deb; install it to make the self-heal automatic.
-- **Next action:** rebuild + `sudo dpkg -i` the `0.1.0-13` deb (owner's step).
+  `203.0.113.12` (Verizon cellular), `teather0` activated, DNS ready.
+- **Done 2026-09-03:** shipped in `0.1.0-13` and now installed (via `0.1.0-17`);
+  the self-heal is automatic on the running daemon.
 
 ### 2026-09-01 — Security review of the tree; SOCKS relay authentication (D-028, `0.1.0-12`)
 

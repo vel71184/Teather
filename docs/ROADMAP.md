@@ -71,7 +71,7 @@ Accepted operating model (D-014 as amended by D-022):
   firewall change, no change to any physical link.
 
 Deliverables (delivered as Android `0.1.0-p1` / `versionCode 2`, Debian
-`0.1.0-4`, iterated to Android `0.1.0-p1.3` / `versionCode 5`, Debian `0.1.0-12`):
+`0.1.0-4`, iterated to Android `0.1.0-p1.5` / `versionCode 7`, Debian `0.1.0-17`):
 
 - Android with DUMP-protected `START` / `STOP` / `RECONFIGURE` actions and
   versioned machine-readable `dumpsys` status.
@@ -140,6 +140,11 @@ in `AGENTS.md`. Done so far:
 - **D-028/D-029/D-030** — SOCKS relay authentication (per-run secret, schema 2),
   the `.deb` bundling and installing the matching APK, and release signing.
   Live-verified (`0.1.0-12` / `0.1.0-p1.3`, 2026-09-01).
+- **D-031** — an advisory security-version layer (separate from the pairing
+  schema) with a GTK update prompt; plus a Light/Dark Appearance setting on
+  both halves, a state-driven phone-app install button, and a GTK window that
+  replaces a stale instance on relaunch. Live-verified (`0.1.0-17` /
+  `0.1.0-p1.5`, 2026-09-03).
 - **E-012** — operational carrier evidence recorded (no tether hard-stop on a
   hard-stop prepaid plan under heavy daily use).
 
