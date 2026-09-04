@@ -54,11 +54,17 @@ carrier); other platform clients (Windows/macOS/iOS); multi-client support. See
 ### Before the repo can go public
 
 - ~~An explicit license~~ — **done: GPL-3.0-or-later (D-010).**
-- A vulnerability-reporting channel (`SECURITY.md`).
-- A first tagged release with the APK + `.deb` attached — the app's "Get the
-  desktop client" button and `teather device install` need a target.
-- Plus the phone-reboot fault case (the one D-026 fault not yet exercised) and
-  an ongoing daily-use soak.
+- ~~Scrub git history of private data~~ — **done: the pilot phone's IPs, the
+  only sensitive strings in 57 commits, rewritten to documentation addresses and
+  force-pushed.**
+- ~~A first tagged release with the APK + `.deb`~~ — **done:
+  [`v0.1.0-p1.6`](https://github.com/vel71184/Teather/releases/tag/v0.1.0-p1.6)
+  (pre-release).**
+- **Owner action:** flip the repo to public (Settings → General → Danger Zone),
+  then enable private vulnerability reporting (Settings → Security) — it cannot
+  be enabled while the repo is private. `SECURITY.md` already covers the gap.
+- Not blocking public: the phone-reboot fault case and an ongoing daily-use
+  soak.
 
 ### Verification
 
@@ -304,13 +310,18 @@ was last compressed on 2026-09-03.
   client: no pip deps. CI workflow: read-only permissions, no secrets, pinned
   actions.
 - **SECURITY.md:** switched to "use GitHub private vulnerability reporting."
-- **Publishing model (owner-directed):** source + the current `.deb` and `.apk`
-  as GitHub release assets.
-- **Still open before public:** enable GitHub private vulnerability reporting,
-  cut the first tag with the binaries attached.
+- **First release:**
+  [`v0.1.0-p1.6`](https://github.com/vel71184/Teather/releases/tag/v0.1.0-p1.6)
+  cut as a **pre-release** — source plus `teather_0.1.0-21_amd64.deb`,
+  `Teather-0.1.0-p1.6.apk` (release-signed, `CN=Teather`), and `SHA256SUMS`.
+  Publishing model (owner-directed): source + binaries.
 - **Verified:** 97 host + 30 Android unit tests still pass; `0.1.0-21` deb
   built; `git log --all -S` for every sensitive string comes back empty
-  post-rewrite.
+  post-rewrite; `origin/main` blob + message scan is clean; GitHub now detects
+  the license as GPL-3.0.
+- **Remaining (owner action only):** flip the repo to public, then enable
+  private vulnerability reporting (Settings → Security; the API rejects it while
+  the repo is private).
 
 ### 2026-09-03 — Session history; human-readable byte units (D-033, `0.1.0-20`)
 

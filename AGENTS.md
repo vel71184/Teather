@@ -65,10 +65,12 @@ is done:
 
 Current build: Debian `0.1.0-21` / Android `0.1.0-p1.6` (`versionCode 8`).
 
-**What's left:** the pre-public checklist — a `SECURITY.md` reporting channel
-and a first tagged release with the APK + `.deb` (licensing is done — D-010,
-GPL-3.0-or-later; the pilot phone's IPs are scrubbed from git history) — plus
-the phone-reboot fault case and an ongoing daily-use soak. Everything else — IPv6, WireGuard (P4),
+**What's left:** the owner flips the repo to public and enables private
+vulnerability reporting (a Settings click, only works once public). Everything
+buildable is done: GPL-3.0-or-later (D-010), git history scrubbed of the pilot
+phone's IPs, dependency audit clean, and the first tagged release
+(`v0.1.0-p1.6`, pre-release, source + `.deb` + `.apk`). Non-blocking: the
+phone-reboot fault case and an ongoing daily-use soak. Everything else — IPv6, WireGuard (P4),
 other platform clients, P3 wireless (deprioritised: a local receiver link is
 invisible to the carrier), multi-client — is deferred, not fenced off; propose a
 slice if it's clearly worth doing. Do **not** add fingerprint camouflage, DPI

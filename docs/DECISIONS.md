@@ -219,6 +219,10 @@ built around the code, which is weaker than the owner's intent).
 - The pilot phone's public egress IPs were replaced with RFC 5737 documentation
   addresses across the working tree and git history (see the 2026-09-03 work
   log) as part of the same pre-public pass.
+- The first tagged release, `v0.1.0-p1.6` (pre-release), was cut with the
+  source, the `.deb`, and the release-signed `.apk`. Flipping the repository to
+  public and enabling GitHub private vulnerability reporting are the owner's
+  remaining steps (the latter cannot be done while the repo is private).
 
 ## D-033 — Connection-session history lives on the daemon, not the phone
 

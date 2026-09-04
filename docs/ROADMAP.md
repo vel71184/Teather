@@ -76,14 +76,15 @@ phone-reboot fault case, and a longer daily-use soak.
   reachable); the Android app has no runtime dependencies and the Python client
   has no pip dependencies. Reproducible-build notes are in
   `third_party/tun2proxy/README.md` and `docs/DEVELOPMENT.md`.
-- Establish a vulnerability-reporting channel (`SECURITY.md`) — enable GitHub
-  private vulnerability reporting once the repo exists.
-- Cut a first tagged release with the APK + `.deb` attached, so the app's "Get
-  the desktop client" link and `teather device install` have a target (D-029,
-  D-030 wiring is done). **Publishing model: source + the current `.deb` and
-  `.apk` as release assets.**
-- State supported and unsupported devices honestly; document provider/accounting
-  uncertainty without advertising guaranteed evasion (D-009).
+- ~~Cut a first tagged release with the APK + `.deb` attached~~ — **done:
+  `v0.1.0-p1.6` (pre-release), source + `.deb` + `.apk` + `SHA256SUMS`.** The
+  app's "Get the desktop client" link and `teather device install` now have a
+  target.
+- ~~Honest device-support / provider-accounting wording (D-009)~~ — in the
+  README, `docs/EXPERIMENTS.md`, and the release notes.
+- **Remaining (owner action):** flip the repo to public, then enable GitHub
+  private vulnerability reporting (Settings → Security — unavailable while
+  private; `SECURITY.md` covers the interim).
 
 ## Possible future directions (not a committed sequence)
 
