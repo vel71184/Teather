@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     upstream.add_argument("transport", choices=("auto", "cellular", "wifi", "ethernet"))
     _json_flag(commands.add_parser("diagnose", help="run read-only diagnostics"))
     _json_flag(commands.add_parser("recover", help="clean journaled resources and diagnose"))
+    _json_flag(commands.add_parser("sessions", help="show the recent connection-session history"))
     return parser
 
 
@@ -95,6 +96,29 @@ def main(argv: list[str] | None = None) -> int:
             result = client.call("Disconnect")
         elif arguments.command == "diagnose":
             result = client.call("Diagnose")
+        elif arguments.command == "sessions":
+            sessions = client.call("SessionHistory")
+            if getattr(arguments, "json", False):
+                print(json.dumps(sessions, sort_keys=True, separators=(",", ":")))
+                return 0
+            if not sessions:
+                print("No sessions recorded yet")
+                return 0
+            def _bytes(n: int) -> str:
+                value = float(max(0, int(n)))
+                for unit in ("B", "KiB", "MiB", "GiB"):
+                    if value < 1024 or unit == "GiB":
+                        return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+                    value /= 1024
+                return f"{value:.1f} GiB"
+            for s in sorted(sessions, key=lambda x: str(x.get("started", "")), reverse=True):
+                mins = int(s.get("duration_s", 0)) // 60
+                print(
+                    f"{s.get('started', '?')}  {mins:>4}m  "
+                    f"up {_bytes(s.get('to_internet', 0)):>10}  down {_bytes(s.get('to_client', 0)):>10}  "
+                    f"{s.get('upstream', '?')}  ({s.get('end_reason', '?')})"
+                )
+            return 0
         elif arguments.command == "recover":
             status = client.call("Disconnect")
             result = client.call("Diagnose")

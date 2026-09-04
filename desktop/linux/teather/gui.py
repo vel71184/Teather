@@ -24,6 +24,26 @@ _STATUS_COLORS = {
 }
 
 
+def _format_bytes(n: int) -> str:
+    value = float(max(0, int(n)))
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GiB"
+
+
+def _format_duration(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    hours, rem = divmod(seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
 def _status_markup(state: str, message: str) -> str:
     color = _STATUS_COLORS.get(state, "#9AA0A6")
     label = html.escape((state or "unknown").capitalize())
@@ -105,6 +125,7 @@ class TeatherWindow:
         )
         menu = Gtk.Menu()
         for label, callback in (
+            ("Session history", self._session_history),
             ("Diagnostics", self._diagnose),
             ("Restart window", lambda *_: self._restart_self()),
         ):
@@ -332,6 +353,55 @@ class TeatherWindow:
         selected = self._selected()
         if selected and widget.get_active() != selected["auto_connect"]:
             self._call("SetAutoConnect", "(sb)", (selected["device_id"], widget.get_active()))
+
+    def _session_history(self, *_args):
+        try:
+            sessions = self.client.call("SessionHistory")
+        except Exception as error:
+            sessions = None
+        dialog = self.Gtk.Dialog(title="Session history", transient_for=self.window, modal=True)
+        dialog.add_button("Close", self.Gtk.ResponseType.CLOSE)
+        dialog.set_default_size(620, 380)
+        body = self.Gtk.TextView(editable=False, cursor_visible=False, monospace=True)
+        body.set_wrap_mode(self.Gtk.WrapMode.NONE)
+        body.set_left_margin(10)
+        body.set_right_margin(10)
+        body.get_buffer().set_text(self._session_history_text(sessions))
+        scroller = self.Gtk.ScrolledWindow()
+        scroller.set_policy(self.Gtk.PolicyType.AUTOMATIC, self.Gtk.PolicyType.AUTOMATIC)
+        scroller.add(body)
+        dialog.get_content_area().pack_start(scroller, True, True, 6)
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
+
+    @staticmethod
+    def _session_history_text(sessions) -> str:
+        if sessions is None:
+            return "Could not read the session history from the Teather service."
+        if not sessions:
+            return "No sessions recorded yet. Each connection is logged when it ends."
+        rows = sorted(sessions, key=lambda s: str(s.get("started", "")), reverse=True)
+        header = f"{'Started (UTC)':<21}{'Duration':>10}  {'→ Internet':>12}{'→ Phone':>14}  {'Upstream':<10}{'Ended by':<16}"
+        lines = [header, "-" * len(header)]
+        total_up = total_down = 0
+        for s in rows:
+            up = int(s.get("to_internet", 0))
+            down = int(s.get("to_client", 0))
+            total_up += up
+            total_down += down
+            lines.append(
+                f"{str(s.get('started', '?')):<21}"
+                f"{_format_duration(int(s.get('duration_s', 0))):>10}  "
+                f"{_format_bytes(up):>12}{_format_bytes(down):>14}  "
+                f"{str(s.get('upstream', '?')):<10}{str(s.get('end_reason', '?')):<16}"
+            )
+        lines.append("-" * len(header))
+        lines.append(
+            f"{len(rows)} session(s)   → Internet {_format_bytes(total_up)}   "
+            f"→ Phone {_format_bytes(total_down)}"
+        )
+        return "\n".join(lines)
 
     def _diagnose(self, *_args):
         try:
@@ -566,8 +636,8 @@ class TeatherWindow:
             active_up = status.get("active_upstream") or status.get("upstream", "cellular")
             self.metrics.set_text(
                 f"Active sessions: {status['active_sessions']}\n"
-                f"Phone → Internet: {status['bytes_client_to_internet']} bytes\n"
-                f"Internet → Phone: {status['bytes_internet_to_client']} bytes\n"
+                f"Phone → Internet: {_format_bytes(status['bytes_client_to_internet'])}\n"
+                f"Internet → Phone: {_format_bytes(status['bytes_internet_to_client'])}\n"
                 f"Upstream: {active_up}   Failover: {armed}\n"
                 "P1 coverage: TCP + virtual DNS; general UDP and IPv6 unsupported"
             )

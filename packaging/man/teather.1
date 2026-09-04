@@ -61,6 +61,14 @@ binding; the teather0 interface, tunnel, routes, and DNS are untouched.
 .B diagnose [--json]
 Run read-only diagnostics.
 .TP
+.B sessions [--json]
+Show the recent connection-session history: for each finished session, its
+start time, duration, bytes each way, upstream, and how it ended. Kept by
+.B teatherd
+in
+.I ~/.local/state/teather/sessions.jsonl
+(the most recent 100), useful for reviewing a long soak after the fact.
+.TP
 .B recover [--json]
 Clean only journaled resources, then report diagnostics. Rarely needed:
 .B teatherd
@@ -88,6 +96,10 @@ control action \(em adb commands, D-Bus calls, connect/disconnect/reconcile
 steps \(em but never browsing destinations or resolver contents. Set
 .B TEATHER_DEBUG=1
 in the service environment for verbose output.
+.TP
+.I ~/.local/state/teather/sessions.jsonl
+One JSON object per finished session (mode 0600, most recent 100). Shown by
+.BR "teather sessions" .
 .TP
 .I /usr/share/doc/teather/RECOVERY.md.gz
 Offline recovery instructions.

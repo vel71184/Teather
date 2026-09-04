@@ -6,7 +6,7 @@
   connection. It is **feature-complete for the owner's use**; remaining work is
   the pre-public checklist (below) and optional future directions
   (`docs/ROADMAP.md`).
-- **Current build:** Debian `0.1.0-19` / Android `0.1.0-p1.6` (`versionCode 8`,
+- **Current build:** Debian `0.1.0-20` / Android `0.1.0-p1.6` (`versionCode 8`,
   release-signed — D-030). Status-wire schema 2; every `p1.x` pairs with every
   desktop build. `docs/DECISIONS.md` has the per-decision rationale; the work
   log below has the per-session detail.
@@ -59,8 +59,8 @@ carrier); other platform clients (Windows/macOS/iOS); multi-client support. See
 
 ### Verification
 
-90 host unit tests + the D-Bus smoke test; 30 Android unit tests; both APKs and
-the `0.1.0-19` `.deb` build. Live end to end (work log): connect, TCP on
+97 host unit tests + the D-Bus smoke test; 30 Android unit tests; both APKs and
+the `0.1.0-20` `.deb` build. Live end to end (work log): connect, TCP on
 cellular, full Wi-Fi-loss failover, UDP via udpgw, zero-gap upstream switch,
 clean teardown to byte-identical host state; the D-028 relay-auth path (an
 unauthenticated SOCKS connection is refused, authenticated egress on cellular);
@@ -119,7 +119,7 @@ for current state and `docs/ROADMAP.md` for what remains optional.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-19`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-20`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -145,18 +145,22 @@ for current state and `docs/ROADMAP.md` for what remains optional.
   stay on the same status schema.
 - `logging_setup` — rotating `~/.local/state/teather/teatherd.log` (0600),
   `TEATHER_DEBUG=1` for DEBUG.
+- `session_log` — each finished session (duration, bytes each way, upstream,
+  end reason) appended to a capped `~/.local/state/teather/sessions.jsonl`
+  (0600, D-033).
 - `dbus_service` — the `io.github.vel71184.Teather1.Manager` interface
   (`GetStatus`, `ListDevices`, `Connect`, `Disconnect`, `ApproveDevice`,
   `RenameDevice`, `ForgetDevice`, `SetAutoConnect`, `SetAutoFailover`,
-  `SetUpstream`, `AndroidAppState`, `InstallAndroid`, `Diagnose` +
-  `StatusChanged`/`DevicesChanged`/`MetricsChanged` signals) and the
-  self-clearing toast notifications.
+  `SetUpstream`, `AndroidAppState`, `InstallAndroid`, `Diagnose`,
+  `SessionHistory` + `StatusChanged`/`DevicesChanged`/`MetricsChanged` signals)
+  and the self-clearing toast notifications.
 - `cli.py` — `teather status|devices|connect|disconnect|device
-  approve|rename|forget|install|autoconnect|failover|upstream|diagnose|recover`,
+  approve|rename|forget|install|autoconnect|failover|upstream|diagnose|sessions|recover`,
   all pure D-Bus clients.
 - `gui.py` — single-instance GTK3 window: device picker, connect/disconnect,
   approve/rename/forget, auto-connect + failover checkboxes, upstream combo,
-  live metrics, diagnostics, recovery hint. AppIndicator tray when the desktop
+  live metrics (human-readable byte units), recovery hint, and a HeaderBar menu
+  (Session history, Diagnostics, Restart). AppIndicator tray when the desktop
   supports it; closing the window never disconnects.
 - `config.py` — mode-0600 JSON, locally salted device-id hashes, never the raw
   serial.
@@ -164,7 +168,7 @@ for current state and `docs/ROADMAP.md` for what remains optional.
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
   pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
   `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
-- 90 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+- 97 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -275,6 +279,29 @@ priority", and the README status line agree — a milestone isn't done until the
 do. When this section runs long, fold the oldest entries into the History
 digest at the end (a few lines per milestone) and let git keep the detail; it
 was last compressed on 2026-09-03.
+
+### 2026-09-03 — Session history; human-readable byte units (D-033, `0.1.0-20`)
+
+- **Trigger:** the owner found the GTK raw byte counters confusing and floated a
+  per-session log for showing long-soak viability.
+- **Decision (D-033):** the history lives on the **daemon**, not the phone —
+  `teatherd` already has the poll loop, the persistent log, and connect/
+  disconnect detection, and the Android app stays a thin relay.
+- **Built:** `session_log.py` (append + 100-entry cap, `sessions.jsonl`, 0600).
+  `Manager` stamps a session on `connect()` and, on any `_finish_teardown`,
+  writes `{started, ended, duration_s, to_internet, to_client, upstream,
+  end_reason}` — byte fields are `max(0, end − start)` deltas on the phone's
+  cumulative counters. New `SessionHistory` D-Bus method, `teather sessions
+  [--json]`, and a "Session history" table in the GTK HeaderBar menu. GTK byte
+  counters switched to KiB/MiB/GiB.
+- **Android:** untouched (`0.1.0-p1.6`); Linux-only release. Status schema and
+  `api_version` unchanged.
+- **Verified:** 97 host unit tests (7 new — session_log cap/round-trip, a
+  recorded session's byte deltas, a health-drop's `end_reason`, the GTK
+  formatters and history table); `gui.py` imports headless; `0.1.0-20` deb
+  built. A test-isolation gap was caught and fixed (the manager tests now pin
+  the state dir into their tempdir so `sessions.jsonl` never touches the real
+  `~/.local/state`). Live check after `dpkg -i` is the owner's.
 
 ### 2026-09-03 — Shared design language; GTK visual pass (D-032, `0.1.0-18`/`-19` / `0.1.0-p1.6`)
 

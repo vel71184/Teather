@@ -1,3 +1,16 @@
+teather (0.1.0-20) unstable; urgency=medium
+
+  * GTK byte counters now use human-readable units (KiB / MiB / GiB) instead of
+    a raw byte count.
+  * Connection-session history (D-033). teatherd records each finished session
+    to ~/.local/state/teather/sessions.jsonl (most recent 100) with its
+    duration, bytes each way, upstream, and how it ended. New `teather sessions`
+    command and a "Session history" item in the GTK HeaderBar menu. Kept on the
+    daemon rather than the phone so the Android app stays a thin relay.
+  * Android is unchanged (still 0.1.0-p1.6); this is a Linux-only release.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 23:30:00 +0000
+
 teather (0.1.0-19) unstable; urgency=medium
 
   * Fix the HeaderBar overflow menu added in 0.1.0-18. "Restart window"

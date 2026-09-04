@@ -152,6 +152,17 @@ signal dispatch); "Diagnostics" shows a dialog. Menu popup + activation
 re-confirmed on the owner's Wayland session with a throwaway test window;
 `gui.py` only; 90 host tests.
 
+**2026-09-03 (`0.1.0-20`, D-033):** daemon-side session history. Each finished
+session is appended to `~/.local/state/teather/sessions.jsonl` (0600, capped at
+100) with duration, byte deltas each way, upstream, and end reason; exposed via
+`SessionHistory` / `teather sessions` / a GTK menu table. Tests: `session_log`
+cap and round-trip, a recorded session's byte deltas after connect→disconnect,
+a health-drop's `end_reason`, and the GTK formatters/table. The manager tests
+now pin the state dir into their tempdir so the real `~/.local/state` is never
+touched. 97 host tests; Android unchanged; `0.1.0-20` deb built. The long-soak
+value is confirmed by the owner running a session and checking `teather
+sessions`.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -323,7 +334,7 @@ non-public provider systems.
 Before tagging any checkpoint:
 
 - All automated tests for implemented behavior pass (`make check` — 90 host + 30
-  Android at `0.1.0-19` / `0.1.0-p1.6`).
+  Android at `0.1.0-20` / `0.1.0-p1.6`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

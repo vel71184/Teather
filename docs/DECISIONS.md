@@ -201,6 +201,50 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-033 — Connection-session history lives on the daemon, not the phone
+
+**Status:** Accepted · **Date:** 2026-09-03 (owner-directed) · **Build:** Debian
+`0.1.0-20`
+
+### Context
+
+The GTK client showed raw byte counters, which the owner found confusing, and
+floated logging per-session client↔internet totals somewhere accessible so a
+long soak can be shown after the fact. The open question was where the log
+should live: the Android app (present for the whole session, the source of the
+byte counters) or the Linux daemon.
+
+### Decision
+
+The **Linux daemon** keeps the history. `teatherd` already runs a ~3 s poll
+loop, already writes a persistent `teatherd.log`, and already detects every
+connect and disconnect (D-026); a session record is a cheap addition there. The
+Android app stays a thin relay (assistant memory: keep the Android side
+lightweight) — it is not asked to manage a rotating file.
+
+`Manager` stamps a session on a successful `connect()` (wall-clock start, the
+upstream, and the phone's cumulative relay byte counters as a baseline) and, on
+any teardown through `_finish_teardown`, writes one line to
+`~/.local/state/teather/sessions.jsonl` — `started`, `ended`, `duration_s`,
+`to_internet`, `to_client` (deltas against the baseline), `upstream`, and
+`end_reason` (`user`, a D-026 drop category, `reconcile`, `recover`). The file
+is mode 0600 and capped at the most recent 100 entries (`session_log.py`).
+Exposed as the `SessionHistory` D-Bus method, `teather sessions [--json]`, and a
+"Session history" table in the GTK HeaderBar menu. GTK byte counters were also
+switched to binary units (KiB/MiB/GiB).
+
+### Consequences
+
+- A session that spans a `teatherd` restart is not recorded — `shutdown()`
+  leaves the relay running and the next start adopts it, so there is no clean
+  end event. Acceptable: restarts are rare and the relay's own live counters
+  still cover the current run.
+- Byte deltas use `max(0, end - start)` on the phone's cumulative counters; a
+  mid-session relay restart (counters reset) would under-report, but D-026
+  would have ended the session at that drop anyway.
+- Additive only: the status-wire schema and `api_version` are unchanged, and
+  Android is untouched.
+
 ## D-032 — Cross-client consistency through a shared design spec, not a shared toolkit
 
 **Status:** Accepted · **Date:** 2026-09-03 (owner-directed)

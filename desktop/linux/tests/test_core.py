@@ -766,6 +766,15 @@ class InterfaceSnapshotTests(unittest.TestCase):
 
 class ManagerTests(unittest.TestCase):
     def make_manager(self, directory, adb, nm_factory=FakeNmConnection):
+        # Keep the session-history file (session_log -> logging_setup.state_dir)
+        # inside the test's tempdir instead of the real ~/.local/state.
+        env = patch.dict(
+            os.environ,
+            {"XDG_STATE_HOME": str(Path(directory) / "state"), "STATE_DIRECTORY": ""},
+            clear=False,
+        )
+        env.start()
+        self.addCleanup(env.stop)
         config = ConfigStore(Path(directory) / "config" / "config.json")
         journal = OwnershipJournal(Path(directory) / "runtime" / "journal.json")
         resolver = Path(directory) / "resolv.conf"
@@ -1260,6 +1269,61 @@ class ManagerTests(unittest.TestCase):
             self.assertIsNone(manager.journal.load())
             self.assertEqual(manager.connect(device_id)["state"], "connected")
 
+    def test_a_finished_session_is_recorded_with_byte_deltas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb({SERIAL_ONE: compatible_status(
+                bytes_client_to_internet=1_000, bytes_internet_to_client=2_000,
+            )})
+            manager = self.make_manager(directory, adb)
+            device_id = self._approve_one(manager)
+            manager.connect(device_id)
+            self.assertEqual(manager.session_history(), [])  # not recorded until it ends
+            adb.states[SERIAL_ONE] = compatible_status(
+                bytes_client_to_internet=1_500_000, bytes_internet_to_client=9_002_000,
+            )
+            manager.disconnect()
+            history = manager.session_history()
+            self.assertEqual(len(history), 1)
+            entry = history[0]
+            self.assertEqual(entry["to_internet"], 1_499_000)
+            self.assertEqual(entry["to_client"], 9_000_000)
+            self.assertEqual(entry["upstream"], "cellular")
+            self.assertEqual(entry["end_reason"], "user")
+            self.assertTrue(entry["started"].endswith("Z"))
+
+    def test_a_health_drop_records_the_session_with_the_drop_reason(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            manager.connect(self._approve_one(manager))
+            adb.present = False  # phone unplugged
+            manager.health_check()
+            history = manager.session_history()
+            self.assertEqual(len(history), 1)
+            self.assertEqual(history[0]["end_reason"], "phone-disconnected")
+
+
+class SessionLogTests(unittest.TestCase):
+    def test_append_caps_at_max_entries_and_read_round_trips(self):
+        from teather import session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_STATE_HOME": directory, "STATE_DIRECTORY": ""}, clear=False):
+                for i in range(session_log.MAX_ENTRIES + 25):
+                    session_log.append({"i": i, "upstream": "cellular"})
+                rows = session_log.read()
+                self.assertEqual(len(rows), session_log.MAX_ENTRIES)
+                self.assertEqual(rows[0]["i"], 25)   # oldest kept
+                self.assertEqual(rows[-1]["i"], session_log.MAX_ENTRIES + 24)
+                self.assertEqual(stat.S_IMODE(session_log.sessions_path().stat().st_mode), 0o600)
+
+    def test_read_is_empty_and_safe_when_no_file_exists(self):
+        from teather import session_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_STATE_HOME": directory, "STATE_DIRECTORY": ""}, clear=False):
+                self.assertEqual(session_log.read(), [])
+
 
 class SelfHealTests(unittest.TestCase):
     def make_manager(self, directory, adb):
@@ -1473,11 +1537,11 @@ class InterfaceParityTests(unittest.TestCase):
         for method in (
             "GetStatus", "ListDevices", "Connect", "Disconnect", "ApproveDevice",
             "RenameDevice", "ForgetDevice", "SetAutoConnect", "SetAutoFailover",
-            "SetUpstream", "Diagnose",
+            "SetUpstream", "Diagnose", "SessionHistory",
         ):
             self.assertIn(f'name="{method}"', INTROSPECTION_XML)
         parser = build_parser()
-        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "failover", "upstream", "diagnose", "recover"):
+        for command in ("status", "devices", "connect", "disconnect", "autoconnect", "failover", "upstream", "diagnose", "recover", "sessions"):
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "autoconnect":
@@ -1526,6 +1590,37 @@ class GuiStatusPillTests(unittest.TestCase):
         from teather import gui
 
         self.assertIn("#9AA0A6", gui._status_markup("weird", ""))
+
+
+class GuiFormattingTests(unittest.TestCase):
+    def test_format_bytes_scales_and_uses_binary_units(self):
+        from teather import gui
+
+        self.assertEqual(gui._format_bytes(0), "0 B")
+        self.assertEqual(gui._format_bytes(1023), "1023 B")
+        self.assertEqual(gui._format_bytes(1024), "1.0 KiB")
+        self.assertEqual(gui._format_bytes(1024 * 1024), "1.0 MiB")
+        self.assertEqual(gui._format_bytes(5 * 1024 ** 3 + 512 * 1024 ** 2), "5.5 GiB")
+        self.assertEqual(gui._format_bytes(-10), "0 B")
+
+    def test_format_duration_is_human_readable(self):
+        from teather import gui
+
+        self.assertEqual(gui._format_duration(45), "45s")
+        self.assertEqual(gui._format_duration(125), "2m 5s")
+        self.assertEqual(gui._format_duration(3600 + 27 * 60), "1h 27m")
+
+    def test_session_history_text_totals_and_handles_empty(self):
+        from teather.gui import TeatherWindow
+
+        self.assertIn("No sessions recorded", TeatherWindow._session_history_text([]))
+        self.assertIn("service", TeatherWindow._session_history_text(None))
+        text = TeatherWindow._session_history_text([
+            {"started": "2026-09-03T21:00:00Z", "duration_s": 3600,
+             "to_internet": 1024, "to_client": 2048, "upstream": "cellular", "end_reason": "user"},
+        ])
+        self.assertIn("1.0 KiB", text)
+        self.assertIn("1 session(s)", text)
 
 
 if __name__ == "__main__":

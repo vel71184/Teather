@@ -1,7 +1,7 @@
 # Roadmap
 
 Teather is **feature-complete for the owner's use**: P0 and P1 passed their
-gates, and the owner-directed post-P1 track (D-024…D-032) is done. What remains
+gates, and the owner-directed post-P1 track (D-024…D-033) is done. What remains
 is the pre-public checklist and a set of optional future directions. None of the
 latter is scheduled; each would advance only when it is worth doing and can be
 backed by evidence. `docs/PROJECT_STATUS.md` is the live state; this file is the
@@ -21,7 +21,7 @@ recorded without a generalized claim.
 **Complete and the owner's daily connection.** An installable Debian client
 provides understandable, recoverable system-wide TCP and DNS through the Android
 relay. Delivered as Android `0.1.0-p1` → `0.1.0-p1.6` and Debian `0.1.0-4` →
-`0.1.0-19`. Acceptance detail and the VM/physical procedure are in
+`0.1.0-20`. Acceptance detail and the VM/physical procedure are in
 `docs/P1_HANDOFF.md`; the test matrix is in `docs/TEST_PLAN.md`.
 
 Accepted operating model (D-014 as amended by D-022) — still authoritative:
@@ -54,6 +54,8 @@ focused track, now complete:
 - **D-031** — advisory security-version layer with a GTK update prompt.
 - **D-032** — shared design language (`docs/DESIGN_LANGUAGE.md`): native clients,
   no cross-platform toolkit.
+- **D-033** — daemon-side connection-session history (`teather sessions`, a GTK
+  menu table), plus human-readable GTK byte units.
 - **E-012** — operational carrier evidence recorded (no tether hard-stop on a
   hard-stop prepaid plan under heavy daily use).
 

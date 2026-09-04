@@ -22,8 +22,10 @@ as little receiver-side software as each platform permits.
 > `.deb` bundles the matching APK and installs/updates it, with a stronger
 > prompt for security releases (D-029, D-031); the Android build is
 > release-signed (D-030). Both clients follow a shared design language, native
-> per platform (`docs/DESIGN_LANGUAGE.md`, D-032). Verified live end to end on
-> the dev laptop + pilot phone. Current builds: Debian `0.1.0-19`, Android
+> per platform (`docs/DESIGN_LANGUAGE.md`, D-032), and the daemon keeps a capped
+> per-session history for reviewing a long soak (`teather sessions`, D-033).
+> Verified live end to end on
+> the dev laptop + pilot phone. Current builds: Debian `0.1.0-20`, Android
 > `0.1.0-p1.6`. Full history in `docs/PROJECT_STATUS.md`; rationale in
 > `docs/DECISIONS.md`.
 
@@ -351,7 +353,7 @@ apps on the phone cannot use it, since Android loopback is reachable by any
 installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
 links to the releases page.
 
-**Linux** (Debian `0.1.0-19`): a per-user `teatherd` D-Bus service, a `teather`
+**Linux** (Debian `0.1.0-20`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window (HeaderBar, labelled sections, a coloured status pill —
 D-032). NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
@@ -365,7 +367,10 @@ forward) is detected in seconds and auto-reconnects, with a persistent
 (D-026). The package bundles the matching APK — a GTK button (or `teather device
 install`) puts it on the phone, or updates it when the phone's app is behind,
 with a stronger prompt for security-relevant releases (D-029, D-031). The GTK
-window also has a Light/Dark/Follow-system Appearance setting.
+window also has a Light/Dark/Follow-system Appearance setting. The daemon records
+each finished session (duration, bytes each way, upstream, how it ended) to a
+capped `~/.local/state/teather/sessions.jsonl`, shown by `teather sessions` and
+a GTK menu table (D-033).
 
 Validated live end to end on the dev laptop + pilot phone: connect, TCP on
 cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream

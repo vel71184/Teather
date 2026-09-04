@@ -453,6 +453,7 @@ arguments and never enter logs, D-Bus responses, or disk.
 | ADB | `AdbClient` | devices / forward / dumpsys / relay control / `install -r`; serials redacted |
 | APK lockstep | `Manager.android_app_state` / `install_android`, `/usr/lib/teather/Teather.apk` | Bundled APK; `teather device install` or the GTK button keeps the phone app on the same schema (D-029); `android_security` / `security_update_available` drive an update prompt (D-031) |
 | Logging | `logging_setup.py` | Rotating `~/.local/state/teather/teatherd.log` (0600) |
+| Session history | `session_log.py` | `Manager` writes each finished session (duration, bytes each way, upstream, end reason) to a capped `sessions.jsonl` (0600); `SessionHistory` D-Bus method, `teather sessions`, GTK menu table (D-033) |
 | D-Bus + notify | `dbus_service.py` | `io.github.vel71184.Teather1.Manager`; self-clearing toasts |
 | CLI | `cli.py` → `teather` | Pure D-Bus client for every method |
 | GUI | `gui.py` → `teather-gtk` | GTK3 window (HeaderBar, labelled sections, a daemon-driven status pill per `docs/DESIGN_LANGUAGE.md` / D-032) + optional tray; a relaunch replaces a running instance (so a package upgrade takes effect); Appearance (theme) setting in `~/.config/teather/gui.json` |

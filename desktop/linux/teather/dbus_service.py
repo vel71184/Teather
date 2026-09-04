@@ -23,6 +23,7 @@ INTROSPECTION_XML = f"""
     <method name="AndroidAppState"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="InstallAndroid"><arg type="s" direction="in"/><arg type="a{{sv}}" direction="out"/></method>
     <method name="Diagnose"><arg type="a{{sv}}" direction="out"/></method>
+    <method name="SessionHistory"><arg type="aa{{sv}}" direction="out"/></method>
     <signal name="StatusChanged"><arg type="a{{sv}}"/></signal>
     <signal name="DevicesChanged"><arg type="aa{{sv}}"/></signal>
     <signal name="MetricsChanged"><arg type="a{{sv}}"/></signal>
@@ -184,9 +185,10 @@ class ManagerDbusService:
                     self.manager.note_user_intent(), self.manager.install_android(arguments[0])
                 )[1],
                 "Diagnose": self.manager.diagnose,
+                "SessionHistory": self.manager.session_history,
             }
             result = methods[method]()
-            if method == "ListDevices":
+            if method in ("ListDevices", "SessionHistory"):
                 invocation.return_value(self.GLib.Variant("(aa{sv})", ([dict_variant(self.GLib, item) for item in result],)))
             else:
                 invocation.return_value(self.GLib.Variant("(a{sv})", (dict_variant(self.GLib, result),)))

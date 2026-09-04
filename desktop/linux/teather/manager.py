@@ -8,6 +8,7 @@ import socket
 import subprocess
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +30,7 @@ from .errors import TeatherError
 from .journal import Ownership, OwnershipJournal
 from .networkmanager import NetworkManagerConnection
 from .preflight import evaluate_routes, parse_nameservers
+from . import session_log
 
 TUNNEL_PATH = "/usr/lib/teather/tun2proxy"
 
@@ -93,6 +95,9 @@ class Manager:
         self._autoconnect_paused_until = 0.0
         self._autoconnect_seen: set[str] = set()
         self._relay_ok_at = 0.0
+        # In-flight connection session, recorded to session_log on teardown.
+        # None whenever nothing is connected.
+        self._session: dict | None = None
         # Security level of the phone app the last time its relay was seen
         # (D-031). Compared against the bundled APK's level to escalate an
         # available update from a passive button to an active prompt.
@@ -493,6 +498,7 @@ class Manager:
                 self._last_drop = ""
                 self._health_tick = 0
                 self._relay_ok_at = time.monotonic()
+                self._begin_session(android, upstream)
                 self._note_relay_status(android)
                 log.info("connected: device=%s upstream=%s armed=%s standalone=%s port=%s",
                          selected_id[:12], upstream, armed, self._standalone, local_port)
@@ -558,6 +564,65 @@ class Manager:
         security = getattr(status, "security", 0)
         if security:
             self._android_security = security
+        if self._session is not None:
+            self._session["bytes_last"] = (
+                getattr(status, "bytes_client_to_internet", 0) or 0,
+                getattr(status, "bytes_internet_to_client", 0) or 0,
+            )
+
+    @staticmethod
+    def _relay_byte_pair(status) -> tuple[int, int]:
+        return (
+            getattr(status, "bytes_client_to_internet", 0) or 0,
+            getattr(status, "bytes_internet_to_client", 0) or 0,
+        )
+
+    def _begin_session(self, android, upstream: str) -> None:
+        start = self._relay_byte_pair(android)
+        self._session = {
+            "started": datetime.now(timezone.utc),
+            "started_monotonic": time.monotonic(),
+            "upstream": upstream,
+            "bytes_start": start,
+            "bytes_last": start,
+        }
+
+    def _record_session(self, end_reason: str) -> None:
+        """Write the in-flight session to the history and clear it. Deltas use
+        the phone's cumulative relay counters; a fresh `adb.status` is tried for
+        the end value, falling back to the last one seen on the poll."""
+        session = self._session
+        self._session = None
+        if session is None:
+            return
+        end_bytes = session["bytes_last"]
+        if self._active_serial is not None:
+            try:
+                end_bytes = self._relay_byte_pair(self.adb.status(self._active_serial))
+            except TeatherError:
+                pass
+        start_b = session["bytes_start"]
+        to_internet = max(0, end_bytes[0] - start_b[0])
+        to_client = max(0, end_bytes[1] - start_b[1])
+        started: datetime = session["started"]
+        ended = datetime.now(timezone.utc)
+        entry = {
+            "started": started.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "ended": ended.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "duration_s": int(max(0.0, time.monotonic() - session["started_monotonic"])),
+            "to_internet": to_internet,
+            "to_client": to_client,
+            "upstream": self._active_upstream or session["upstream"],
+            "end_reason": end_reason,
+        }
+        session_log.append(entry)
+        log.info(
+            "session recorded: %ss, to_internet=%s to_client=%s upstream=%s reason=%s",
+            entry["duration_s"], to_internet, to_client, entry["upstream"], end_reason,
+        )
+
+    def session_history(self) -> list[dict]:
+        return session_log.read()
 
     def _device_present(self, serial: str) -> bool:
         try:
@@ -661,7 +726,11 @@ class Manager:
         clean = host_clean and self._load_journal_safe() is None
         return clean, errors
 
-    def _finish_teardown(self, clean: bool, errors: list[str], *, disconnected_message: str) -> dict:
+    def _finish_teardown(
+        self, clean: bool, errors: list[str], *, disconnected_message: str, end_reason: str = "",
+    ) -> dict:
+        if self._session is not None:
+            self._record_session(end_reason or self._last_drop or "user")
         self._active_id = ""
         self._active_serial = None
         self._active_local_port = None
@@ -742,13 +811,13 @@ class Manager:
         clean, errors = self._release_owned(use_nm_scan=True)
         if clean:
             self._finish_teardown(
-                clean, errors,
+                clean, errors, end_reason="reconcile",
                 disconnected_message="Teather cleared leftover resources from an earlier session and is ready to connect.",
             )
             log.info("reconcile: recovered to a clean disconnected state")
         else:
             self._reconcile_cooldown = time.monotonic() + 30.0
-            self._finish_teardown(clean, errors, disconnected_message="")
+            self._finish_teardown(clean, errors, disconnected_message="", end_reason="reconcile")
             log.warning("reconcile: still not clean: %s", sorted(set(errors)))
 
     def set_upstream(self, upstream: str) -> dict:
@@ -788,7 +857,7 @@ class Manager:
             log.info("recover requested (state=%s)", self._state)
             clean, errors = self._release_owned(use_nm_scan=True)
             self._finish_teardown(
-                clean, errors,
+                clean, errors, end_reason="recover",
                 disconnected_message="Recovered leftover resources; ready to connect.",
             )
             if not clean and "networkmanager-connection" in errors:

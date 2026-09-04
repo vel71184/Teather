@@ -59,8 +59,11 @@ is done:
 - **D-032** — shared design language (`docs/DESIGN_LANGUAGE.md`): native
   clients, no cross-platform toolkit. GTK HeaderBar + sections + status pill;
   Android palette/heading/pill alignment.
+- **D-033** — `teatherd` keeps a capped session history
+  (`~/.local/state/teather/sessions.jsonl`); `teather sessions` and a GTK menu
+  table read it. Byte counters shown in KiB/MiB/GiB. Android untouched.
 
-Current build: Debian `0.1.0-19` / Android `0.1.0-p1.6` (`versionCode 8`).
+Current build: Debian `0.1.0-20` / Android `0.1.0-p1.6` (`versionCode 8`).
 
 **What's left:** the pre-public checklist (license D-010, `SECURITY.md` reporting
 channel, a first tagged release with the APK + `.deb`), the phone-reboot fault

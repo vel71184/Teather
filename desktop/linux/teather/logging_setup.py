@@ -48,6 +48,12 @@ def log_path() -> Path:
     return _state_dir() / "teatherd.log"
 
 
+def state_dir() -> Path:
+    """Public accessor for the daemon's state directory (the log lives here, and
+    so does the session history)."""
+    return _state_dir()
+
+
 def configure_logging() -> Path | None:
     """Attach the rotating-file and stderr handlers to the ``teather`` logger.
 
