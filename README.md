@@ -9,32 +9,22 @@ tethering service. The longer-term objective is a phone-centered system that can
 serve Windows, macOS, Linux, Android, and iOS over Wi-Fi, USB, or Bluetooth with
 as little receiver-side software as each platform permits.
 
-> **Status:** P0 passed its physical gates; P1 (Linux USB Desktop) is complete
-> and runs live on the developer laptop. NetworkManager owns the non-persistent
-> `teather0` interface (D-022), there is no privileged helper, DNS is additive
-> so a working Wi-Fi/Ethernet link is never disturbed, failover to the phone is
-> automatic once that link is gone (D-022), the phone's upstream transport is
-> switchable on the fly with no gap (D-023 + `ACTION_RECONFIGURE`), and general
-> UDP is carried over tun2proxy's `udpgw` and terminated on the phone (D-024).
-> Teather can also come up as the *only* internet path when the host has no other
-> link (D-025), and an abnormal disconnect — phone unplug, USB/ADB drop,
-> tun2proxy exit, a dropped forward — self-heals and auto-reconnects in a few
-> seconds, with a persistent `~/.local/state/teather/teatherd.log` and toast
-> notifications (D-026). The relay authenticates the loopback SOCKS connection
-> with a per-run secret so other apps on the phone cannot use it (D-028); the
-> desktop package bundles the matching APK and a GTK button installs or updates
-> it on the phone, with a stronger prompt for security-relevant releases (D-029,
-> D-031); the Android build is release-signed (D-030). Both clients follow a
-> shared design language (`docs/DESIGN_LANGUAGE.md`, D-032) — native per platform,
-> no cross-platform toolkit — with a Light/Dark/Follow-system Appearance setting.
-> A 2026-08-30 end-to-end test covered connect, TCP on cellular, full Wi-Fi-loss
-> failover, a UDP STUN round-trip, the zero-gap upstream switch, and a clean
-> teardown; a 2026-08-31 fault-injection pass exercised the D-026 self-heal
-> paths; a 2026-09-01 pass verified D-028/D-029/D-030 live; a 2026-09-03 pass
-> verified the self-heal wedge fix (`0.1.0-13`), the Appearance setting, and the
-> D-031 security-version layer on the dev laptop + pilot phone. The D-032 visual
-> pass (`0.1.0-18`/`-19` / `0.1.0-p1.6`) is cosmetic. Current builds:
-> Debian `0.1.0-19`, Android `0.1.0-p1.6`. See `docs/PROJECT_STATUS.md` and
+> **Status:** P0 passed its physical gates; **P1 (Linux USB Desktop) is complete
+> and is the owner's daily connection** — feature-complete for that use.
+> NetworkManager owns a non-persistent, in-memory `teather0` with no privileged
+> helper and additive DNS, so a working Wi-Fi/Ethernet link is never disturbed
+> and failover to the phone is automatic once it's gone (D-022). The phone's
+> upstream is switchable with no gap (D-023), general UDP rides tun2proxy's
+> `udpgw` and terminates on the phone with no VpnService (D-024), Teather can be
+> the sole path when no other link exists (D-025), and an abnormal disconnect
+> self-heals and auto-reconnects (D-026). The loopback SOCKS relay requires a
+> per-run secret so other apps on the phone can't use it (D-028); the desktop
+> `.deb` bundles the matching APK and installs/updates it, with a stronger
+> prompt for security releases (D-029, D-031); the Android build is
+> release-signed (D-030). Both clients follow a shared design language, native
+> per platform (`docs/DESIGN_LANGUAGE.md`, D-032). Verified live end to end on
+> the dev laptop + pilot phone. Current builds: Debian `0.1.0-19`, Android
+> `0.1.0-p1.6`. Full history in `docs/PROJECT_STATUS.md`; rationale in
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
@@ -333,7 +323,8 @@ ready.
   not depend on Internet or chat access.
 - [Architecture](docs/ARCHITECTURE.md) — component boundaries, data flow, and
   technical risks.
-- [Roadmap](docs/ROADMAP.md) — ordered milestones and exit criteria.
+- [Roadmap](docs/ROADMAP.md) — what's done, the pre-public checklist, and
+  optional future directions.
 - [Decision log](docs/DECISIONS.md) — accepted, proposed, and unresolved choices.
 - [Development guide](docs/DEVELOPMENT.md) — environment and workflow rules.
 - [Design language](docs/DESIGN_LANGUAGE.md) — the shared UI spec every native
@@ -376,18 +367,13 @@ install`) puts it on the phone, or updates it when the phone's app is behind,
 with a stronger prompt for security-relevant releases (D-029, D-031). The GTK
 window also has a Light/Dark/Follow-system Appearance setting.
 
-Validated by a 2026-08-30 end-to-end test (install, connect, TCP on cellular,
-full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream switch,
-byte-identical teardown), a 2026-08-31 fault-injection pass (daemon restart,
-tun2proxy kill, `adb kill-server`, phone unplug/replug, Wi-Fi toggle, GUI), a
-2026-09-01 pass for D-028/D-029/D-030 (release-signed APK pushed via `teather
-device install`, unauthenticated SOCKS refused, authenticated traffic on
-cellular over the `teather0` failover route), and a 2026-09-03 pass for the
-self-heal fix (`0.1.0-13`), the appearance setting, and the D-031
-security-version layer — all live on the dev laptop + pilot phone, ending with
-the GTK button pushing `p1.5` and the daemon reporting a matched security
-version. 90 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
-[project status](docs/PROJECT_STATUS.md).
+Validated live end to end on the dev laptop + pilot phone: connect, TCP on
+cellular, full Wi-Fi-loss failover, a UDP STUN round-trip, the zero-gap upstream
+switch, byte-identical teardown, a fault-injection pass over the D-026 self-heal
+paths, and the D-028 relay-auth path (unauthenticated SOCKS refused,
+authenticated traffic on cellular). 90 host unit tests + 30 Android unit tests
+pass. `docs/PROJECT_STATUS.md` has the dated detail; `docs/DECISIONS.md` has the
+rationale.
 
 Build:
 

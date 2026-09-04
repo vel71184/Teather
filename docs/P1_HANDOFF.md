@@ -15,39 +15,26 @@ helper). Do not restart P0 or rebuild the P1 scaffold.
 The VM and phone steps below need the owner (see `AGENTS.md` "Safety gates").
 Everything up to them — building the package, updating code and docs — does not.
 
-## Current resume point — D-022 implemented; phone-free VM matrix passed
+## How this document is used now
 
-On 2026-08-29 the owner delegated the D-022 decision. D-021's `Reapply`
-mechanism was disproven (E-002: `teather0` was an externally-assumed
-NetworkManager connection, so `Reapply` never propagated the sentinel to
-`/etc/resolv.conf`). **D-022 is Accepted, implemented in shipped source
-(package `0.1.0-4`), and its phone-free parts passed the disposable-VM matrix
-on 2026-08-29/30 (see "Phase 2 (D-022) — VM results" below and D-022 in
-`docs/DECISIONS.md`).**
+P1 acceptance is behind us. This file is retained as the **re-validation
+procedure** — the sequence to re-run before publishing, or on a fresh machine,
+or after a change that touches the route/DNS/TUN path. It is not a live
+to-do list; `docs/PROJECT_STATUS.md` is the resume point.
 
-What changed:
+The record below is organized as: the phase-by-phase acceptance evidence that
+was actually collected (Phases 1–3, historical), then the standing operating
+model and the physical-test checklist. Version numbers in the procedures are
+historical — substitute the current package (`0.1.0-19` / `0.1.0-p1.6`).
 
-- NetworkManager creates and owns `teather0` from the start — an in-memory connection of type `tun`, with `tun.owner` delegation so
-  `tun2proxy` (spawned by `teatherd` as the desktop user, `--tun teather0`) attaches directly. **The setuid-root helper, its polkit
-  action, its route/rule parser, and its man page are deleted.**
-- DNS is additive: `ipv4.dns-priority` is now a positive, non-exclusive `32050`
-  with `ignore-auto-dns=false`, so `/etc/resolv.conf` keeps the physical
-  resolver first while it is present. `_verify_additive()` fails the connection
-  closed if arming ever leaves the sentinel as the only resolver.
-- Automatic failover is the default (config `auto_failover`, on). `teather
-  failover off` leaves Teather connected but dormant (no default route, no DNS)
-  until armed. Exposed as `SetAutoFailover` on D-Bus and a GTK checkbox.
-- `packaging/systemd/teather.service` restores `NoNewPrivileges=yes` and adds
-  `RestrictSUIDSGID`/`ProtectControlGroups`/etc.; `packaging/debian/control`
-  drops the `pkexec` dependency.
-
-Verification done: 46 host unit tests + the D-Bus smoke test pass; the
-phone-free VM matrix passed (below). The pre-D-022 tree is on branch
-`archive/d021-reapply-dns-approach` (commit `c78d45f`).
-
-**Next: the phone.** Everything that can be validated without it is done. Phase
-3 needs the owner to connect the phone (USB passthrough into the VM is the
-low-risk way — the VM already has its own network to lose). See "Phase 3".
+The final architecture that was accepted (D-022): NetworkManager creates and
+owns `teather0` as an in-memory `tun` connection with `tun.owner` delegation, so
+`tun2proxy` (spawned by `teatherd` as the desktop user) attaches directly — no
+setuid-root helper, no polkit action. DNS is additive (positive, non-exclusive
+`ipv4.dns-priority`), automatic failover is the default, and `_verify_additive()`
+fails the connection closed if arming ever leaves the sentinel as the only
+resolver. The pre-D-022 tree is on branch `archive/d021-reapply-dns-approach`
+(commit `c78d45f`).
 
 ## Evidence already complete
 

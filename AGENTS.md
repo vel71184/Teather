@@ -40,81 +40,35 @@ The reason to stop is a real gate or a real fork — not a status check.
 
 ## Current priority
 
-P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
-D-022 has run live on the developer laptop since 2026-08-30. Current installed +
-committed build: Debian `0.1.0-19` / Android `0.1.0-p1.6` (`versionCode 8`).
-Deployed + live-tested through `0.1.0-11`: D-023 (upstream switch), D-024 (udpgw
-UDP), D-025 (standalone connect), D-026 (abnormal-disconnect self-heal +
-auto-reconnect + `teatherd.log` + toast notifications + single-instance GTK +
-sole-path tracking; fault-injection tested 2026-08-31). **D-028/D-029/D-030
-(`0.1.0-12` / Android `0.1.0-p1.3`, live-verified 2026-09-01):** D-028 — the
-SOCKS relay requires RFC 1929 auth with a per-run secret the phone publishes
-only in its `DUMP`-protected status (closes "any app on the phone can use the
-loopback relay"; schema → 2). D-029 — the deb bundles the APK;
-`teather device install` (or a GTK button) keeps the phone app in lockstep.
-D-030 — release signing done; the release key lives at
-`~/.teather/teather-release.jks` (`keystore.properties`, both gitignored). SDK
-at `~/Android/Sdk`. **2026-09-03 (`0.1.0-13`..`0.1.0-17`, live-verified):** a
-self-heal wedge fix (reconcile went dormant on a non-`recovery-pending` latched
-error after a reboot with a stale DNS sentinel); a Light/Dark/Follow-system
-Appearance setting on both halves; a state-driven GTK phone-app install button;
-**D-031** — an advisory `teather.status.security` version (separate from the
-pairing schema) with a GTK update prompt; and a GTK window that replaces a
-stale instance on relaunch. **2026-09-03 (`0.1.0-18`/`-19` / `0.1.0-p1.6`):**
-**D-032** — a shared design language (`docs/DESIGN_LANGUAGE.md`): native clients,
-no cross-platform toolkit; first pass gave the GTK window a HeaderBar, labelled
-sections, and a status pill, and aligned the Android app's palette/headings/pill
-(`-19` fixed the HeaderBar menu, dead on click). Cosmetic; schema unchanged.
-Deferred: the phone-reboot soak.
+**P1 is complete, live, and feature-complete for the owner's use.** P0/E-001 and
+P1 acceptance passed; Teather is the owner's daily connection. The owner directed
+a focused post-P1 track (not the full P2/P4 sequence, discharging D-018), and it
+is done:
 
-The owner **directed a focused post-P1 track** and rejected the roadmap's
-assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must
-follow. Status:
+- **D-022** — NetworkManager owns an in-memory `teather0` `tun`, no privileged
+  helper, additive DNS, automatic failover.
+- **D-023 / D-024 / D-025** — zero-gap upstream switch; general UDP over
+  `udpgw` terminated on the phone (Shadow PC works); Teather as the sole path.
+- **D-026** — abnormal-disconnect self-heal + auto-reconnect, `teatherd.log`,
+  toast notifications, single-instance GTK.
+- **D-028 / D-029 / D-030** — per-run SOCKS secret (schema 2); `.deb` bundles +
+  installs the APK; release signing (key at `~/.teather/teather-release.jks`,
+  `keystore.properties` gitignored). SDK at `~/Android/Sdk`.
+- **D-031** — advisory `teather.status.security` version with a GTK update
+  prompt (does not gate pairing).
+- **D-032** — shared design language (`docs/DESIGN_LANGUAGE.md`): native
+  clients, no cross-platform toolkit. GTK HeaderBar + sections + status pill;
+  Android palette/heading/pill alignment.
 
-1. Android status/text cleanup, Linux-matched icon, zero-gap upstream switch
-   (`ACTION_RECONFIGURE`). **Done + live-tested** 2026-08-30.
-2. **Lightweight UDP** (D-024): tun2proxy's `udpgw` feature +
-   `--udpgw-server 240.0.0.1:1`; the phone's `UdpGatewayServer` terminates the
-   framed stream over the existing SOCKS connection. No second ADB forward, no
-   `VpnService`, no packet stack. **Done + live-tested** 2026-08-30 (STUN
-   round-trip through `teather0`). The Debian build rebuilds tun2proxy with
-   `--features udpgw` automatically.
-3. **Primary-goal verification.** The re-origination that keeps cellular traffic
-   from looking tethered is already built — the phone opens every socket itself,
-   and the 2026-08-30 test confirmed the egress is genuinely the phone's cellular
-   link. **Operational evidence (E-012):** on a prepaid Straight Talk plan where
-   exceeding the tether allowance is a hard stop, sustained daily Teather use —
-   including a ~4-hour heavy session — has drawn no tether hard-stop and no
-   carrier notice. Recorded as observation, not proof (D-009). The controlled
-   network-layer check (E-011: TTL / JA3 via a reflector + a cellular-bound
-   request from the phone) is now **opportunistic** — run it when a reflector
-   host is available; it is no longer blocking.
-4. **Robustness** — D-026 (`0.1.0-11`) implements self-healing reconciliation,
-   the wider `health_check()`, persistent logging, toast notifications, the
-   single-instance GTK app, the standalone connectivity re-check, and sole-path
-   tracking (punch items 4/5/6). Committed `071e2cc`; fault-injection tested
-   2026-08-31 and passing. Remaining: the phone-reboot case and a real
-   daily-use soak.
+Current build: Debian `0.1.0-19` / Android `0.1.0-p1.6` (`versionCode 8`).
 
-The 2026-08-30 live test also raised the relay concurrency ceiling 64 -> 256
-(`0.1.0-7`) after a full-desktop failover exhausted the old limit, then tuned the
-UDP gateway (`--udpgw-connections 16`, `--udp-timeout 30`, `0.1.0-8`). On
-`0.1.0-8` **Shadow PC launched and was usable** through Teather (Wi-Fi off, whole
-desktop on `teather0`); the owner confirmed it. Bitrate/latency were not
-measured. P3 wireless stays deprioritised — it is the native-UDP path if a
-future session needs better cloud-gaming quality, but Shadow works now.
-
-**P3 wireless is deprioritised.** A local Wi-Fi receiver link does not advance
-the not-classified-as-tethered goal — the carrier cannot see the receiver<->phone
-link — and enabling any Android AP mode is one more device-side state change with
-no benefit here. USB/ADB stays the transport while that goal dominates; revisit
-P3 only as a cable-free convenience if the owner asks.
-
-IPv6 and the broader "become a VPN" scope stay deferred. Do not add fingerprint
-camouflage, DPI evasion, or carrier-stealth profiles (D-009) — deliberate
-non-goal. Anything outside the current track (multi-client, other platforms, P5
-polish) is lower priority, not off-limits — see **Working autonomy**. Release
-signing is wired (D-030); the owner generates the key.
+**What's left:** the pre-public checklist (license D-010, `SECURITY.md` reporting
+channel, a first tagged release with the APK + `.deb`), the phone-reboot fault
+case, and an ongoing daily-use soak. Everything else — IPv6, WireGuard (P4),
+other platform clients, P3 wireless (deprioritised: a local receiver link is
+invisible to the carrier), multi-client — is deferred, not fenced off; propose a
+slice if it's clearly worth doing. Do **not** add fingerprint camouflage, DPI
+evasion, or carrier-stealth profiles (D-009) — a deliberate non-goal.
 
 ## Safety gates — ask the owner first
 

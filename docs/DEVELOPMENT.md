@@ -56,20 +56,13 @@ serial. If multiple devices exist, set `TEATHER_SERIAL` in the shell only.
 The historical P0 reproduction sequence is maintained in `docs/P0_HANDOFF.md`.
 The current P1 continuation is `docs/P1_HANDOFF.md`.
 
-## Completed P0 development sequence
+## Working style
 
-Use narrow vertical slices:
-
-1. Start and stop a foreground Android service.
-2. Listen on Android loopback and return a fixed test response through ADB.
-3. Open one outbound socket through an explicitly selected upstream.
-4. Implement the minimum SOCKS5 CONNECT path.
-5. Verify repeated Linux TCP requests.
-6. Add cancellation, timeouts, counters, and clean shutdown.
-7. Only then introduce TUN and receiver routing.
-
-Avoid building the full configuration model, theme, tray icon, or generic plugin
-system before step 6 passes.
+Narrow vertical slices, still. The P0/P1 build followed a strict slice order
+(service lifecycle → loopback echo → one upstream socket → SOCKS `CONNECT` →
+repeated requests → cancellation/timeouts/counters → only then TUN and routing),
+and new work should keep that discipline: get the smallest end-to-end path
+working before adding a configuration surface, a second transport, or polish.
 
 ## Current local workflow
 

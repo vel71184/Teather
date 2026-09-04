@@ -76,24 +76,20 @@ correctness requirements.
 
 ## P1 network restoration matrix
 
-**2026-08-29 (D-022 implemented, `0.1.0-4`):** the mechanism-specific rows below
-now describe NetworkManager owning `teather0` as an in-memory `tun` connection
-and additive DNS. Failover is automatic once the physical link's route and
-resolver disappear; the `auto_failover` setting can hold Teather dormant
-instead. The restoration requirements (idempotent stop, signal/crash/cable
-recovery, no unrelated state mutation) are unchanged.
-
 Capture relevant Linux state before and after each test.
 
-**2026-08-31 (D-026, `0.1.0-11`):** the "required recovery" for an *abnormal*
-loss is now stronger than "fails closed with recoverable state" — `teatherd`
-must detect it within a few seconds, release its owned resources to a clean
-`disconnected` state (not `error`), and let auto-connect reconnect once the
-phone is reachable, with no manual `teather recover`. The host side stays
-strict (an unverifiable `teather0` still stops with `ambiguous-interface`).
-Fault-injection tested 2026-08-31: `systemctl restart`, `kill -9 tun2proxy`,
-`adb kill-server`, phone unplug/replug, Wi-Fi off/on — all self-heal and
-auto-reconnect. Phone reboot still to do.
+**D-022 (`0.1.0-4`) → D-026 (`0.1.0-11`), condensed:** the mechanism rows below
+describe NetworkManager owning `teather0` as an in-memory `tun` with additive
+DNS; failover is automatic once the physical route and resolver disappear
+(`auto_failover` can hold Teather dormant instead). Since D-026 the required
+recovery for an *abnormal* loss is stronger than "fails closed": `teatherd` must
+detect it within seconds, release its resources to a clean `disconnected` state
+(not `error`), and let auto-connect reconnect with no manual `teather recover` —
+while the host side stays strict (an unverifiable `teather0` still stops with
+`ambiguous-interface`). Fault-injection tested 2026-08-31 (`systemctl restart`,
+`kill -9 tun2proxy`, `adb kill-server`, phone unplug/replug, Wi-Fi off/on).
+Idempotent stop and signal/crash/cable recovery are unchanged. Phone reboot
+still to do.
 
 **2026-09-01 (D-028/D-029/D-030, `0.1.0-12` / `0.1.0-p1.3`):** the loopback
 SOCKS relay requires RFC 1929 auth with a per-run secret; `dumpsys` schema is 2.
