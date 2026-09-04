@@ -53,15 +53,19 @@
   window replacing a stale instance on relaunch instead of re-showing
   pre-upgrade code (`0.1.0-17`). Status schema unchanged (2) throughout — every
   `p1.x` pairs with every desktop build.
-- **`0.1.0-18` / Android `0.1.0-p1.6`** (2026-09-03) — first application of the
-  shared design language (D-032, `docs/DESIGN_LANGUAGE.md`). The GTK window gets
-  a HeaderBar, labelled sections (Connection / This phone / Preferences /
-  Activity), a coloured status pill, a header overflow menu, and symbolic icons
-  on the primary buttons; the Android app aligns its palette tokens, section
-  headings, and status pill to the same spec. Cosmetic only — no behaviour
-  change, no new dependency, status schema still 2.
+- **`0.1.0-18`/`0.1.0-19` / Android `0.1.0-p1.6`** (2026-09-03) — first
+  application of the shared design language (D-032, `docs/DESIGN_LANGUAGE.md`).
+  The GTK window gets a HeaderBar, labelled sections (Connection / This phone /
+  Preferences / Activity), a coloured status pill, a header overflow menu, and
+  symbolic icons on the primary buttons; the Android app aligns its palette
+  tokens, section headings, and status pill to the same spec. Cosmetic only — no
+  behaviour change, no new dependency, status schema still 2. `0.1.0-19` fixes
+  the header menu the owner found dead on click: "Restart window" re-execs via
+  `python3 -m teather.gui` (an `os.execv` on the bare `sys.argv[0]` was failing
+  silently), and "Diagnostics" shows a dialog instead of writing to an
+  off-screen label.
 - **Verification:** 90 host unit tests, 30 Android unit tests, both APKs + the
-  `0.1.0-18` deb build. **Live end to end on the dev laptop + pilot phone.**
+  `0.1.0-19` deb build. **Live end to end on the dev laptop + pilot phone.**
   2026-09-01: release key generated (D-030), release-signed APK pushed via
   `teather device install` (D-029), `teather connect` through the new `teatherd`
   — unauthenticated SOCKS refused (`000`), authenticated egress on Verizon
@@ -80,7 +84,7 @@
   visual pass — D-032; `0.1.0-p1.5` security-version layer — D-031; `0.1.0-p1.4`
   appearance setting; `0.1.0-p1.3` SOCKS relay auth — D-028, status schema 2);
   Debian package
-  `0.1.0-18` (design-language visual pass to the GTK client — D-032; `0.1.0-17` GTK window replaces a stale instance on relaunch; `0.1.0-16` D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
+  `0.1.0-19` (design-language visual pass to the GTK client — D-032, `0.1.0-18`, + a `0.1.0-19` fix for the dead header menu; `0.1.0-17` GTK window replaces a stale instance on relaunch; `0.1.0-16` D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -191,7 +195,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-18`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-19`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -458,10 +462,21 @@ current milestone; git history keeps them.
   block. Cosmetic; `SECURITY_VERSION` and `SCHEMA_VERSION` unchanged.
 - **Verified:** 90 host unit tests (2 new for `_status_markup`), 30 Android unit
   tests, `:app:assembleRelease` + `lintVitalRelease`, `Teather.apk.version`
-  sidecar `8 / 0.1.0-p1.6 / 1`, `0.1.0-18` deb built. `gui.py` imports and the
-  pill helper renders/escapes correctly. Live GTK look is the owner's check
-  after installing `0.1.0-18`; the Android reinstall is optional (cosmetic,
-  schema unchanged).
+  sidecar `8 / 0.1.0-p1.6 / 1`, deb built. `gui.py` imports and the pill helper
+  renders/escapes correctly.
+- **Follow-up (`0.1.0-19`):** the owner installed `0.1.0-18` and found the
+  HeaderBar menu items dead on click. Two causes, both fixed: "Restart window"
+  ran `os.execv` on `os.path.realpath(sys.argv[0])`, but `sys.argv[0]` is the
+  bare `teather-gtk` name under a `.desktop` launch and resolved against the
+  wrong directory — and GTK swallows the exception from a signal handler, so the
+  click did nothing; it now re-execs `python3 -m teather.gui`. "Diagnostics"
+  wrote its result to the `detail` label, now at the bottom of a scrolled window
+  and off-screen; it now shows a `Gtk.MessageDialog` with the diagnose fields.
+  The "update installed" banner shares the fixed `_restart_self`. Verified: menu
+  popup + item activation confirmed on the owner's Wayland session with a
+  throwaway test window; 90 host tests; `0.1.0-19` deb built. Live GTK look is
+  the owner's check after installing `0.1.0-19`; the Android reinstall is
+  optional (cosmetic, schema unchanged).
 
 ### 2026-09-03 — GTK window replaces a stale instance on relaunch (`0.1.0-17`)
 

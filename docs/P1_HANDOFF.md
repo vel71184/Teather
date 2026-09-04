@@ -1,7 +1,7 @@
 # P1 Linux USB Desktop validation handoff
 
 **P1 acceptance was met (D-022, first packaged as `0.1.0-4`) and Teather is now
-the owner's daily connection; the current build is Debian `0.1.0-18` / Android
+the owner's daily connection; the current build is Debian `0.1.0-19` / Android
 `0.1.0-p1.6` (`versionCode 8`, release-signed — D-030).** The version numbers in
 the VM/install procedures below are historical — substitute the current package.
 `docs/PROJECT_STATUS.md` is the live resume point; this file is kept for the

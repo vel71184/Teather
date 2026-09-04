@@ -1,3 +1,15 @@
+teather (0.1.0-19) unstable; urgency=medium
+
+  * Fix the HeaderBar overflow menu added in 0.1.0-18. "Restart window"
+    re-execs through `python3 -m teather.gui` instead of `sys.argv[0]`, which
+    is the bare launcher name when started from a .desktop file and resolved
+    against the wrong directory — the failure was swallowed by GTK's signal
+    dispatch, so the item did nothing. "Diagnostics" now shows its result in a
+    dialog rather than writing "Done" to an off-screen label. Same fix applied
+    to the "update installed" restart banner.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 23:15:00 +0000
+
 teather (0.1.0-18) unstable; urgency=medium
 
   * Visual pass to the shared design language (D-032, docs/DESIGN_LANGUAGE.md).

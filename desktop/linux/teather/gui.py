@@ -334,7 +334,29 @@ class TeatherWindow:
             self._call("SetAutoConnect", "(sb)", (selected["device_id"], widget.get_active()))
 
     def _diagnose(self, *_args):
-        self._call("Diagnose")
+        try:
+            result = self.client.call("Diagnose")
+            failover = (
+                "armed" if result.get("failover_armed")
+                else "on" if result.get("auto_failover") else "off"
+            )
+            text = (
+                f"Ready: {'yes' if result.get('ready') else 'no'}\n"
+                f"Issues: {result.get('issues', 'none')}\n"
+                f"NetworkManager: {result.get('networkmanager_version', 'unknown')}\n"
+                f"Usable nameservers: {result.get('usable_nameservers', 0)}\n"
+                f"Upstream: {result.get('upstream', 'unknown')}    Failover: {failover}"
+            )
+        except Exception as error:
+            text = f"Could not run diagnostics: {error}"
+        dialog = self.Gtk.MessageDialog(
+            transient_for=self.window, modal=True,
+            message_type=self.Gtk.MessageType.INFO, buttons=self.Gtk.ButtonsType.CLOSE,
+            text="Teather diagnostics",
+        )
+        dialog.format_secondary_text(text)
+        dialog.run()
+        dialog.destroy()
 
     def _actionable_app_status(self):
         """The current phone-app status if it warrants an install, else None."""
@@ -558,7 +580,12 @@ class TeatherWindow:
         return self.GLib.SOURCE_CONTINUE
 
     def _restart_self(self):
-        os.execv(sys.executable, [sys.executable, os.path.realpath(sys.argv[0])])
+        # Re-exec through the module rather than sys.argv[0]: when teather-gtk is
+        # started from a .desktop file or PATH, argv[0] is often the bare name and
+        # os.path.realpath would resolve it against the wrong directory. An
+        # uncaught failure here is swallowed by GTK's signal dispatch, so the
+        # click would silently do nothing.
+        os.execv(sys.executable, [sys.executable, "-m", "teather.gui"])
 
     def _delete(self, *_args):
         # Never tear down the connection here — the daemon owns it. With a tray

@@ -42,7 +42,7 @@ The reason to stop is a real gate or a real fork — not a status check.
 
 P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
 D-022 has run live on the developer laptop since 2026-08-30. Current installed +
-committed build: Debian `0.1.0-18` / Android `0.1.0-p1.6` (`versionCode 8`).
+committed build: Debian `0.1.0-19` / Android `0.1.0-p1.6` (`versionCode 8`).
 Deployed + live-tested through `0.1.0-11`: D-023 (upstream switch), D-024 (udpgw
 UDP), D-025 (standalone connect), D-026 (abnormal-disconnect self-heal +
 auto-reconnect + `teatherd.log` + toast notifications + single-instance GTK +

@@ -149,6 +149,13 @@ pill helper's colour map and message escaping) + 30 Android unit tests;
 GTK appearance is the owner's visual check after `dpkg -i`; the Android
 reinstall is optional.
 
+**2026-09-03 (`0.1.0-19`):** fix for the D-032 HeaderBar menu, which the owner
+found dead on click. "Restart window" now re-execs `python3 -m teather.gui`
+(the old `os.execv` on the bare `sys.argv[0]` failed silently under GTK's
+signal dispatch); "Diagnostics" shows a dialog. Menu popup + activation
+re-confirmed on the owner's Wayland session with a throwaway test window;
+`gui.py` only; 90 host tests.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |

@@ -236,9 +236,11 @@ program again per platform — still consistent because it follows the spec.
 
 - `docs/DESIGN_LANGUAGE.md` is the reference; UI changes on any client are
   checked against it, and a deliberate change to a shared rule updates the doc.
-- The first application of the spec (`0.1.0-18` / Android `0.1.0-p1.6`) restructured
-  the GTK window into HeaderBar + labelled sections + a status pill, and aligned
-  the Android app's palette tokens, section headings, and status pill to match.
+- The first application of the spec (`0.1.0-18`/`-19` / Android `0.1.0-p1.6`)
+  restructured the GTK window into HeaderBar + labelled sections + a status pill,
+  and aligned the Android app's palette tokens, section headings, and status
+  pill to match. (`0.1.0-19` fixed the HeaderBar menu, which was dead on click —
+  see the 2026-09-03 worklog.)
 - No new runtime dependency on any client. The GTK status pill is Pango markup on
   a label (no CSS provider), so it cannot fight the system theme.
 

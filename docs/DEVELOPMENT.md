@@ -7,7 +7,7 @@ live-verified: upstream switching (D-023), general UDP over udpgw (D-024),
 standalone connect (D-025), abnormal-disconnect self-heal (D-026), SOCKS relay
 authentication (D-028), APK bundling/install (D-029), release signing (D-030),
 the security-version layer (D-031), and the shared design language (D-032,
-`docs/DESIGN_LANGUAGE.md`). Current build: Debian `0.1.0-18` /
+`docs/DESIGN_LANGUAGE.md`). Current build: Debian `0.1.0-19` /
 Android `0.1.0-p1.6`
 (`versionCode 8`). `docs/PROJECT_STATUS.md` is the resume point.
 

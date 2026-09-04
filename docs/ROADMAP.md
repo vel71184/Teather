@@ -71,7 +71,7 @@ Accepted operating model (D-014 as amended by D-022):
   firewall change, no change to any physical link.
 
 Deliverables (delivered as Android `0.1.0-p1` / `versionCode 2`, Debian
-`0.1.0-4`, iterated to Android `0.1.0-p1.6` / `versionCode 8`, Debian `0.1.0-18`):
+`0.1.0-4`, iterated to Android `0.1.0-p1.6` / `versionCode 8`, Debian `0.1.0-19`):
 
 - Android with DUMP-protected `START` / `STOP` / `RECONFIGURE` actions and
   versioned machine-readable `dumpsys` status.
