@@ -63,11 +63,12 @@ is done:
   (`~/.local/state/teather/sessions.jsonl`); `teather sessions` and a GTK menu
   table read it. Byte counters shown in KiB/MiB/GiB. Android untouched.
 
-Current build: Debian `0.1.0-20` / Android `0.1.0-p1.6` (`versionCode 8`).
+Current build: Debian `0.1.0-21` / Android `0.1.0-p1.6` (`versionCode 8`).
 
-**What's left:** the pre-public checklist (license D-010, `SECURITY.md` reporting
-channel, a first tagged release with the APK + `.deb`), the phone-reboot fault
-case, and an ongoing daily-use soak. Everything else — IPv6, WireGuard (P4),
+**What's left:** the pre-public checklist — a `SECURITY.md` reporting channel
+and a first tagged release with the APK + `.deb` (licensing is done — D-010,
+GPL-3.0-or-later; the pilot phone's IPs are scrubbed from git history) — plus
+the phone-reboot fault case and an ongoing daily-use soak. Everything else — IPv6, WireGuard (P4),
 other platform clients, P3 wireless (deprioritised: a local receiver link is
 invisible to the carrier), multi-client — is deferred, not fenced off; propose a
 slice if it's clearly worth doing. Do **not** add fingerprint camouflage, DPI

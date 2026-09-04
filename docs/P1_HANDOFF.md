@@ -1,7 +1,7 @@
 # P1 Linux USB Desktop validation handoff
 
 **P1 acceptance was met (D-022, first packaged as `0.1.0-4`) and Teather is now
-the owner's daily connection; the current build is Debian `0.1.0-20` / Android
+the owner's daily connection; the current build is Debian `0.1.0-21` / Android
 `0.1.0-p1.6` (`versionCode 8`, release-signed — D-030).** The version numbers in
 the VM/install procedures below are historical — substitute the current package.
 `docs/PROJECT_STATUS.md` is the live resume point; this file is kept for the
@@ -25,7 +25,7 @@ to-do list; `docs/PROJECT_STATUS.md` is the resume point.
 The record below is organized as: the phase-by-phase acceptance evidence that
 was actually collected (Phases 1–3, historical), then the standing operating
 model and the physical-test checklist. Version numbers in the procedures are
-historical — substitute the current package (`0.1.0-20` / `0.1.0-p1.6`).
+historical — substitute the current package (`0.1.0-21` / `0.1.0-p1.6`).
 
 The final architecture that was accepted (D-022): NetworkManager creates and
 owns `teather0` as an in-memory `tun` connection with `tun.owner` delegation, so

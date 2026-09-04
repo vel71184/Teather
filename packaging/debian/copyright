@@ -1,11 +1,24 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Teather
-Source: private personal project
+Source: https://github.com/vel71184/Teather
 
 Files: *
-Copyright: 2026 Teather contributors
-License: Proprietary
- All rights are reserved until the repository owner selects an explicit license.
+Copyright: 2026 John (vel71184)
+License: GPL-3.0-or-later
+ This program is free software: you can redistribute it and/or modify it under
+ the terms of the GNU General Public License as published by the Free Software
+ Foundation, either version 3 of the License, or (at your option) any later
+ version.
+ .
+ This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License along with
+ this program. If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems the full text of the GPL version 3 is in
+ /usr/share/common-licenses/GPL-3.
 
 Files: usr/lib/teather/tun2proxy
 Copyright: tun2proxy contributors

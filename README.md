@@ -25,7 +25,7 @@ as little receiver-side software as each platform permits.
 > per platform (`docs/DESIGN_LANGUAGE.md`, D-032), and the daemon keeps a capped
 > per-session history for reviewing a long soak (`teather sessions`, D-033).
 > Verified live end to end on
-> the dev laptop + pilot phone. Current builds: Debian `0.1.0-20`, Android
+> the dev laptop + pilot phone. Current builds: Debian `0.1.0-21`, Android
 > `0.1.0-p1.6`. Full history in `docs/PROJECT_STATUS.md`; rationale in
 > `docs/DECISIONS.md`.
 
@@ -353,7 +353,7 @@ apps on the phone cannot use it, since Android loopback is reachable by any
 installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
 links to the releases page.
 
-**Linux** (Debian `0.1.0-20`): a per-user `teatherd` D-Bus service, a `teather`
+**Linux** (Debian `0.1.0-21`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window (HeaderBar, labelled sections, a coloured status pill —
 D-032). NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
@@ -408,9 +408,19 @@ superseded by P1 and is not the current resume point.
 
 ## Contributing and licensing
 
-The repository is personal and private at present. Contributions should follow
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions should follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
-No open-source license has been selected yet. Until a license file is added, the
-source is not licensed for redistribution or reuse. Selecting a license is an
-explicit pre-publication decision; see [the decision log](docs/DECISIONS.md).
+Teather is licensed under the **GNU General Public License v3.0 or later**
+([`LICENSE`](LICENSE), D-010). In short: you may use, study, share, and modify
+it, including commercially, as long as anything you distribute that is built
+from this code is also released under the GPL and keeps the copyright and
+license notices. The bundled `tun2proxy` binary is MIT-licensed by its
+[upstream project](https://github.com/tun2proxy/tun2proxy); see
+[`packaging/debian/copyright`](packaging/debian/copyright).
+
+> Not required, just appreciated: if Teather ends up in something that makes you
+> real money, a one-time thank-you to the author is welcome. It has no bearing
+> on your rights under the GPL.
+
+Teather was written with the help of an AI coding assistant. That does not
+change the license or your rights under it.

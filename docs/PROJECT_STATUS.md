@@ -6,10 +6,13 @@
   connection. It is **feature-complete for the owner's use**; remaining work is
   the pre-public checklist (below) and optional future directions
   (`docs/ROADMAP.md`).
-- **Current build:** Debian `0.1.0-20` / Android `0.1.0-p1.6` (`versionCode 8`,
+- **Current build:** Debian `0.1.0-21` / Android `0.1.0-p1.6` (`versionCode 8`,
   release-signed — D-030). Status-wire schema 2; every `p1.x` pairs with every
   desktop build. `docs/DECISIONS.md` has the per-decision rationale; the work
   log below has the per-session detail.
+- **License:** GPL-3.0-or-later (`LICENSE`, D-010). Bundled `tun2proxy` binary
+  is MIT (its upstream). The pilot phone's egress IPs have been scrubbed from
+  the working tree and all git history (RFC 5737 documentation addresses).
 
 ### What runs — proven live on the dev laptop + pilot phone
 
@@ -50,7 +53,7 @@ carrier); other platform clients (Windows/macOS/iOS); multi-client support. See
 
 ### Before the repo can go public
 
-- An explicit license (D-010, still open).
+- ~~An explicit license~~ — **done: GPL-3.0-or-later (D-010).**
 - A vulnerability-reporting channel (`SECURITY.md`).
 - A first tagged release with the APK + `.deb` attached — the app's "Get the
   desktop client" button and `teather device install` need a target.
@@ -60,7 +63,7 @@ carrier); other platform clients (Windows/macOS/iOS); multi-client support. See
 ### Verification
 
 97 host unit tests + the D-Bus smoke test; 30 Android unit tests; both APKs and
-the `0.1.0-20` `.deb` build. Live end to end (work log): connect, TCP on
+the `0.1.0-21` `.deb` build. Live end to end (work log): connect, TCP on
 cellular, full Wi-Fi-loss failover, UDP via udpgw, zero-gap upstream switch,
 clean teardown to byte-identical host state; the D-028 relay-auth path (an
 unauthenticated SOCKS connection is refused, authenticated egress on cellular);
@@ -119,7 +122,7 @@ for current state and `docs/ROADMAP.md` for what remains optional.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-20`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-21`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -178,9 +181,10 @@ reference.
 
 ## Open threads (none blocking)
 
-- **Pre-public checklist** — license (D-010), `SECURITY.md` reporting channel,
-  first tagged release with the APK + `.deb`. See "Before the repo can go
-  public" above.
+- **Pre-public checklist** — `SECURITY.md` reporting channel and a first tagged
+  release with the APK + `.deb`. Licensing (D-010, GPL-3.0-or-later) and the
+  git-history scrub of the pilot phone's IPs are done. See "Before the repo can
+  go public" above.
 - **E-012 follow-ups** — check per-app cellular data-usage attribution on the
   phone after a heavy session; keep logging heavy sessions and any carrier
   contact across billing cycles.
@@ -231,7 +235,6 @@ A quick index; `docs/DECISIONS.md` has the rationale and status.
   opportunistic. This is the owner's real daily use, not a synthetic gate.
 - The userspace WireGuard endpoint (P4) is a hypothesis, not planned work.
 - IPv6 through Teather is unsupported and not in progress.
-- The repository license is undecided (D-010) — needed before public access.
 
 ## Explicitly not in progress
 
@@ -279,6 +282,35 @@ priority", and the README status line agree — a milestone isn't done until the
 do. When this section runs long, fold the oldest entries into the History
 digest at the end (a few lines per milestone) and let git keep the detail; it
 was last compressed on 2026-09-03.
+
+### 2026-09-03 — License (GPL-3.0-or-later), history scrub, pre-public audit (D-010, `0.1.0-21`)
+
+- **License (D-010):** the owner chose a "share and share alike" license →
+  **GPL-3.0-or-later**. Added `LICENSE` (canonical FSF text), a README license
+  section with a non-binding "thank-you if it makes you money" note, updated
+  `packaging/debian/copyright` (Teather = GPL-3.0-or-later, `tun2proxy` = MIT),
+  and `CONTRIBUTING.md` (inbound = outbound, no CLA). AGPL/MPL/Apache/MIT
+  considered and rejected — see D-010.
+- **History scrub:** the pilot phone's public egress IPs (four Verizon cellular
+  addresses and one Wi-Fi address) were the only sensitive data found anywhere
+  in 57 commits. Replaced with RFC 5737 documentation addresses (`203.0.113.x` /
+  `198.51.100.x`) in the working tree **and rewritten out of all git history**
+  (`git filter-branch`), then force-pushed. No serials, keys, credentials,
+  tokens, phone numbers, or subscriber data were ever committed;
+  `keystore.properties` never was (only the `CHANGE_ME` template).
+- **Dependency audit:** `cargo audit` on the vendored `tun2proxy` `Cargo.lock` —
+  **0 vulnerabilities** (3 low-severity unmaintained/yanked advisories on
+  transitive crates, none reachable). Android app: no runtime deps. Python
+  client: no pip deps. CI workflow: read-only permissions, no secrets, pinned
+  actions.
+- **SECURITY.md:** switched to "use GitHub private vulnerability reporting."
+- **Publishing model (owner-directed):** source + the current `.deb` and `.apk`
+  as GitHub release assets.
+- **Still open before public:** enable GitHub private vulnerability reporting,
+  cut the first tag with the binaries attached.
+- **Verified:** 97 host + 30 Android unit tests still pass; `0.1.0-21` deb
+  built; `git log --all -S` for every sensitive string comes back empty
+  post-rewrite.
 
 ### 2026-09-03 — Session history; human-readable byte units (D-033, `0.1.0-20`)
 

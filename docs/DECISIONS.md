@@ -183,23 +183,42 @@ correct that. D-009 itself is unchanged: no guaranteed-bypass claims, and no
 purpose-built stealth/fingerprint-camouflage features beyond what the relay
 architecture already provides structurally.
 
-## D-010 — Defer licensing until before public access
+## D-010 — License under the GNU GPL v3.0 or later
 
-**Status:** Open · **Date:** 2026-08-22
+**Status:** Accepted · **Date:** 2026-09-03 (owner-directed) · **Build:**
+Debian `0.1.0-21`
 
-### Decision needed
+### Decision
 
-Select an explicit license before making the repository public. Until then, no
-license file will be added and reuse/redistribution is not granted.
+Teather is licensed **GPL-3.0-or-later**. The full text is in `LICENSE` (the
+canonical FSF text); `README.md` and `packaging/debian/copyright` carry the
+short notice, and the copyright holder is recorded as "John (vel71184)".
 
-### Candidates to evaluate
+### Rationale
 
-- GPL-3.0 for reciprocal source distribution.
-- Apache-2.0 for permissive reuse with an explicit patent grant.
-- MPL-2.0 for file-level reciprocity.
+The owner wanted a "share and share alike" license: freely usable, studied, and
+modified, but anything distributed that is built from this code must also be
+GPL and keep the notices. That is copyleft, and it also answers the owner's
+concern about someone taking the code closed and profiting — the GPL permits
+commercial use but not proprietary redistribution.
 
-The choice should reflect whether future commercial reuse without contributing
-changes is acceptable.
+Considered and not chosen: **AGPL-3.0** (adds a network-use trigger — only
+worth it if Teather is ever run as a hosted service for other people, which it
+is not), **MPL-2.0 / Apache-2.0 / MIT** (all allow a proprietary product to be
+built around the code, which is weaker than the owner's intent).
+
+### Consequences
+
+- The bundled `tun2proxy` binary stays under its upstream MIT license
+  (GPL-compatible); `packaging/debian/copyright` records both.
+- A `NOTICE`-style non-binding request ("a thank-you is appreciated if this
+  makes you real money") lives in `README.md` and has no legal effect on GPL
+  rights.
+- Teather was written with AI assistance; per the tooling provider's terms the
+  owner holds the output and may license it. This does not affect the GPL grant.
+- The pilot phone's public egress IPs were replaced with RFC 5737 documentation
+  addresses across the working tree and git history (see the 2026-09-03 work
+  log) as part of the same pre-public pass.
 
 ## D-033 — Connection-session history lives on the daemon, not the phone
 

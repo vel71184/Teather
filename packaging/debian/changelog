@@ -1,3 +1,15 @@
+teather (0.1.0-21) unstable; urgency=medium
+
+  * Teather is now licensed GPL-3.0-or-later (D-010). LICENSE added;
+    packaging/debian/copyright updated (Teather = GPL-3.0-or-later, the bundled
+    tun2proxy binary stays MIT).
+  * Documentation only otherwise: pre-public audit — the pilot phone's egress
+    IPs were replaced with RFC 5737 documentation addresses across the tree and
+    git history; cargo audit on the tun2proxy lockfile reports no
+    vulnerabilities. No code or behaviour change; still Android 0.1.0-p1.6.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 23:45:00 +0000
+
 teather (0.1.0-20) unstable; urgency=medium
 
   * GTK byte counters now use human-readable units (KiB / MiB / GiB) instead of

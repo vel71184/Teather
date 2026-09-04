@@ -8,9 +8,10 @@ standalone connect (D-025), abnormal-disconnect self-heal (D-026), SOCKS relay
 authentication (D-028), APK bundling/install (D-029), release signing (D-030),
 the security-version layer (D-031), the shared design language (D-032,
 `docs/DESIGN_LANGUAGE.md`), and daemon-side session history (D-033). Current
-build: Debian `0.1.0-20` /
+build: Debian `0.1.0-21` /
 Android `0.1.0-p1.6`
-(`versionCode 8`). `docs/PROJECT_STATUS.md` is the resume point.
+(`versionCode 8`). Licensed **GPL-3.0-or-later** (`LICENSE`, D-010).
+`docs/PROJECT_STATUS.md` is the resume point.
 
 ## Pinned Android and P1 toolchain
 

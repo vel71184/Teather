@@ -6,13 +6,15 @@ states otherwise.
 
 ## Reporting a vulnerability
 
-While the repository is private, report suspected vulnerabilities directly to the
-repository owner through a private channel. Do not place exploitable details,
-private keys, provider data, device identifiers, or unredacted diagnostics in a
-public issue.
+Report suspected vulnerabilities through **GitHub private vulnerability
+reporting** (the "Report a vulnerability" button on the repository's Security
+tab). Do not open a public issue, and do not include exploitable details,
+private keys, provider data, device identifiers, or unredacted diagnostics in
+one.
 
-Before the repository becomes public, enable GitHub private vulnerability
-reporting or publish a dedicated security contact and update this document.
+If private reporting is unavailable, contact the repository owner
+(`vel71184` on GitHub) and wait for an acknowledged private channel before
+sending details.
 
 Useful reports include:
 

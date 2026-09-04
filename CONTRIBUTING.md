@@ -51,8 +51,9 @@ experiments, but do not describe an unverified path as supported.
 Use the template in `docs/EXPERIMENTS.md`. Record failures and inconclusive results
 as carefully as successes. Redact provider account information and device IDs.
 
-## License status
+## License
 
-No contribution license or open-source project license has been selected. Do not
-accept outside contributions or make the repository public until ownership and
-license terms are explicit.
+Teather is licensed **GPL-3.0-or-later** (`LICENSE`, D-010). By submitting a
+contribution you agree that it is licensed under the same terms — the project
+uses inbound-equals-outbound licensing and has no separate CLA. Keep existing
+copyright and license notices intact.

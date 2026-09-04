@@ -65,18 +65,25 @@ phone-reboot fault case, and a longer daily-use soak.
 
 ## Before making the repository public
 
-- Select and add an explicit license (D-010, still open).
-- Remove private device/provider details and captures from history, not merely
-  the current tree.
-- Add reproducible build instructions; pin dependencies; run vulnerability and
-  license checks.
-- Establish a vulnerability-reporting channel (`SECURITY.md`).
+- ~~Select and add an explicit license~~ — **done: GPL-3.0-or-later (D-010).**
+- ~~Remove private device/provider details from history, not merely the current
+  tree~~ — **done: the pilot phone's egress IPs were replaced with RFC 5737
+  documentation addresses across the working tree and all git history.** No
+  serials, keys, credentials, or subscriber data were ever committed.
+- ~~Pin dependencies; run vulnerability and license checks~~ — **done:**
+  `cargo audit` on the vendored `tun2proxy` lockfile reports 0 vulnerabilities
+  (3 low-severity "unmaintained/yanked" advisories on transitive crates, none
+  reachable); the Android app has no runtime dependencies and the Python client
+  has no pip dependencies. Reproducible-build notes are in
+  `third_party/tun2proxy/README.md` and `docs/DEVELOPMENT.md`.
+- Establish a vulnerability-reporting channel (`SECURITY.md`) — enable GitHub
+  private vulnerability reporting once the repo exists.
 - Cut a first tagged release with the APK + `.deb` attached, so the app's "Get
   the desktop client" link and `teather device install` have a target (D-029,
-  D-030 wiring is done).
+  D-030 wiring is done). **Publishing model: source + the current `.deb` and
+  `.apk` as release assets.**
 - State supported and unsupported devices honestly; document provider/accounting
   uncertainty without advertising guaranteed evasion (D-009).
-- Decide whether binaries or only source will be published.
 
 ## Possible future directions (not a committed sequence)
 

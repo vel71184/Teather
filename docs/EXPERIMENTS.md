@@ -19,6 +19,11 @@ captures containing personal traffic.
 7. Distinguish observation from inference.
 8. Never generalize one provider/device result into a universal claim.
 
+Public egress IP addresses in the records below have been replaced with
+RFC 5737 documentation addresses (`203.0.113.x` = the phone's cellular IP,
+`198.51.100.x` = a host/Wi-Fi IP). The comparison they illustrate — relayed
+traffic exits as the phone's own address, not the receiver's — is unchanged.
+
 ## Experiment template
 
 ```markdown
