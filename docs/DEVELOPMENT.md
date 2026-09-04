@@ -6,7 +6,7 @@ privileged helper, additive DNS, and automatic failover (D-022). Post-P1, all
 live-verified: upstream switching (D-023), general UDP over udpgw (D-024),
 standalone connect (D-025), abnormal-disconnect self-heal (D-026), SOCKS relay
 authentication (D-028), APK bundling/install (D-029), and release signing
-(D-030). Current build: Debian `0.1.0-16` / Android `0.1.0-p1.5`
+(D-030). Current build: Debian `0.1.0-17` / Android `0.1.0-p1.5`
 (`versionCode 7`). `docs/PROJECT_STATUS.md` is the resume point.
 
 ## Pinned Android and P1 toolchain

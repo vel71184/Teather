@@ -1,3 +1,14 @@
+teather (0.1.0-17) unstable; urgency=medium
+
+  * The GTK window no longer keeps running old code across a package upgrade.
+    Launching `teather-gtk` now takes over a running instance
+    (ALLOW_REPLACEMENT | REPLACE) instead of re-presenting the stale one, and a
+    window that is open when the package is upgraded shows a "restart this
+    window" banner. Previously, closing the window only hid it to the tray, so
+    reopening re-showed the pre-upgrade process.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 21:00:00 +0000
+
 teather (0.1.0-16) unstable; urgency=medium
 
   * Security-version layer (D-031). The Android app now carries a

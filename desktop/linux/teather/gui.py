@@ -2,9 +2,21 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
+from . import __file__ as _pkg_file
 from .dbus_client import DbusClient
+
+
+def _installed_code_mtime() -> float:
+    """Newest mtime among the installed teather*.py files. A `dpkg -i` rewrites
+    them, so a jump means a package upgrade happened under a running window."""
+    try:
+        package = Path(_pkg_file).resolve().parent
+        return max((p.stat().st_mtime for p in package.glob("*.py")), default=0.0)
+    except OSError:
+        return 0.0
 
 THEME_CHOICES = ("system", "light", "dark")
 THEME_LABELS = {"system": "Follow system", "light": "Light", "dark": "Dark"}
@@ -54,6 +66,7 @@ class TeatherWindow:
         self._app_state = None
         self._app_checked_for = None
         self._security_nagged = False
+        self._code_stamp = _installed_code_mtime()
         self._theme_guard = False
         self._apply_theme(_read_theme())
         self.window = Gtk.Window(title="Teather")
@@ -67,6 +80,15 @@ class TeatherWindow:
         title.set_markup("<span size='xx-large' weight='bold'>Teather</span>")
         title.set_xalign(0)
         box.pack_start(title, False, False, 0)
+
+        self.update_banner = Gtk.Button(
+            label="A Teather update is installed — click to restart this window"
+        )
+        self.update_banner.get_style_context().add_class("suggested-action")
+        self.update_banner.connect("clicked", lambda *_: self._restart_self())
+        self.update_banner.set_no_show_all(True)
+        box.pack_start(self.update_banner, False, False, 0)
+
         self.state = Gtk.Label(xalign=0, wrap=True)
         box.pack_start(self.state, False, False, 0)
         note = Gtk.Label(xalign=0, wrap=True)
@@ -473,7 +495,12 @@ class TeatherWindow:
         except Exception as error:
             self.state.set_text("State: unavailable")
             self.detail.set_text(str(error))
+        if _installed_code_mtime() > self._code_stamp + 1:
+            self.update_banner.show()
         return self.GLib.SOURCE_CONTINUE
+
+    def _restart_self(self):
+        os.execv(sys.executable, [sys.executable, os.path.realpath(sys.argv[0])])
 
     def _delete(self, *_args):
         # Never tear down the connection here — the daemon owns it. With a tray
@@ -494,8 +521,10 @@ class TeatherWindow:
 
 
 class TeatherApplication:
-    """Single-instance wrapper: launching teather-gtk again re-presents the
-    existing window instead of starting another process."""
+    """Single-instance wrapper. Launching `teather-gtk` again takes over any
+    running instance (ALLOW_REPLACEMENT | REPLACE) rather than re-presenting it,
+    so a window left open from before a package upgrade is replaced by one
+    running the new code instead of silently keeping the old code."""
 
     def __init__(self):
         import gi
@@ -504,7 +533,7 @@ class TeatherApplication:
         self.Gtk = Gtk
         self.app = Gtk.Application(
             application_id="io.github.vel71184.Teather",
-            flags=Gio.ApplicationFlags.FLAGS_NONE,
+            flags=Gio.ApplicationFlags.ALLOW_REPLACEMENT | Gio.ApplicationFlags.REPLACE,
         )
         self.app.connect("activate", self._activate)
         self.window = None

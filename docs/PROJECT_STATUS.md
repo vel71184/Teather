@@ -68,7 +68,7 @@
 - **Runnable build:** Android `0.1.0-p1.5` (`versionCode 7`, security-version
   layer — D-031; `0.1.0-p1.4` appearance setting; `0.1.0-p1.3` SOCKS relay auth
   — D-028, status schema 2); Debian package
-  `0.1.0-16` (D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
+  `0.1.0-17` (GTK window replaces a stale instance on relaunch; `0.1.0-16` D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -178,7 +178,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-16`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-17`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -419,6 +419,24 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-03 — GTK window replaces a stale instance on relaunch (`0.1.0-17`)
+
+- **Trigger:** the owner disconnected, closed the Teather window, installed a
+  new `.deb`, reopened `teather-gtk` — and got the **old** GUI. Cause: closing
+  the window only hides it to the tray (D-026), so the pre-upgrade process stays
+  alive, and the single-instance `Gtk.Application` re-presents that stale
+  process instead of loading the new code.
+- **Fix (`gui.py` only):** the app now uses
+  `ALLOW_REPLACEMENT | REPLACE`, so any `teather-gtk` launch takes over a
+  running instance rather than re-presenting it. Belt-and-suspenders: a window
+  open across a package upgrade watches its own installed `*.py` mtimes and
+  shows a "restart this window" banner (which `os.execv`s itself) when they
+  jump. Takes full effect once the running instance is already on `0.1.0-17+`
+  (the replacement handshake needs both sides to allow it).
+- **Verified:** 88 host unit tests still pass; `gui.py` compiles; the mtime
+  helper resolves against whichever copy is running. Live window behaviour is
+  the owner's check after installing `0.1.0-17`.
 
 ### 2026-09-03 — Security-version layer + state-driven phone-app button (D-031, `0.1.0-16` / `0.1.0-p1.5`)
 
