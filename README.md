@@ -30,7 +30,7 @@ as little receiver-side software as each platform permits.
 > paths; a 2026-09-01 pass verified D-028/D-029/D-030 live (release-signed APK
 > installed via `teather device install`, unauthenticated SOCKS refused,
 > authenticated traffic egressing on cellular). Current builds: Debian
-> `0.1.0-14`, Android `0.1.0-p1.4`. See `docs/PROJECT_STATUS.md` and
+> `0.1.0-15`, Android `0.1.0-p1.4`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
@@ -354,7 +354,7 @@ apps on the phone cannot use it, since Android loopback is reachable by any
 installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
 links to the releases page.
 
-**Linux** (Debian `0.1.0-14`): a per-user `teatherd` D-Bus service, a `teather`
+**Linux** (Debian `0.1.0-15`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
 is automatic when Wi-Fi/Ethernet is lost, and Teather can also come up as the

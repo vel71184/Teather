@@ -67,7 +67,7 @@
   an ongoing daily-use soak.
 - **Runnable build:** Android `0.1.0-p1.4` (`versionCode 6`, appearance setting;
   `0.1.0-p1.3` SOCKS relay auth — D-028, status schema 2); Debian package
-  `0.1.0-14` (appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
+  `0.1.0-15` (GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -177,7 +177,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-14`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-15`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.

@@ -140,9 +140,14 @@ class TeatherWindow:
 
         self.metrics = Gtk.Label(xalign=0, selectable=True)
         box.pack_start(self.metrics, False, False, 0)
+        tools = Gtk.Box(spacing=8)
         diagnostics = Gtk.Button(label="Diagnostics")
         diagnostics.connect("clicked", self._diagnose)
-        box.pack_start(diagnostics, False, False, 0)
+        tools.pack_start(diagnostics, True, True, 0)
+        self.phone_app_button = Gtk.Button(label="Phone app…")
+        self.phone_app_button.connect("clicked", self._phone_app)
+        tools.pack_start(self.phone_app_button, True, True, 0)
+        box.pack_start(tools, False, False, 0)
         self.detail = Gtk.Label(xalign=0, yalign=0, selectable=True, wrap=True)
         box.pack_start(self.detail, True, True, 0)
 
@@ -247,6 +252,63 @@ class TeatherWindow:
 
     def _diagnose(self, *_args):
         self._call("Diagnose")
+
+    def _phone_app(self, *_args):
+        selected = self._selected()
+        device_id = (selected or {}).get("device_id", "")
+        try:
+            state = self.client.call("AndroidAppState", "(s)", (device_id,))
+        except Exception as error:
+            self.detail.set_text(str(error))
+            return
+        status = state.get("status")
+        installed = state.get("installed_version_code", 0)
+        bundled = state.get("bundled_version_code", 0)
+        summary = {
+            "current": f"The phone app is up to date (version {installed}).",
+            "ahead": f"The phone app (version {installed}) is newer than this package bundles (version {bundled}).",
+            "outdated": f"The phone app is version {installed}; this package bundles version {bundled}.",
+            "missing": f"No Teather app is installed on the phone. This package bundles version {bundled}.",
+            "no-device": "Connect exactly one phone (or pick it in the list) first.",
+            "no-bundle": "This package does not bundle a phone app.",
+        }.get(status, f"Phone app status: {status}")
+        self.detail.set_text(summary)
+        if status not in ("outdated", "missing"):
+            return
+
+        verb = "Update" if status == "outdated" else "Install"
+        try:
+            connected = self.client.call("GetStatus").get("state") == "connected"
+        except Exception:
+            connected = False
+        prompt = f"{verb} the Teather app (version {bundled}) on the phone now?"
+        if connected:
+            prompt += (
+                "\n\nTeather will disconnect for the install and reconnect afterwards — "
+                "if the phone is your only link, expect a short outage."
+            )
+        dialog = self.Gtk.MessageDialog(
+            transient_for=self.window, modal=True,
+            message_type=self.Gtk.MessageType.QUESTION, buttons=self.Gtk.ButtonsType.YES_NO,
+            text=prompt,
+        )
+        response = dialog.run()
+        dialog.destroy()
+        if response != self.Gtk.ResponseType.YES:
+            return
+        try:
+            if connected:
+                self.client.call("Disconnect")
+            result = self.client.call("InstallAndroid", "(s)", (device_id,))
+            self.detail.set_text(
+                f"Phone app is now version {result.get('version_code')} "
+                f"({result.get('action', 'installed')})."
+            )
+            if connected:
+                self.client.call("Connect", "(s)", (device_id,))
+        except Exception as error:
+            self.detail.set_text(str(error))
+        self.refresh()
 
     def _set_failover(self, widget):
         if self._failover_guard:

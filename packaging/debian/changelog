@@ -1,3 +1,13 @@
+teather (0.1.0-15) unstable; urgency=medium
+
+  * GTK client: a "Phone app…" button next to Diagnostics. It reports how the
+    phone's Teather app compares to the one this package bundles and, when the
+    phone is missing it or behind, offers to install/update it (the GUI surface
+    for `teather device install`). If Teather is connected it warns that the
+    install needs a brief disconnect, then reconnects afterwards.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 19:00:00 +0000
+
 teather (0.1.0-14) unstable; urgency=medium
 
   * GTK client: an Appearance setting (Follow system / Light / Dark), persisted
