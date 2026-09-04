@@ -51,6 +51,9 @@ class TeatherWindow:
         self.GLib, self.Gtk = GLib, Gtk
         self.app = None
         self.client = DbusClient()
+        self._app_state = None
+        self._app_checked_for = None
+        self._security_nagged = False
         self._theme_guard = False
         self._apply_theme(_read_theme())
         self.window = Gtk.Window(title="Teather")
@@ -253,29 +256,68 @@ class TeatherWindow:
     def _diagnose(self, *_args):
         self._call("Diagnose")
 
+    def _actionable_app_status(self):
+        """The current phone-app status if it warrants an install, else None."""
+        status = (self._app_state or {}).get("status")
+        return status if status in ("missing", "outdated") else None
+
+    def _check_phone_app(self, device_id):
+        """One on-demand AndroidAppState probe (an adb round-trip — never on the
+        poll loop). Caches the result and restyles the button."""
+        try:
+            self._app_state = self.client.call("AndroidAppState", "(s)", (device_id,))
+        except Exception:
+            self._app_state = None
+        self._app_checked_for = device_id
+        self._refresh_phone_app_button()
+
+    def _refresh_phone_app_button(self):
+        state = self._app_state or {}
+        status = state.get("status")
+        bundled = state.get("bundled_version_code", 0)
+        installed = state.get("installed_version_code", 0)
+        security = bool(state.get("bundled_security", 0) > state.get("installed_security", 0)
+                        and state.get("installed_security", 0))
+        css = self.phone_app_button.get_style_context()
+        for name in ("suggested-action", "destructive-action"):
+            css.remove_class(name)
+        if status == "missing":
+            label, sensitive, cls = f"Install app (v{bundled})", True, "suggested-action"
+        elif status == "outdated" and security:
+            label, sensitive, cls = f"Security update (v{installed}→v{bundled})", True, "destructive-action"
+        elif status == "outdated":
+            label, sensitive, cls = f"Update app (v{installed}→v{bundled})", True, "suggested-action"
+        elif status == "current":
+            label, sensitive, cls = f"App up to date (v{installed})", False, None
+        elif status == "ahead":
+            label, sensitive, cls = "Phone app is newer", False, None
+        else:
+            label, sensitive, cls = "Phone app…", status is None, None
+        self.phone_app_button.set_label(label)
+        self.phone_app_button.set_sensitive(sensitive)
+        if cls:
+            css.add_class(cls)
+
     def _phone_app(self, *_args):
         selected = self._selected()
         device_id = (selected or {}).get("device_id", "")
-        try:
-            state = self.client.call("AndroidAppState", "(s)", (device_id,))
-        except Exception as error:
-            self.detail.set_text(str(error))
-            return
-        status = state.get("status")
-        installed = state.get("installed_version_code", 0)
-        bundled = state.get("bundled_version_code", 0)
-        summary = {
-            "current": f"The phone app is up to date (version {installed}).",
-            "ahead": f"The phone app (version {installed}) is newer than this package bundles (version {bundled}).",
-            "outdated": f"The phone app is version {installed}; this package bundles version {bundled}.",
-            "missing": f"No Teather app is installed on the phone. This package bundles version {bundled}.",
-            "no-device": "Connect exactly one phone (or pick it in the list) first.",
-            "no-bundle": "This package does not bundle a phone app.",
-        }.get(status, f"Phone app status: {status}")
-        self.detail.set_text(summary)
-        if status not in ("outdated", "missing"):
-            return
+        if self._actionable_app_status() is None:
+            self._check_phone_app(device_id)
+            state = self._app_state or {}
+            self.detail.set_text({
+                "current": f"The phone app is up to date (version {state.get('installed_version_code', 0)}).",
+                "ahead": "The phone app is newer than this package bundles.",
+                "no-device": "Connect exactly one phone (or pick it in the list) first.",
+                "no-bundle": "This package does not bundle a phone app.",
+            }.get(state.get("status"), "Checked the phone app."))
+            if self._actionable_app_status() is None:
+                return
+        self._install_phone_app(device_id)
 
+    def _install_phone_app(self, device_id):
+        state = self._app_state or {}
+        status = state.get("status")
+        bundled = state.get("bundled_version_code", 0)
         verb = "Update" if status == "outdated" else "Install"
         try:
             connected = self.client.call("GetStatus").get("state") == "connected"
@@ -308,7 +350,50 @@ class TeatherWindow:
                 self.client.call("Connect", "(s)", (device_id,))
         except Exception as error:
             self.detail.set_text(str(error))
+        self._security_nagged = False
+        self._check_phone_app(device_id)
         self.refresh()
+
+    _APP_ERRORS = ("android-app-missing", "android-incompatible", "android-not-ready")
+
+    def _sync_phone_app(self, status, devices):
+        connected = [d["device_id"] for d in devices if d.get("connected")]
+        device_id = connected[0] if len(connected) == 1 else ""
+
+        # Re-probe only when the phone changed or an app-related error appeared
+        # for one we have not checked — never every refresh (it is an adb call).
+        app_error = status.get("error_category") in self._APP_ERRORS
+        if device_id and (device_id != self._app_checked_for
+                          or (app_error and self._actionable_app_status() is None)):
+            self._check_phone_app(device_id)
+        elif not device_id and self._app_checked_for is not None:
+            self._app_state = None
+            self._app_checked_for = None
+            self._refresh_phone_app_button()
+
+        if status.get("security_update_available"):
+            if not self._security_nagged:
+                self._security_nagged = True
+                self._prompt_security_update(device_id)
+        else:
+            self._security_nagged = False
+
+    def _prompt_security_update(self, device_id):
+        dialog = self.Gtk.MessageDialog(
+            transient_for=self.window, modal=True,
+            message_type=self.Gtk.MessageType.WARNING, buttons=self.Gtk.ButtonsType.YES_NO,
+            text="A security update is available for the phone app.",
+        )
+        dialog.format_secondary_text(
+            "The Teather app on the phone is behind on a security-relevant fix. "
+            "Install the update now? Teather will disconnect briefly and reconnect."
+        )
+        response = dialog.run()
+        dialog.destroy()
+        if response == self.Gtk.ResponseType.YES:
+            if self._app_state is None:
+                self._check_phone_app(device_id)
+            self._install_phone_app(device_id)
 
     def _set_failover(self, widget):
         if self._failover_guard:
@@ -384,6 +469,7 @@ class TeatherWindow:
                 f"Upstream: {active_up}   Failover: {armed}\n"
                 "P1 coverage: TCP + virtual DNS; general UDP and IPv6 unsupported"
             )
+            self._sync_phone_app(status, devices)
         except Exception as error:
             self.state.set_text("State: unavailable")
             self.detail.set_text(str(error))

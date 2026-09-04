@@ -22,6 +22,7 @@ class RelayStatusWireTest {
         val wire = RelayStatusWire.serialize(status, CellularStatus(true, true))
 
         assertTrue(wire.startsWith("teather.status.version=2\n"))
+        assertTrue(wire.contains("teather.status.security=${RelayStatusWire.SECURITY_VERSION}\n"))
         assertTrue(wire.contains("teather.status.secret=00112233445566778899aabbccddeeff\n"))
         assertTrue(wire.contains("lifecycle=running\n"))
         assertTrue(wire.contains("selected_upstream=cellular_(validated)\n"))

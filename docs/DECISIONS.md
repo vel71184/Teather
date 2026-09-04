@@ -201,6 +201,54 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-031 — A security-version layer separate from the wire schema
+
+**Status:** Accepted · **Date:** 2026-09-03
+
+### Context
+
+D-028 added `teather.status.version` (the wire schema, now 2) as a hard
+compatibility gate — a client and relay that disagree refuse to pair. But not
+every security-relevant fix breaks the wire (the D-028 udpgw parser hardening
+did not), so the schema alone does not tell the user "you are running a build
+that is missing a security fix — you should update." The owner asked for a
+layered scheme: a visible security level in the app, and a desktop client that
+escalates from a passive "update available" button to an active prompt when the
+gap is a security one.
+
+### Decision
+
+Add `RelayStatusWire.SECURITY_VERSION` (an `Int`, starting at 1), published as
+`teather.status.security` in the relay status wire and shown in the app as
+"Security level: N". It is bumped **only** when a release carries a
+security-relevant change. Unlike the schema it does **not** gate pairing — an
+older app still connects (nag, not block), because a genuinely
+wire-incompatible version already cannot connect at all.
+
+The desktop package records the bundled APK's security version as a third line
+in `Teather.apk.version`. `teatherd` remembers the phone's level from the last
+status wire it saw (`android_security` in `GetStatus`) and sets
+`security_update_available` when the bundle is ahead. The GTK client:
+
+- keeps one always-visible phone-app button that reads "Install app",
+  "Update app", "Security update", "App up to date" (grey/disabled), or "Phone
+  app is newer" depending on the comparison;
+- pops a one-time dialog when `security_update_available` becomes true.
+
+The phone-app check is an on-demand ADB round-trip (GUI start, a phone appears,
+after an app-related connect error) — never on the poll loop.
+
+### Consequences
+
+- Three orthogonal version concepts: `versionCode` (any build, drives the plain
+  update button), `SECURITY_VERSION` (advisory, drives the prompt),
+  `SCHEMA_VERSION` (mandatory, gates pairing).
+- `SECURITY_VERSION` and its baseline comment are hand-maintained in
+  `RelayStatusWire.kt`; a security release bumps both it and `versionCode`.
+- The desktop knows the phone's exact security level only while the relay is or
+  has been running this daemon session; while it has never connected, the
+  client falls back to the `versionCode` comparison (button, no prompt).
+
 ## D-030 — Create a permanent release signing key (supersedes D-019's deferral)
 
 **Status:** Accepted · **Date:** 2026-09-01

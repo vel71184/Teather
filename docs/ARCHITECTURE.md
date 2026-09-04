@@ -83,9 +83,11 @@ Implemented responsibilities:
   ordinary applications are denied.
 - Emit `dumpsys` status schema version 2 (lifecycle, bound/configured port,
   configured and selected upstream, cellular availability/validation, aggregate
-  counters, coarse errors, and the per-run relay secret) — no destinations or
-  device/subscriber data. A schema-1 desktop client and a schema-2 relay refuse
-  to pair.
+  counters, coarse errors, the per-run relay secret, and a `security` version) —
+  no destinations or device/subscriber data. A schema-1 desktop client and a
+  schema-2 relay refuse to pair. The `security` version (D-031) is advisory: it
+  bumps only on a security-relevant release and drives the desktop's update
+  prompt, but does not gate pairing.
 
 Teather never uses Android `VpnService`: it is a relay server, not a capture of
 the phone's own application traffic. This is the structural reason the traffic

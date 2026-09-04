@@ -123,6 +123,15 @@ tests; `assembleRelease` and `lintVitalRelease` clean. Manual check still
 pending: the GTK combo and the phone spinner switching themes in a live window
 (owner does this after install).
 
+**2026-09-03 (`0.1.0-16` / `0.1.0-p1.5`, D-031):** security-version layer. The
+app reports `teather.status.security` (level 1); the wire schema is unchanged
+(2), so pairing is unaffected. `teatherd` exposes `android_security` and
+`security_update_available` in `GetStatus`; the GTK phone-app button is
+state-driven and a one-time prompt fires when the bundle is ahead on security
+version. 88 host (4 new) + 30 Android unit tests; `assembleRelease` /
+`lintVitalRelease` clean. Manual check pending: the button states and the
+security prompt against a real phone that is a version behind.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -293,8 +302,8 @@ non-public provider systems.
 
 Before tagging any checkpoint:
 
-- All automated tests for implemented behavior pass (`make check` — 84 host + 30
-  Android at `0.1.0-14` / `0.1.0-p1.4`).
+- All automated tests for implemented behavior pass (`make check` — 88 host + 30
+  Android at `0.1.0-16` / `0.1.0-p1.5`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

@@ -1,3 +1,17 @@
+teather (0.1.0-16) unstable; urgency=medium
+
+  * Security-version layer (D-031). The Android app now carries a
+    SECURITY_VERSION (starting at 1), reports it as teather.status.security in
+    the status wire, and shows "Security level: N". Unlike the wire schema it
+    does not gate pairing — an older app still connects — but the desktop uses
+    it to escalate an available update from the plain "Update app" button to a
+    one-time prompt. Teather.apk.version gains a third line (the bundled APK's
+    security version). The GTK phone-app button is now state-driven:
+    Install / Update / Security update / grey "App up to date" / "Phone app is
+    newer". Android bumped to 0.1.0-p1.5 / versionCode 7.
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 20:00:00 +0000
+
 teather (0.1.0-15) unstable; urgency=medium
 
   * GTK client: a "Phone app…" button next to Diagnostics. It reports how the

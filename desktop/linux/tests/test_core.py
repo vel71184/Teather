@@ -44,6 +44,7 @@ PHYSICAL_RESOLVER = "nameserver 10.0.2.3\n"
 def compatible_status(**changes):
     values = {
         "schema": 2,
+        "security": 1,
         "lifecycle": "running",
         "bound_port": 1080,
         "configured_port": 1080,
@@ -475,6 +476,19 @@ class StatusAndPreflightTests(unittest.TestCase):
         )
         self.assertEqual(status.secret, "")
 
+    def test_status_parser_reads_the_security_version_and_defaults_it_to_zero(self):
+        with_security = parse_android_status(
+            "teather.status.version=2\nteather.status.security=3\n"
+            "lifecycle=running\nbound_port=1080\nconfigured_port=1080\n"
+            "configured_upstream=cellular\n"
+        )
+        self.assertEqual(with_security.security, 3)
+        without = parse_android_status(
+            "teather.status.version=2\nlifecycle=running\nbound_port=1080\n"
+            "configured_port=1080\nconfigured_upstream=cellular\n"
+        )
+        self.assertEqual(without.security, 0)  # an app that predates the field
+
     def test_status_compatibility_includes_requested_upstream(self):
         self.assertFalse(compatible_status(configured_upstream="default").compatible)
         self.assertFalse(compatible_status(configured_port=2080).compatible)
@@ -782,11 +796,14 @@ class ManagerTests(unittest.TestCase):
                 manager.connect()
             self.assertEqual(caught.exception.category, "selection-required")
 
-    def _with_bundled_apk(self, directory, version_code=99, version_name="0.1.0-test"):
+    def _with_bundled_apk(self, directory, version_code=99, version_name="0.1.0-test", security=None):
         apk = Path(directory) / "Teather.apk"
         apk.write_bytes(b"PK\x03\x04 fake apk")
         ver = Path(directory) / "Teather.apk.version"
-        ver.write_text(f"{version_code}\n{version_name}\n")
+        body = f"{version_code}\n{version_name}\n"
+        if security is not None:
+            body += f"{security}\n"
+        ver.write_text(body)
         return patch.multiple(
             "teather.manager", BUNDLED_APK=str(apk), BUNDLED_APK_VERSION=str(ver)
         )
@@ -806,6 +823,33 @@ class ManagerTests(unittest.TestCase):
                 self.assertEqual(adb.installs, [(SERIAL_ONE, str(Path(directory) / "Teather.apk"))])
                 self.assertEqual(result["action"], "reinstalled")
                 self.assertEqual(manager.android_app_state("")["status"], "current")
+
+    def test_android_app_state_exposes_the_bundled_security_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory, security=2):
+                self.assertEqual(manager.android_app_state("")["bundled_security"], 2)
+
+    def test_connect_records_the_phone_security_version_and_flags_an_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()  # compatible_status() reports security level 1
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory, security=2):
+                device_id = self._approve_one(manager)
+                manager.connect(device_id)
+                status = manager.get_status()
+                self.assertEqual(status["android_security"], 1)
+                self.assertTrue(status["security_update_available"])
+
+    def test_no_security_update_flag_when_the_phone_matches_the_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adb = FakeAdb()
+            manager = self.make_manager(directory, adb)
+            with self._with_bundled_apk(directory, security=1):
+                device_id = self._approve_one(manager)
+                manager.connect(device_id)
+                self.assertFalse(manager.get_status()["security_update_available"])
 
     def test_install_android_installs_when_missing(self):
         with tempfile.TemporaryDirectory() as directory:

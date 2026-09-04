@@ -34,6 +34,7 @@ import io.github.vel71184.teather.service.RelayLifecycle
 import io.github.vel71184.teather.service.RelayRuntime
 import io.github.vel71184.teather.service.RelayService
 import io.github.vel71184.teather.service.RelayStatus
+import io.github.vel71184.teather.service.RelayStatusWire
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -308,6 +309,7 @@ class MainActivity : Activity() {
         val snapshot = status.stats
         statusText.text = buildString {
             append("State: ").append(status.lifecycle.name.lowercase(Locale.US)).append('\n')
+            append("Security level: ").append(RelayStatusWire.SECURITY_VERSION).append('\n')
             status.configuration?.let { configuration ->
                 append("Listener: 127.0.0.1:").append(status.boundPort ?: configuration.port).append('\n')
                 append("Requested upstream: ").append(configuration.upstream.wireName).append('\n')

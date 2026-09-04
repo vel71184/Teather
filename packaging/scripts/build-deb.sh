@@ -2,7 +2,7 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-version=0.1.0-15
+version=0.1.0-16
 source_date_epoch=1787788800
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT HUP INT TERM
@@ -31,6 +31,9 @@ apk_version_name=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' "$repo/app/bu
   echo "could not read versionCode/versionName from app/build.gradle.kts" >&2
   exit 1
 }
+apk_security=$(sed -n 's/.*SECURITY_VERSION *= *\([0-9][0-9]*\).*/\1/p' \
+  "$repo/app/src/main/kotlin/io/github/vel71184/teather/service/RelayStatusWire.kt")
+[ -n "$apk_security" ] || apk_security=0
 
 [ "$(dpkg --print-architecture)" = amd64 ] || {
   echo "P1 packaging currently supports only an amd64 build host" >&2
@@ -61,7 +64,7 @@ install -m 0755 "$repo/desktop/linux/bin/teather-gtk" "$root/usr/bin/teather-gtk
 install -m 0755 "$tunnel" "$root/usr/lib/teather/tun2proxy"
 strip --remove-section=.comment "$root/usr/lib/teather/tun2proxy"
 install -m 0644 "$apk" "$root/usr/lib/teather/Teather.apk"
-printf '%s\n%s\n' "$apk_version_code" "$apk_version_name" > "$root/usr/lib/teather/Teather.apk.version"
+printf '%s\n%s\n%s\n' "$apk_version_code" "$apk_version_name" "$apk_security" > "$root/usr/lib/teather/Teather.apk.version"
 chmod 0644 "$root/usr/lib/teather/Teather.apk.version"
 install -m 0644 "$repo/packaging/teather.desktop" "$root/usr/share/applications/teather.desktop"
 install -m 0644 "$repo/desktop/linux/resources/icons/teather.svg" \

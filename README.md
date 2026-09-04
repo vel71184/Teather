@@ -30,7 +30,7 @@ as little receiver-side software as each platform permits.
 > paths; a 2026-09-01 pass verified D-028/D-029/D-030 live (release-signed APK
 > installed via `teather device install`, unauthenticated SOCKS refused,
 > authenticated traffic egressing on cellular). Current builds: Debian
-> `0.1.0-15`, Android `0.1.0-p1.4`. See `docs/PROJECT_STATUS.md` and
+> `0.1.0-16`, Android `0.1.0-p1.5`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
@@ -346,7 +346,7 @@ ready.
 P1 is complete and Teather is the owner's daily connection. The Android build is
 release-signed with a project key (D-030).
 
-**Android** (`0.1.0-p1.4`, `versionCode 6`): a Kotlin foreground service running
+**Android** (`0.1.0-p1.5`, `versionCode 7`): a Kotlin foreground service running
 a local SOCKS5 relay plus a udpgw terminator for general UDP, with a live
 upstream picker (`auto|cellular|wifi|ethernet`) and status/metrics. The relay
 authenticates the SOCKS connection with a per-run secret (D-028) so that other
@@ -354,7 +354,7 @@ apps on the phone cannot use it, since Android loopback is reachable by any
 installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
 links to the releases page.
 
-**Linux** (Debian `0.1.0-15`): a per-user `teatherd` D-Bus service, a `teather`
+**Linux** (Debian `0.1.0-16`): a per-user `teatherd` D-Bus service, a `teather`
 CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
 is automatic when Wi-Fi/Ethernet is lost, and Teather can also come up as the
@@ -377,8 +377,10 @@ device install`, unauthenticated SOCKS refused, authenticated traffic on
 cellular over the `teather0` failover route), and a 2026-09-03 self-heal fix
 (`0.1.0-13`: the poll-loop reconcile could go dormant after a failed
 auto-connect and leave the daemon wedged in `error` after a reboot), and a
-Light/Dark/system appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`).
-84 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
+Light/Dark/system appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`),
+and a security-version layer that prompts to update the phone app on a
+security-relevant release (D-031, `0.1.0-16` / `0.1.0-p1.5`).
+88 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
 [project status](docs/PROJECT_STATUS.md).
 
 Build:

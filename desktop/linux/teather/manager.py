@@ -93,6 +93,10 @@ class Manager:
         self._autoconnect_paused_until = 0.0
         self._autoconnect_seen: set[str] = set()
         self._relay_ok_at = 0.0
+        # Security level of the phone app the last time its relay was seen
+        # (D-031). Compared against the bundled APK's level to escalate an
+        # available update from a passive button to an active prompt.
+        self._android_security = 0
         self._lock = threading.RLock()
         self._devices: dict[str, AdbDevice] = {}
         self.on_status_changed: Callable[[dict], None] = lambda _status: None
@@ -185,8 +189,16 @@ class Manager:
             "active_upstream": self._active_upstream,
             "udp_supported": True,
             "ipv6_supported": False,
+            "android_security": self._android_security,
+            "security_update_available": self._security_update_available(),
             **metrics,
         }
+
+    def _security_update_available(self) -> bool:
+        bundled = self._bundled_apk_version()
+        return bool(
+            bundled and self._android_security and bundled[2] > self._android_security
+        )
 
     def _select(self, device_id: str) -> tuple[str, AdbDevice]:
         self.discover()
@@ -481,6 +493,7 @@ class Manager:
                 self._last_drop = ""
                 self._health_tick = 0
                 self._relay_ok_at = time.monotonic()
+                self._note_relay_status(android)
                 log.info("connected: device=%s upstream=%s armed=%s standalone=%s port=%s",
                          selected_id[:12], upstream, armed, self._standalone, local_port)
                 return self._emit_status()
@@ -542,6 +555,9 @@ class Manager:
         health_check can skip its own probe when a GUI is already polling."""
         if getattr(status, "compatible", False):
             self._relay_ok_at = time.monotonic()
+        security = getattr(status, "security", 0)
+        if security:
+            self._android_security = security
 
     def _device_present(self, serial: str) -> bool:
         try:
@@ -788,14 +804,19 @@ class Manager:
 
     # -- Android app install / upgrade (D-029) --------------------------
 
-    def _bundled_apk_version(self) -> tuple[int, str] | None:
+    def _bundled_apk_version(self) -> tuple[int, str, int] | None:
+        """`(versionCode, versionName, securityVersion)` for the bundled APK, or
+        None when this package ships no APK. A legacy two-line sidecar reports
+        security version 0."""
         try:
             lines = Path(BUNDLED_APK_VERSION).read_text(encoding="utf-8").split()
         except OSError:
             return None
         if not lines or not lines[0].isdigit():
             return None
-        return int(lines[0]), (lines[1] if len(lines) > 1 else "")
+        name = lines[1] if len(lines) > 1 else ""
+        security = int(lines[2]) if len(lines) > 2 and lines[2].isdigit() else 0
+        return int(lines[0]), name, security
 
     def android_app_state(self, device_id: str = "") -> dict:
         """Compare the phone's Teather app against the APK this package bundles.
@@ -814,8 +835,10 @@ class Manager:
         result = {
             "bundled_version_code": bundled[0] if bundled else 0,
             "bundled_version_name": bundled[1] if bundled else "",
+            "bundled_security": bundled[2] if bundled else 0,
             "installed_version_code": 0,
             "installed_version_name": "",
+            "installed_security": self._android_security,
             "status": "no-bundle" if bundled is None else "no-device",
         }
         if device is None or bundled is None:

@@ -38,8 +38,16 @@ object RelayStatusWire {
     // must not attach.
     const val SCHEMA_VERSION = 2
 
+    // Bumped only when a release carries a security-relevant fix (an auth change,
+    // a parser hardening, an injection fix). Unlike SCHEMA_VERSION this does not
+    // gate pairing — an older app still connects — but the desktop client uses it
+    // to escalate an available update from a passive button to an active prompt.
+    // 1: baseline (SOCKS relay auth + udpgw parser hardening, D-028).
+    const val SECURITY_VERSION = 1
+
     fun serialize(status: RelayStatus, cellular: CellularStatus): String = buildString {
         appendLine("teather.status.version=$SCHEMA_VERSION")
+        appendLine("teather.status.security=$SECURITY_VERSION")
         appendLine("teather.status.secret=${status.secret ?: "none"}")
         appendLine("lifecycle=${status.lifecycle.name.lowercase()}")
         appendLine("bound_port=${status.boundPort ?: 0}")

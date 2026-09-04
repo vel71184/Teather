@@ -51,7 +51,7 @@
   the activity overrides its base configuration + ships `-night` resources).
   Status schema unchanged (2); p1.3 and p1.4 pair identically. The phone app is
   built but **not yet installed** on the pilot phone.
-- **Verification:** 84 host unit tests, 30 Android unit tests, both APKs + the
+- **Verification:** 88 host unit tests, 30 Android unit tests, both APKs + the
   `0.1.0-14` deb build. **Live-verified end to end 2026-09-01** on the dev laptop
   + pilot phone: the release key was generated (D-030), the release-signed APK
   reached the phone via `teather device install` (D-029; the no-op "already
@@ -65,9 +65,10 @@
   plan under heavy daily use); the controlled E-011 network-layer check is
   opportunistic, pending a reflector host. Plus the phone-reboot fault case and
   an ongoing daily-use soak.
-- **Runnable build:** Android `0.1.0-p1.4` (`versionCode 6`, appearance setting;
-  `0.1.0-p1.3` SOCKS relay auth — D-028, status schema 2); Debian package
-  `0.1.0-15` (GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
+- **Runnable build:** Android `0.1.0-p1.5` (`versionCode 7`, security-version
+  layer — D-031; `0.1.0-p1.4` appearance setting; `0.1.0-p1.3` SOCKS relay auth
+  — D-028, status schema 2); Debian package
+  `0.1.0-16` (D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -78,9 +79,9 @@
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 84 host
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 88 host
   unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029, 2 for the
-  `0.1.0-13` self-heal fix, 2 for the appearance setting) + D-Bus smoke
+  `0.1.0-13` self-heal fix, 2 for the appearance setting, 4 for D-031) + D-Bus smoke
   pass; 30 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
   `~/Android/Sdk` (`local.properties` corrected).
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
@@ -150,7 +151,7 @@ not in progress.
 
 ## Implemented surface (what actually exists)
 
-### Android relay — `app/` (Kotlin, `0.1.0-p1.4`, `versionCode 6`, release-signed — D-030)
+### Android relay — `app/` (Kotlin, `0.1.0-p1.5`, `versionCode 7`, release-signed — D-030)
 
 - `RelayService` — an exported `connectedDevice` foreground service protected by
   `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
@@ -177,7 +178,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-15`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-16`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -222,7 +223,7 @@ not in progress.
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
   pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
   `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
-- 84 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+- 88 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -418,6 +419,32 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-03 — Security-version layer + state-driven phone-app button (D-031, `0.1.0-16` / `0.1.0-p1.5`)
+
+- **Trigger:** the owner wanted a multi-layer version scheme — a visible
+  "security version" in the app, a desktop that treats a matching one as
+  compatible and an older one as an update, with the install button greyed to
+  "installed" when everything checks out, and a *popup* (not just a button) for
+  security-relevant updates.
+- **Android:** `RelayStatusWire.SECURITY_VERSION` (=1), published as
+  `teather.status.security` and shown as "Security level: N". Does **not** gate
+  pairing (that stays `SCHEMA_VERSION`). `versionCode 7` / `0.1.0-p1.5`.
+- **Linux:** `android_status.py` parses `security`; `Teather.apk.version` gains
+  a third line (bundled security level); `build-deb.sh` reads it from the Kotlin
+  source. `teatherd` remembers the phone's level (`_note_relay_status`) and
+  exposes `android_security` + `security_update_available` in `GetStatus`.
+- **GTK:** the phone-app button is now state-driven — "Install app" / "Update
+  app" / "Security update" (destructive-action styling) / disabled "App up to
+  date" / "Phone app is newer". A one-time dialog fires when
+  `security_update_available` becomes true. The app check is on-demand (GUI
+  start, phone appears, app-related connect error), never on the poll loop.
+- **Verified:** 88 host unit tests (4 new), 30 Android unit tests,
+  `assembleRelease` + `lintVitalRelease` clean, `0.1.0-16` deb's sidecar reads
+  `7 / 0.1.0-p1.5 / 1`. See `docs/DECISIONS.md` D-031.
+- **Next action:** `sudo dpkg -i` the `0.1.0-16` deb; the phone-app button and
+  the security prompt want a real test against a phone that is a version behind
+  (install `p1.5` after, or test the button while the phone still has `p1.3`).
 
 ### 2026-09-03 — Appearance setting on both halves (`0.1.0-14` / `0.1.0-p1.4`)
 

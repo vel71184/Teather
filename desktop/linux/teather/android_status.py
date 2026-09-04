@@ -16,6 +16,7 @@ DEFAULT_UPSTREAM = "cellular"
 @dataclass(frozen=True)
 class AndroidStatus:
     schema: int = 0
+    security: int = 0
     lifecycle: str = "stopped"
     bound_port: int = 0
     configured_port: int = 0
@@ -59,7 +60,7 @@ def parse_android_status(output: str) -> AndroidStatus:
             continue
         key, value = line.strip().split("=", 1)
         if (
-            key in ("teather.status.version", "teather.status.secret")
+            key in ("teather.status.version", "teather.status.security", "teather.status.secret")
             or key in AndroidStatus.__dataclass_fields__
         ):
             values[key] = value
@@ -81,6 +82,7 @@ def parse_android_status(output: str) -> AndroidStatus:
 
     return AndroidStatus(
         schema=integer("teather.status.version"),
+        security=integer("teather.status.security"),
         lifecycle=values.get("lifecycle", "unknown"),
         bound_port=integer("bound_port"),
         configured_port=integer("configured_port"),
