@@ -3,9 +3,10 @@
 - **Snapshot date:** 2026-09-03
 - **Lifecycle:** implementation / pre-alpha
 - **State:** P1 (Linux USB Desktop) is complete and is the owner's daily
-  connection. It is **feature-complete for the owner's use**; remaining work is
-  the pre-public checklist (below) and optional future directions
-  (`docs/ROADMAP.md`).
+  connection. It is **feature-complete for the owner's use**. The repository is
+  **public** as of 2026-09-03 (https://github.com/vel71184/Teather); the
+  pre-public checklist is done. Remaining work is optional future directions
+  (`docs/ROADMAP.md`) plus two non-blocking verification gaps.
 - **Current build:** Debian `0.1.0-21` / Android `0.1.0-p1.6` (`versionCode 8`,
   release-signed — D-030). Status-wire schema 2; every `p1.x` pairs with every
   desktop build. `docs/DECISIONS.md` has the per-decision rationale; the work
@@ -51,20 +52,23 @@ transports (P3, deprioritised — a local receiver link is invisible to the
 carrier); other platform clients (Windows/macOS/iOS); multi-client support. See
 `docs/ROADMAP.md` "Possible future directions".
 
-### Before the repo can go public
+### Pre-public checklist — complete (2026-09-03)
 
-- ~~An explicit license~~ — **done: GPL-3.0-or-later (D-010).**
-- ~~Scrub git history of private data~~ — **done: the pilot phone's IPs, the
-  only sensitive strings in 57 commits, rewritten to documentation addresses and
-  force-pushed.**
-- ~~A first tagged release with the APK + `.deb`~~ — **done:
+- **License:** GPL-3.0-or-later (D-010, `LICENSE`); GitHub detects it.
+- **History scrub:** the pilot phone's egress IPs — the only sensitive strings
+  in 57 commits — rewritten to RFC 5737 documentation addresses and
+  force-pushed.
+- **Dependency audit:** `cargo audit` on `tun2proxy` — 0 vulnerabilities; no
+  runtime deps on the app or the Python client.
+- **First release:**
   [`v0.1.0-p1.6`](https://github.com/vel71184/Teather/releases/tag/v0.1.0-p1.6)
-  (pre-release).**
-- **Owner action:** flip the repo to public (Settings → General → Danger Zone),
-  then enable private vulnerability reporting (Settings → Security) — it cannot
-  be enabled while the repo is private. `SECURITY.md` already covers the gap.
-- Not blocking public: the phone-reboot fault case and an ongoing daily-use
-  soak.
+  (pre-release) — source + `.deb` + release-signed `.apk` + `SHA256SUMS`.
+- **Repo public**, with **private vulnerability reporting** and **Dependabot
+  alerts** enabled.
+- Not blocking: the phone-reboot fault case and an ongoing daily-use soak.
+- Known and accepted: commits carry `Co-Authored-By: Claude` and a
+  `Claude-Session:` trailer (opaque, non-resolvable IDs); left in place rather
+  than rewrite now-public history.
 
 ### Verification
 
@@ -319,9 +323,11 @@ was last compressed on 2026-09-03.
   built; `git log --all -S` for every sensitive string comes back empty
   post-rewrite; `origin/main` blob + message scan is clean; GitHub now detects
   the license as GPL-3.0.
-- **Remaining (owner action only):** flip the repo to public, then enable
-  private vulnerability reporting (Settings → Security; the API rejects it while
-  the repo is private).
+- **Public:** the owner flipped the repository to public on 2026-09-03. Private
+  vulnerability reporting and Dependabot alerts were then enabled. The
+  `Claude-Session:` commit trailers were left in place — a rewrite of now-public
+  history is not worth it for opaque, non-resolvable IDs.
+  **Teather is live: https://github.com/vel71184/Teather**
 
 ### 2026-09-03 — Session history; human-readable byte units (D-033, `0.1.0-20`)
 

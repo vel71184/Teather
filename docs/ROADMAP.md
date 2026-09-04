@@ -1,11 +1,11 @@
 # Roadmap
 
 Teather is **feature-complete for the owner's use**: P0 and P1 passed their
-gates, and the owner-directed post-P1 track (D-024…D-033) is done. What remains
-is the pre-public checklist and a set of optional future directions. None of the
-latter is scheduled; each would advance only when it is worth doing and can be
-backed by evidence. `docs/PROJECT_STATUS.md` is the live state; this file is the
-forward view.
+gates, the owner-directed post-P1 track (D-024…D-033) is done, and the
+repository is **public** (GPL-3.0-or-later, first release `v0.1.0-p1.6`). What
+remains is a set of optional future directions — none scheduled; each would
+advance only when it is worth doing and can be backed by evidence.
+`docs/PROJECT_STATUS.md` is the live state; this file is the forward view.
 
 ## Done
 
@@ -63,7 +63,7 @@ Still open in this track: **E-011** (the controlled TTL/JA3 comparison, now
 opportunistic — needs a reflector reachable from the phone's cellular), a
 phone-reboot fault case, and a longer daily-use soak.
 
-## Before making the repository public
+## Publication (done 2026-09-03)
 
 - ~~Select and add an explicit license~~ — **done: GPL-3.0-or-later (D-010).**
 - ~~Remove private device/provider details from history, not merely the current
@@ -82,9 +82,9 @@ phone-reboot fault case, and a longer daily-use soak.
   target.
 - ~~Honest device-support / provider-accounting wording (D-009)~~ — in the
   README, `docs/EXPERIMENTS.md`, and the release notes.
-- **Remaining (owner action):** flip the repo to public, then enable GitHub
-  private vulnerability reporting (Settings → Security — unavailable while
-  private; `SECURITY.md` covers the interim).
+- ~~Flip the repo to public; enable private vulnerability reporting~~ —
+  **done 2026-09-03.** The repository is public with private vulnerability
+  reporting and Dependabot alerts on.
 
 ## Possible future directions (not a committed sequence)
 

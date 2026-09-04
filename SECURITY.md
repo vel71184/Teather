@@ -45,5 +45,6 @@ Useful reports include:
 
 ## Supported versions
 
-There are currently no supported versions or releases. Security fixes should be
-applied to the active development branch and documented in the project status.
+`v0.1.0-p1.6` is a pre-release with no support or backport commitment. Security
+fixes are applied to `main` and documented in `docs/PROJECT_STATUS.md`; there is
+no maintained release branch.

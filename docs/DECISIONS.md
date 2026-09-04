@@ -220,9 +220,11 @@ built around the code, which is weaker than the owner's intent).
   addresses across the working tree and git history (see the 2026-09-03 work
   log) as part of the same pre-public pass.
 - The first tagged release, `v0.1.0-p1.6` (pre-release), was cut with the
-  source, the `.deb`, and the release-signed `.apk`. Flipping the repository to
-  public and enabling GitHub private vulnerability reporting are the owner's
-  remaining steps (the latter cannot be done while the repo is private).
+  source, the `.deb`, and the release-signed `.apk`. The repository was made
+  public on 2026-09-03 with private vulnerability reporting and Dependabot
+  alerts enabled. Commits keep their `Co-Authored-By: Claude` /
+  `Claude-Session:` trailers — stripping them would mean rewriting now-public
+  history, which is not worth it (the session IDs are opaque and non-resolvable).
 
 ## D-033 — Connection-session history lives on the daemon, not the phone
 
