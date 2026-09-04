@@ -60,11 +60,12 @@ error after a reboot with a stale DNS sentinel); a Light/Dark/Follow-system
 Appearance setting on both halves; a state-driven GTK phone-app install button;
 **D-031** — an advisory `teather.status.security` version (separate from the
 pairing schema) with a GTK update prompt; and a GTK window that replaces a
-stale instance on relaunch. **2026-09-03 (`0.1.0-18` / `0.1.0-p1.6`):** **D-032**
-— a shared design language (`docs/DESIGN_LANGUAGE.md`): native clients, no
-cross-platform toolkit; first pass gave the GTK window a HeaderBar, labelled
-sections, and a status pill, and aligned the Android app's palette/headings/pill.
-Cosmetic; schema unchanged. Deferred: the phone-reboot soak.
+stale instance on relaunch. **2026-09-03 (`0.1.0-18`/`-19` / `0.1.0-p1.6`):**
+**D-032** — a shared design language (`docs/DESIGN_LANGUAGE.md`): native clients,
+no cross-platform toolkit; first pass gave the GTK window a HeaderBar, labelled
+sections, and a status pill, and aligned the Android app's palette/headings/pill
+(`-19` fixed the HeaderBar menu, dead on click). Cosmetic; schema unchanged.
+Deferred: the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must

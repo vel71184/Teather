@@ -41,7 +41,7 @@ reorders them.
 | **This phone** | Approve / Rename / Forget, auto-connect, phone-app install/update | — |
 | **Sharing** | — | Copy laptop commands, Get the desktop client |
 | **Preferences** | phone upstream, automatic failover, Appearance | Appearance |
-| **Activity / Diagnostics** | counters, Diagnostics action, detail line | counters in the status block |
+| **Activity / Diagnostics** | counters + detail line (Diagnostics and a window restart live in the HeaderBar menu) | counters in the status block |
 
 Terminology is shared: "upstream" (not "network"/"connection"), "Automatic
 failover", "Appearance" (not "Theme"), "phone" for the Android device.
@@ -68,7 +68,11 @@ Semantic colours (chosen to read on both light and dark backgrounds):
 | Neutral | `disconnected`, `detected`, `stopped`, starting | `#5F6368` | `#9AA0A6` |
 
 The desktop client renders the pill as Pango markup on a label (no CSS provider,
-so it cannot fight the GTK theme). Android sets the `TextView` colour directly.
+so it cannot fight the GTK theme); because a markup colour is fixed rather than
+theme-resolved, it uses the single dark-column value for each meaning, which is
+legible on both light and dark GTK themes (`gui._STATUS_COLORS`). Android has
+real `-night` resources, so it uses the light/dark pair and sets the `TextView`
+colour directly.
 
 ## Palette tokens
 

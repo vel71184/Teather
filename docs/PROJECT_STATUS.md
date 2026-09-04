@@ -437,7 +437,7 @@ priority", and the README status line agree — a milestone isn't done until the
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
 
-### 2026-09-03 — Shared design language; GTK visual pass (D-032, `0.1.0-18` / `0.1.0-p1.6`)
+### 2026-09-03 — Shared design language; GTK visual pass (D-032, `0.1.0-18`/`-19` / `0.1.0-p1.6`)
 
 - **Trigger:** the owner asked how to polish the utilitarian GTK window and keep
   it uniform with the Android app and future platform clients.

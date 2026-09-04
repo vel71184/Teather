@@ -147,8 +147,8 @@ in `AGENTS.md`. Done so far:
   `0.1.0-p1.5`, 2026-09-03).
 - **D-032** — a shared design language (`docs/DESIGN_LANGUAGE.md`): native
   clients, no cross-platform toolkit. First pass — GTK HeaderBar, labelled
-  sections, status pill; Android palette/heading/pill alignment (`0.1.0-18` /
-  `0.1.0-p1.6`, cosmetic).
+  sections, status pill; Android palette/heading/pill alignment (`0.1.0-18`/`-19`
+  / `0.1.0-p1.6`, cosmetic).
 - **E-012** — operational carrier evidence recorded (no tether hard-stop on a
   hard-stop prepaid plan under heavy daily use).
 

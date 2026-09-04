@@ -327,7 +327,7 @@ non-public provider systems.
 Before tagging any checkpoint:
 
 - All automated tests for implemented behavior pass (`make check` — 90 host + 30
-  Android at `0.1.0-18` / `0.1.0-p1.6`).
+  Android at `0.1.0-19` / `0.1.0-p1.6`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

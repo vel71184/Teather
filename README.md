@@ -33,7 +33,7 @@ as little receiver-side software as each platform permits.
 > paths; a 2026-09-01 pass verified D-028/D-029/D-030 live; a 2026-09-03 pass
 > verified the self-heal wedge fix (`0.1.0-13`), the Appearance setting, and the
 > D-031 security-version layer on the dev laptop + pilot phone. The D-032 visual
-> pass (`0.1.0-18` / `0.1.0-p1.6`) is cosmetic. Current builds:
+> pass (`0.1.0-18`/`-19` / `0.1.0-p1.6`) is cosmetic. Current builds:
 > Debian `0.1.0-19`, Android `0.1.0-p1.6`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
