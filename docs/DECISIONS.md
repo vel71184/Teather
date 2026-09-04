@@ -1036,8 +1036,7 @@ physical link disappears.
   Off = the connection is created with no default route and no DNS (dormant)
   until armed.
 
-The pre-D-022 tree remains on `archive/d021-reapply-dns-approach` (commit
-`c78d45f`).
+The pre-D-022 tree remains on the local `archive/d021-reapply-dns-approach` branch (not published).
 
 ### VM validation — 2026-08-29/30 (phone-free parts pass)
 
@@ -1488,5 +1487,5 @@ implemented as designed, but `Reapply` does not actually propagate the DNS
 settings to `/etc/resolv.conf` for `teather0`'s externally-assumed connection
 type. **D-022 is now Accepted and implemented (package `0.1.0-4`)**; it makes
 NetworkManager create and own `teather0` from the start and uses an additive,
-non-exclusive DNS priority. The D-021 implementation is preserved on branch
-`archive/d021-reapply-dns-approach` (commit `c78d45f`).
+non-exclusive DNS priority. The D-021 implementation is preserved on the local
+`archive/d021-reapply-dns-approach` branch (not published).

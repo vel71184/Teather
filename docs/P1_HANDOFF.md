@@ -33,8 +33,7 @@ owns `teather0` as an in-memory `tun` connection with `tun.owner` delegation, so
 setuid-root helper, no polkit action. DNS is additive (positive, non-exclusive
 `ipv4.dns-priority`), automatic failover is the default, and `_verify_additive()`
 fails the connection closed if arming ever leaves the sentinel as the only
-resolver. The pre-D-022 tree is on branch `archive/d021-reapply-dns-approach`
-(commit `c78d45f`).
+resolver. The pre-D-022 tree is preserved on the local `archive/d021-reapply-dns-approach` branch (not published; D-021 and D-022 describe the approach and why it was dropped).
 
 ## Evidence already complete
 

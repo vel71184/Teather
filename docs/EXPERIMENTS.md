@@ -327,8 +327,8 @@ action are removed. `desktop/linux/teather/networkmanager.py` now creates
 in-memory flag, then `ActivateConnection`; `AddAndActivateConnection` returns
 `UnknownDevice` for a not-yet-existing tun), with `tun.owner` delegation and
 additive (positive, non-exclusive) DNS priority. Validated in the VM
-2026-08-30 (see the E-002 pass note above); the pre-D-022 tree is on
-`archive/d021-reapply-dns-approach` (commit `c78d45f`).
+2026-08-30 (see the E-002 pass note above); the pre-D-022 tree is on the local
+`archive/d021-reapply-dns-approach` branch (not published).
 
 ## E-003 — P1 failure-path restoration
 
