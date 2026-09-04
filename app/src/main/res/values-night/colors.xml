@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="status_background">#241E30</color>
+    <color name="accent">#9B84FF</color>
+    <color name="surface_sunken">#241E30</color>
+    <color name="status_ok">#4CAF6A</color>
+    <color name="status_warn">#E0A030</color>
+    <color name="status_error">#E06B5C</color>
+    <color name="status_neutral">#9AA0A6</color>
 </resources>

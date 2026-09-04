@@ -455,7 +455,7 @@ arguments and never enter logs, D-Bus responses, or disk.
 | Logging | `logging_setup.py` | Rotating `~/.local/state/teather/teatherd.log` (0600) |
 | D-Bus + notify | `dbus_service.py` | `io.github.vel71184.Teather1.Manager`; self-clearing toasts |
 | CLI | `cli.py` → `teather` | Pure D-Bus client for every method |
-| GUI | `gui.py` → `teather-gtk` | GTK3 window + optional tray; a relaunch replaces a running instance (so a package upgrade takes effect); Appearance (theme) setting in `~/.config/teather/gui.json` |
+| GUI | `gui.py` → `teather-gtk` | GTK3 window (HeaderBar, labelled sections, a daemon-driven status pill per `docs/DESIGN_LANGUAGE.md` / D-032) + optional tray; a relaunch replaces a running instance (so a package upgrade takes effect); Appearance (theme) setting in `~/.config/teather/gui.json` |
 | Config | `config.py` | Mode-0600 JSON; salted device-id hashes, never raw serials |
 | Historical | `desktop/linux/teather-p0` | P0 ADB-forward + smoke/soak helper (superseded) |
 

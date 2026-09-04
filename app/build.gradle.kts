@@ -35,8 +35,8 @@ android {
         applicationId = "io.github.vel71184.teather"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.0-p1.5"
+        versionCode = 8
+        versionName = "0.1.0-p1.6"
 
     }
 

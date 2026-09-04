@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import os
 import sys
@@ -7,6 +8,29 @@ from pathlib import Path
 
 from . import __file__ as _pkg_file
 from .dbus_client import DbusClient
+
+# Status-pill colours (docs/DESIGN_LANGUAGE.md). Chosen to read on both light and
+# dark GTK themes; applied as Pango markup on a label, never through a CSS
+# provider, so they cannot fight the user's theme.
+_STATUS_COLORS = {
+    "connected": "#4CAF6A",
+    "connecting": "#E0A030",
+    "detecting": "#E0A030",
+    "detected": "#9AA0A6",
+    "disconnected": "#9AA0A6",
+    "starting": "#9AA0A6",
+    "error": "#E06B5C",
+    "unavailable": "#E06B5C",
+}
+
+
+def _status_markup(state: str, message: str) -> str:
+    color = _STATUS_COLORS.get(state, "#9AA0A6")
+    label = html.escape((state or "unknown").capitalize())
+    markup = f"<span foreground='{color}' size='large'>●</span> <b>{label}</b>"
+    if message:
+        markup += f" — {html.escape(message)}"
+    return markup
 
 
 def _installed_code_mtime() -> float:
@@ -71,15 +95,31 @@ class TeatherWindow:
         self._apply_theme(_read_theme())
         self.window = Gtk.Window(title="Teather")
         self.window.set_icon_name("teather")
-        self.window.set_default_size(520, 430)
+        self.window.set_default_size(460, 600)
         self.window.connect("delete-event", self._delete)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=16)
-        self.window.add(box)
 
-        title = Gtk.Label()
-        title.set_markup("<span size='xx-large' weight='bold'>Teather</span>")
-        title.set_xalign(0)
-        box.pack_start(title, False, False, 0)
+        header = Gtk.HeaderBar(title="Teather", show_close_button=True)
+        menu_button = Gtk.MenuButton()
+        menu_button.set_image(
+            Gtk.Image.new_from_icon_name("open-menu-symbolic", Gtk.IconSize.BUTTON)
+        )
+        menu = Gtk.Menu()
+        for label, callback in (
+            ("Diagnostics", self._diagnose),
+            ("Restart window", lambda *_: self._restart_self()),
+        ):
+            item = Gtk.MenuItem(label=label)
+            item.connect("activate", callback)
+            menu.append(item)
+        menu.show_all()
+        menu_button.set_popup(menu)
+        header.pack_end(menu_button)
+        self.window.set_titlebar(header)
+
+        scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.window.add(scroller)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=16)
+        scroller.add(box)
 
         self.update_banner = Gtk.Button(
             label="A Teather update is installed — click to restart this window"
@@ -90,7 +130,11 @@ class TeatherWindow:
         box.pack_start(self.update_banner, False, False, 0)
 
         self.state = Gtk.Label(xalign=0, wrap=True)
+        self.state.set_markup(_status_markup("starting", ""))
         box.pack_start(self.state, False, False, 0)
+        self.hint = Gtk.Label(xalign=0, wrap=True, selectable=True)
+        self.hint.get_style_context().add_class("dim-label")
+        box.pack_start(self.hint, False, False, 0)
         note = Gtk.Label(xalign=0, wrap=True)
         note.set_markup(
             "<small>Closing this window does not disconnect Teather — the background "
@@ -100,44 +144,41 @@ class TeatherWindow:
         note.get_style_context().add_class("dim-label")
         box.pack_start(note, False, False, 0)
 
+        connection = self._section(box, "Connection")
         self.devices = Gtk.ListStore(str, str, bool, bool, str)
         self.selector = Gtk.ComboBox.new_with_model(self.devices)
         renderer = Gtk.CellRendererText()
         self.selector.pack_start(renderer, True)
         self.selector.add_attribute(renderer, "text", 1)
-        box.pack_start(self.selector, False, False, 0)
-
+        connection.pack_start(self.selector, False, False, 0)
         actions = Gtk.Box(spacing=8)
-        self.connect_button = Gtk.Button(label="Connect")
-        self.connect_button.connect("clicked", self._connect)
-        actions.pack_start(self.connect_button, True, True, 0)
-        disconnect = Gtk.Button(label="Disconnect")
-        disconnect.connect("clicked", lambda *_: self._call("Disconnect"))
-        actions.pack_start(disconnect, True, True, 0)
-        box.pack_start(actions, False, False, 0)
-
-        device_actions = Gtk.Box(spacing=8)
-        approve = Gtk.Button(label="Approve")
-        approve.connect("clicked", self._approve)
-        device_actions.pack_start(approve, True, True, 0)
-        rename = Gtk.Button(label="Rename")
-        rename.connect("clicked", self._rename)
-        device_actions.pack_start(rename, True, True, 0)
-        forget = Gtk.Button(label="Forget")
-        forget.connect("clicked", self._forget)
-        device_actions.pack_start(forget, True, True, 0)
-        self.autoconnect = Gtk.CheckButton(label="Auto-connect when relay is already running")
-        self.autoconnect.connect("toggled", self._auto_connect)
-        device_actions.pack_start(self.autoconnect, True, True, 0)
-        box.pack_start(device_actions, False, False, 0)
-
-        self.failover = Gtk.CheckButton(
-            label="Automatic failover: carry traffic once Wi-Fi/Ethernet is lost"
+        self.connect_button = self._button(
+            "Connect", "network-transmit-receive-symbolic", self._connect
         )
-        self._failover_guard = False
-        self.failover.connect("toggled", self._set_failover)
-        box.pack_start(self.failover, False, False, 0)
+        actions.pack_start(self.connect_button, True, True, 0)
+        actions.pack_start(
+            self._button("Disconnect", "network-offline-symbolic",
+                         lambda *_: self._call("Disconnect")),
+            True, True, 0,
+        )
+        connection.pack_start(actions, False, False, 0)
 
+        phone = self._section(box, "This phone")
+        device_actions = Gtk.Box(spacing=8)
+        for label, icon, callback in (
+            ("Approve", "emblem-ok-symbolic", self._approve),
+            ("Rename", "document-edit-symbolic", self._rename),
+            ("Forget", "user-trash-symbolic", self._forget),
+        ):
+            device_actions.pack_start(self._button(label, icon, callback), True, True, 0)
+        phone.pack_start(device_actions, False, False, 0)
+        self.autoconnect = Gtk.CheckButton(label="Auto-connect when the relay is already running")
+        self.autoconnect.connect("toggled", self._auto_connect)
+        phone.pack_start(self.autoconnect, False, False, 0)
+        self.phone_app_button = self._button("Phone app…", "phone-symbolic", self._phone_app)
+        phone.pack_start(self.phone_app_button, False, False, 0)
+
+        prefs = self._section(box, "Preferences")
         upstream_row = Gtk.Box(spacing=8)
         upstream_row.pack_start(Gtk.Label(label="Phone upstream:", xalign=0), False, False, 0)
         self._upstreams = ["auto", "cellular", "wifi", "ethernet"]
@@ -147,8 +188,13 @@ class TeatherWindow:
         self._upstream_guard = False
         self.upstream.connect("changed", self._set_upstream)
         upstream_row.pack_start(self.upstream, False, False, 0)
-        box.pack_start(upstream_row, False, False, 0)
-
+        prefs.pack_start(upstream_row, False, False, 0)
+        self.failover = Gtk.CheckButton(
+            label="Automatic failover: carry traffic once Wi-Fi/Ethernet is lost"
+        )
+        self._failover_guard = False
+        self.failover.connect("toggled", self._set_failover)
+        prefs.pack_start(self.failover, False, False, 0)
         appearance_row = Gtk.Box(spacing=8)
         appearance_row.pack_start(Gtk.Label(label="Appearance:", xalign=0), False, False, 0)
         self.theme = Gtk.ComboBoxText()
@@ -157,28 +203,40 @@ class TeatherWindow:
         self.theme.set_active_id(_read_theme())
         self.theme.connect("changed", self._set_theme)
         appearance_row.pack_start(self.theme, False, False, 0)
-        box.pack_start(appearance_row, False, False, 0)
+        prefs.pack_start(appearance_row, False, False, 0)
 
-        self.hint = Gtk.Label(xalign=0, wrap=True, selectable=True)
-        self.hint.get_style_context().add_class("dim-label")
-        box.pack_start(self.hint, False, False, 0)
-
+        activity = self._section(box, "Activity")
         self.metrics = Gtk.Label(xalign=0, selectable=True)
-        box.pack_start(self.metrics, False, False, 0)
-        tools = Gtk.Box(spacing=8)
-        diagnostics = Gtk.Button(label="Diagnostics")
-        diagnostics.connect("clicked", self._diagnose)
-        tools.pack_start(diagnostics, True, True, 0)
-        self.phone_app_button = Gtk.Button(label="Phone app…")
-        self.phone_app_button.connect("clicked", self._phone_app)
-        tools.pack_start(self.phone_app_button, True, True, 0)
-        box.pack_start(tools, False, False, 0)
+        self.metrics.get_style_context().add_class("dim-label")
+        activity.pack_start(self.metrics, False, False, 0)
         self.detail = Gtk.Label(xalign=0, yalign=0, selectable=True, wrap=True)
-        box.pack_start(self.detail, True, True, 0)
+        activity.pack_start(self.detail, False, False, 0)
 
         self.indicator = self._create_indicator()
         GLib.timeout_add_seconds(1, self.refresh)
         self.refresh()
+
+    def _section(self, box, title):
+        heading = self.Gtk.Label(xalign=0)
+        heading.set_markup(f"<b>{html.escape(title)}</b>")
+        heading.set_margin_top(8)
+        box.pack_start(heading, False, False, 0)
+        inner = self.Gtk.Box(orientation=self.Gtk.Orientation.VERTICAL, spacing=8)
+        inner.set_margin_start(4)
+        box.pack_start(inner, False, False, 0)
+        return inner
+
+    def _button(self, label, icon_name, callback):
+        button = self.Gtk.Button(label=label)
+        try:
+            button.set_image(
+                self.Gtk.Image.new_from_icon_name(icon_name, self.Gtk.IconSize.BUTTON)
+            )
+            button.set_always_show_image(True)
+        except Exception:
+            pass
+        button.connect("clicked", callback)
+        return button
 
     def _create_indicator(self):
         try:
@@ -465,7 +523,7 @@ class TeatherWindow:
                 self.selector.set_active(selected_index)
                 selected = self._selected()
                 self.autoconnect.set_active(bool(selected and selected["auto_connect"]))
-            self.state.set_text(f"State: {status['state']} — {status['message']}")
+            self.state.set_markup(_status_markup(status["state"], status["message"]))
             self.hint.set_text(status.get("recovery_hint", "") or "")
             if self.tray_status is not None:
                 self.tray_status.set_label(f"Status: {status['state']}")
@@ -493,7 +551,7 @@ class TeatherWindow:
             )
             self._sync_phone_app(status, devices)
         except Exception as error:
-            self.state.set_text("State: unavailable")
+            self.state.set_markup(_status_markup("unavailable", "cannot reach the Teather service"))
             self.detail.set_text(str(error))
         if _installed_code_mtime() > self._code_stamp + 1:
             self.update_banner.show()

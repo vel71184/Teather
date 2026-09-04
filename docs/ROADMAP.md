@@ -71,7 +71,7 @@ Accepted operating model (D-014 as amended by D-022):
   firewall change, no change to any physical link.
 
 Deliverables (delivered as Android `0.1.0-p1` / `versionCode 2`, Debian
-`0.1.0-4`, iterated to Android `0.1.0-p1.5` / `versionCode 7`, Debian `0.1.0-17`):
+`0.1.0-4`, iterated to Android `0.1.0-p1.6` / `versionCode 8`, Debian `0.1.0-18`):
 
 - Android with DUMP-protected `START` / `STOP` / `RECONFIGURE` actions and
   versioned machine-readable `dumpsys` status.
@@ -145,6 +145,10 @@ in `AGENTS.md`. Done so far:
   both halves, a state-driven phone-app install button, and a GTK window that
   replaces a stale instance on relaunch. Live-verified (`0.1.0-17` /
   `0.1.0-p1.5`, 2026-09-03).
+- **D-032** — a shared design language (`docs/DESIGN_LANGUAGE.md`): native
+  clients, no cross-platform toolkit. First pass — GTK HeaderBar, labelled
+  sections, status pill; Android palette/heading/pill alignment (`0.1.0-18` /
+  `0.1.0-p1.6`, cosmetic).
 - **E-012** — operational carrier evidence recorded (no tether hard-stop on a
   hard-stop prepaid plan under heavy daily use).
 
@@ -272,6 +276,13 @@ Suggested order:
 If WireGuard compatibility succeeds, these milestones focus on onboarding and
 profiles rather than custom packet-capture clients. If it fails, each platform
 requires a feasibility decision before implementation.
+
+Each new client's UI is written natively for its platform and follows
+`docs/DESIGN_LANGUAGE.md` (D-032) — no cross-platform UI toolkit. A second
+desktop platform, if it lands, gets a thin native shell over the existing
+daemon; the shared spec makes that mostly a layout exercise. Qt as a single
+client for every desktop stays a decision for when a second desktop platform is
+actually real.
 
 ## Before making the repository public
 

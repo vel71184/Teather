@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var upstreamSpinner: Spinner
     private lateinit var themeSpinner: Spinner
     private lateinit var portInput: EditText
+    private lateinit var statusPill: TextView
     private lateinit var statusText: TextView
 
     private val statusUpdater = object : Runnable {
@@ -152,9 +153,10 @@ class MainActivity : Activity() {
         content.addView(TextView(this).apply {
             text = getString(R.string.screen_description)
             textSize = 16f
-            setPadding(0, dp(10), 0, dp(22))
+            setPadding(0, dp(10), 0, dp(4))
         })
 
+        content.addView(sectionLabel(R.string.section_connection))
         content.addView(fieldLabel(R.string.upstream_label))
         upstreamSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(
@@ -168,7 +170,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
 
-        content.addView(fieldLabel(R.string.port_label).apply { setPadding(0, dp(18), 0, dp(6)) })
+        content.addView(fieldLabel(R.string.port_label).apply { setPadding(0, dp(16), 0, dp(6)) })
         portInput = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             setText(RelayConfiguration.DEFAULT_PORT.toString())
@@ -182,7 +184,7 @@ class MainActivity : Activity() {
         val primaryActions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(20), 0, 0)
+            setPadding(0, dp(18), 0, 0)
         }
         primaryActions.addView(Button(this).apply {
             text = getString(R.string.start_relay)
@@ -194,12 +196,11 @@ class MainActivity : Activity() {
         }, weightedButtonParams().apply { marginStart = dp(10) })
         content.addView(primaryActions)
 
+        content.addView(sectionLabel(R.string.section_sharing))
         content.addView(Button(this).apply {
             text = getString(R.string.copy_commands)
             setOnClickListener { copyLaptopCommands() }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(10)
-        })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         content.addView(Button(this).apply {
             text = getString(R.string.get_desktop_client)
@@ -208,7 +209,8 @@ class MainActivity : Activity() {
             topMargin = dp(10)
         })
 
-        content.addView(fieldLabel(R.string.theme_label).apply { setPadding(0, dp(24), 0, dp(6)) })
+        content.addView(sectionLabel(R.string.section_preferences))
+        content.addView(fieldLabel(R.string.theme_label))
         themeSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(
                 this@MainActivity,
@@ -221,14 +223,25 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
 
-        content.addView(fieldLabel(R.string.status_label).apply { setPadding(0, dp(24), 0, dp(8)) })
+        content.addView(sectionLabel(R.string.section_status))
+        statusPill = TextView(this).apply {
+            text = getString(R.string.status_stopped)
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(resources.getColor(R.color.status_neutral, theme))
+            setPadding(0, 0, 0, dp(8))
+        }
+        content.addView(
+            statusPill,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+        )
         statusText = TextView(this).apply {
             text = getString(R.string.status_stopped)
             textSize = 14f
             typeface = Typeface.MONOSPACE
             setTextIsSelectable(true)
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            setBackgroundColor(resources.getColor(R.color.status_background, theme))
+            setBackgroundColor(resources.getColor(R.color.surface_sunken, theme))
         }
         content.addView(
             statusText,
@@ -307,8 +320,10 @@ class MainActivity : Activity() {
 
     private fun renderStatus(status: RelayStatus) {
         val snapshot = status.stats
+        val state = status.lifecycle.name.lowercase(Locale.US)
+        statusPill.text = "● " + state.replaceFirstChar { it.titlecase(Locale.US) }
+        statusPill.setTextColor(resources.getColor(pillColorRes(status.lifecycle), theme))
         statusText.text = buildString {
-            append("State: ").append(status.lifecycle.name.lowercase(Locale.US)).append('\n')
             append("Security level: ").append(RelayStatusWire.SECURITY_VERSION).append('\n')
             status.configuration?.let { configuration ->
                 append("Listener: 127.0.0.1:").append(status.boundPort ?: configuration.port).append('\n')
@@ -357,6 +372,24 @@ class MainActivity : Activity() {
         textSize = 15f
         typeface = Typeface.DEFAULT_BOLD
         setPadding(0, 0, 0, dp(6))
+    }
+
+    /** Section heading per docs/DESIGN_LANGUAGE.md: accent, bold, generous top gap. */
+    private fun sectionLabel(resourceId: Int): TextView = TextView(this).apply {
+        text = getString(resourceId)
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+        isAllCaps = true
+        letterSpacing = 0.08f
+        setTextColor(resources.getColor(R.color.accent, theme))
+        setPadding(0, dp(24), 0, dp(8))
+    }
+
+    private fun pillColorRes(lifecycle: RelayLifecycle): Int = when (lifecycle) {
+        RelayLifecycle.RUNNING -> R.color.status_ok
+        RelayLifecycle.STARTING -> R.color.status_warn
+        RelayLifecycle.FAILED -> R.color.status_error
+        RelayLifecycle.STOPPED -> R.color.status_neutral
     }
 
     private fun weightedButtonParams() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)

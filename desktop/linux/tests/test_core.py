@@ -1511,5 +1511,22 @@ class GuiThemePreferenceTests(unittest.TestCase):
                 self.assertEqual(gui._load_gui_prefs(), {"window_width": 640, "theme": "light"})
 
 
+class GuiStatusPillTests(unittest.TestCase):
+    def test_status_markup_colours_by_state_and_escapes_the_message(self):
+        from teather import gui
+
+        markup = gui._status_markup("connected", "carrying <traffic> & more")
+        self.assertIn(gui._STATUS_COLORS["connected"], markup)
+        self.assertIn("<b>Connected</b>", markup)
+        self.assertIn("&lt;traffic&gt;", markup)
+        self.assertIn("&amp;", markup)
+        self.assertNotIn("<traffic>", markup)
+
+    def test_status_markup_falls_back_to_neutral_for_an_unknown_state(self):
+        from teather import gui
+
+        self.assertIn("#9AA0A6", gui._status_markup("weird", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

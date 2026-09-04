@@ -140,6 +140,15 @@ an in-place upgrade — fixes a stale window keeping pre-upgrade code after the
 tray-hide/reinstall/reopen sequence. `gui.py` only; 88 host tests. Verified
 live: after `dpkg -i` the relaunched window ran the new code.
 
+**2026-09-03 (`0.1.0-18` / `0.1.0-p1.6`, D-032):** design-language visual pass.
+GTK gets a HeaderBar, labelled sections, and a coloured status pill
+(`_status_markup`); Android aligns its palette tokens, section headings, and
+pill. No behaviour change, status schema still 2. 90 host (2 new, covering the
+pill helper's colour map and message escaping) + 30 Android unit tests;
+`assembleRelease` / `lintVitalRelease` clean; `gui.py` imports headless. Live
+GTK appearance is the owner's visual check after `dpkg -i`; the Android
+reinstall is optional.
+
 | Failure event | Required recovery |
 |---|---|
 | Normal stop | Teather routes, rules, TUN, and DNS removed |
@@ -310,8 +319,8 @@ non-public provider systems.
 
 Before tagging any checkpoint:
 
-- All automated tests for implemented behavior pass (`make check` — 88 host + 30
-  Android at `0.1.0-17` / `0.1.0-p1.5`).
+- All automated tests for implemented behavior pass (`make check` — 90 host + 30
+  Android at `0.1.0-18` / `0.1.0-p1.6`).
 - Required manual recovery tests pass.
 - Experiment results are committed.
 - Known failures are documented rather than hidden.

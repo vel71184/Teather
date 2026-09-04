@@ -3,6 +3,10 @@
     <string name="app_name">Teather</string>
     <string name="screen_title">Teather relay</string>
     <string name="screen_description">Relay that lets a USB-connected Linux desktop reach the Internet through this phone\'s selected upstream. Carries TCP, DNS, and general UDP (via udpgw); no IPv6. Android keeps control of the upstream, pairing, and status; no stock tethering is enabled.</string>
+    <string name="section_connection">Connection</string>
+    <string name="section_sharing">Sharing</string>
+    <string name="section_preferences">Preferences</string>
+    <string name="section_status">Status</string>
     <string name="upstream_label">Android upstream</string>
     <string name="port_label">SOCKS5 port</string>
     <string name="start_relay">Start relay</string>
@@ -11,7 +15,6 @@
     <string name="get_desktop_client">Get the desktop client</string>
     <string name="download_url">https://github.com/vel71184/Teather/releases</string>
     <string name="no_browser">No app available to open the download page.</string>
-    <string name="status_label">Live status</string>
     <string name="status_stopped">State: stopped</string>
     <string name="notification_channel_name">Teather relay</string>
     <string name="notification_channel_description">Status for the user-started Teather Internet relay</string>

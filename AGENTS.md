@@ -42,7 +42,7 @@ The reason to stop is a real gate or a real fork — not a status check.
 
 P0/E-001 and P1 acceptance are complete; P1 is the owner's daily connection.
 D-022 has run live on the developer laptop since 2026-08-30. Current installed +
-committed build: Debian `0.1.0-17` / Android `0.1.0-p1.5` (`versionCode 7`).
+committed build: Debian `0.1.0-18` / Android `0.1.0-p1.6` (`versionCode 8`).
 Deployed + live-tested through `0.1.0-11`: D-023 (upstream switch), D-024 (udpgw
 UDP), D-025 (standalone connect), D-026 (abnormal-disconnect self-heal +
 auto-reconnect + `teatherd.log` + toast notifications + single-instance GTK +
@@ -60,7 +60,11 @@ error after a reboot with a stale DNS sentinel); a Light/Dark/Follow-system
 Appearance setting on both halves; a state-driven GTK phone-app install button;
 **D-031** — an advisory `teather.status.security` version (separate from the
 pairing schema) with a GTK update prompt; and a GTK window that replaces a
-stale instance on relaunch. Deferred: the phone-reboot soak.
+stale instance on relaunch. **2026-09-03 (`0.1.0-18` / `0.1.0-p1.6`):** **D-032**
+— a shared design language (`docs/DESIGN_LANGUAGE.md`): native clients, no
+cross-platform toolkit; first pass gave the GTK window a HeaderBar, labelled
+sections, and a status pill, and aligned the Android app's palette/headings/pill.
+Cosmetic; schema unchanged. Deferred: the phone-reboot soak.
 
 The owner **directed a focused post-P1 track** and rejected the roadmap's
 assumption that all of P2 ("protocol completeness") and P4 (WireGuard) must

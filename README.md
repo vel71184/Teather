@@ -24,15 +24,17 @@ as little receiver-side software as each platform permits.
 > with a per-run secret so other apps on the phone cannot use it (D-028); the
 > desktop package bundles the matching APK and a GTK button installs or updates
 > it on the phone, with a stronger prompt for security-relevant releases (D-029,
-> D-031); the Android build is release-signed (D-030). The GTK window also has a
-> Light/Dark/Follow-system Appearance setting.
+> D-031); the Android build is release-signed (D-030). Both clients follow a
+> shared design language (`docs/DESIGN_LANGUAGE.md`, D-032) — native per platform,
+> no cross-platform toolkit — with a Light/Dark/Follow-system Appearance setting.
 > A 2026-08-30 end-to-end test covered connect, TCP on cellular, full Wi-Fi-loss
 > failover, a UDP STUN round-trip, the zero-gap upstream switch, and a clean
 > teardown; a 2026-08-31 fault-injection pass exercised the D-026 self-heal
 > paths; a 2026-09-01 pass verified D-028/D-029/D-030 live; a 2026-09-03 pass
 > verified the self-heal wedge fix (`0.1.0-13`), the Appearance setting, and the
-> D-031 security-version layer on the dev laptop + pilot phone. Current builds:
-> Debian `0.1.0-17`, Android `0.1.0-p1.5`. See `docs/PROJECT_STATUS.md` and
+> D-031 security-version layer on the dev laptop + pilot phone. The D-032 visual
+> pass (`0.1.0-18` / `0.1.0-p1.6`) is cosmetic. Current builds:
+> Debian `0.1.0-18`, Android `0.1.0-p1.6`. See `docs/PROJECT_STATUS.md` and
 > `docs/DECISIONS.md`.
 
 Teather is currently a personal project. It may later become a public source
@@ -334,6 +336,8 @@ ready.
 - [Roadmap](docs/ROADMAP.md) — ordered milestones and exit criteria.
 - [Decision log](docs/DECISIONS.md) — accepted, proposed, and unresolved choices.
 - [Development guide](docs/DEVELOPMENT.md) — environment and workflow rules.
+- [Design language](docs/DESIGN_LANGUAGE.md) — the shared UI spec every native
+  client follows (D-032).
 - [Experiment log](docs/EXPERIMENTS.md) — reproducible evidence and templates.
 - [Test plan](docs/TEST_PLAN.md) — functional, recovery, security, and performance
   validation.
@@ -348,7 +352,7 @@ ready.
 P1 is complete and Teather is the owner's daily connection. The Android build is
 release-signed with a project key (D-030).
 
-**Android** (`0.1.0-p1.5`, `versionCode 7`): a Kotlin foreground service running
+**Android** (`0.1.0-p1.6`, `versionCode 8`): a Kotlin foreground service running
 a local SOCKS5 relay plus a udpgw terminator for general UDP, with a live
 upstream picker (`auto|cellular|wifi|ethernet`) and status/metrics. The relay
 authenticates the SOCKS connection with a per-run secret (D-028) so that other
@@ -356,8 +360,9 @@ apps on the phone cannot use it, since Android loopback is reachable by any
 installed app. `dumpsys` status is schema 2. A "Get the desktop client" button
 links to the releases page.
 
-**Linux** (Debian `0.1.0-17`): a per-user `teatherd` D-Bus service, a `teather`
-CLI, and a GTK window. NetworkManager owns an in-memory, non-persistent
+**Linux** (Debian `0.1.0-18`): a per-user `teatherd` D-Bus service, a `teather`
+CLI, and a GTK window (HeaderBar, labelled sections, a coloured status pill —
+D-032). NetworkManager owns an in-memory, non-persistent
 `teather0` (no privileged helper, additive DNS — D-022); failover to the phone
 is automatic when Wi-Fi/Ethernet is lost, and Teather can also come up as the
 *only* path when there is no other link (D-025). The `teather upstream` switch is
@@ -381,7 +386,7 @@ cellular over the `teather0` failover route), and a 2026-09-03 pass for the
 self-heal fix (`0.1.0-13`), the appearance setting, and the D-031
 security-version layer — all live on the dev laptop + pilot phone, ending with
 the GTK button pushing `p1.5` and the daemon reporting a matched security
-version. 88 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
+version. 90 host unit tests + 30 Android unit tests pass. See [the decision log](docs/DECISIONS.md) and
 [project status](docs/PROJECT_STATUS.md).
 
 Build:

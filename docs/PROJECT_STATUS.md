@@ -53,8 +53,15 @@
   window replacing a stale instance on relaunch instead of re-showing
   pre-upgrade code (`0.1.0-17`). Status schema unchanged (2) throughout — every
   `p1.x` pairs with every desktop build.
-- **Verification:** 88 host unit tests, 30 Android unit tests, both APKs + the
-  `0.1.0-17` deb build. **Live end to end on the dev laptop + pilot phone.**
+- **`0.1.0-18` / Android `0.1.0-p1.6`** (2026-09-03) — first application of the
+  shared design language (D-032, `docs/DESIGN_LANGUAGE.md`). The GTK window gets
+  a HeaderBar, labelled sections (Connection / This phone / Preferences /
+  Activity), a coloured status pill, a header overflow menu, and symbolic icons
+  on the primary buttons; the Android app aligns its palette tokens, section
+  headings, and status pill to the same spec. Cosmetic only — no behaviour
+  change, no new dependency, status schema still 2.
+- **Verification:** 90 host unit tests, 30 Android unit tests, both APKs + the
+  `0.1.0-18` deb build. **Live end to end on the dev laptop + pilot phone.**
   2026-09-01: release key generated (D-030), release-signed APK pushed via
   `teather device install` (D-029), `teather connect` through the new `teatherd`
   — unauthenticated SOCKS refused (`000`), authenticated egress on Verizon
@@ -69,10 +76,11 @@
   plan under heavy daily use); the controlled E-011 network-layer check is
   opportunistic, pending a reflector host. Plus the phone-reboot fault case and
   an ongoing daily-use soak.
-- **Runnable build:** Android `0.1.0-p1.5` (`versionCode 7`, security-version
-  layer — D-031; `0.1.0-p1.4` appearance setting; `0.1.0-p1.3` SOCKS relay auth
-  — D-028, status schema 2); Debian package
-  `0.1.0-17` (GTK window replaces a stale instance on relaunch; `0.1.0-16` D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
+- **Runnable build:** Android `0.1.0-p1.6` (`versionCode 8`, design-language
+  visual pass — D-032; `0.1.0-p1.5` security-version layer — D-031; `0.1.0-p1.4`
+  appearance setting; `0.1.0-p1.3` SOCKS relay auth — D-028, status schema 2);
+  Debian package
+  `0.1.0-18` (design-language visual pass to the GTK client — D-032; `0.1.0-17` GTK window replaces a stale instance on relaunch; `0.1.0-16` D-031 security layer + state-driven phone-app button; `0.1.0-15` GUI "Phone app" install button; `0.1.0-14` appearance setting on both halves; `0.1.0-13` self-heal wedge fix +
   orphaned-sentinel recovery + GTK icon; `0.1.0-12` D-028 relay auth + udpgw
   parser hardening; `0.1.0-11` D-026 self-healing + logging; `0.1.0-9` D-025
   standalone connect; `0.1.0-8` added the udpgw tuning;
@@ -83,9 +91,10 @@
   (`ACTION_RECONFIGURE`, also phone-side), adds general UDP (D-024: tun2proxy
   `udpgw` + a phone-side `UdpGatewayServer` — no VpnService, no second forward),
   matches the Android icon to the Linux artwork, drops stale "P0" wording.
-  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 88 host
+  `0.1.0-7` / `0.1.0-p1.2` raises the relay concurrency ceiling to 256. 90 host
   unit tests (4 for D-025, 20 for D-026, 3 for D-028, 5 for D-029, 2 for the
-  `0.1.0-13` self-heal fix, 2 for the appearance setting, 4 for D-031) + D-Bus smoke
+  `0.1.0-13` self-heal fix, 2 for the appearance setting, 4 for D-031, 2 for the
+  D-032 status pill) + D-Bus smoke
   pass; 30 Android unit tests pass (`:app:testDebugUnitTest`) with the SDK now at
   `~/Android/Sdk` (`local.properties` corrected).
   **Live-tested end to end on 2026-08-30 on the developer laptop + phone**
@@ -155,7 +164,7 @@ not in progress.
 
 ## Implemented surface (what actually exists)
 
-### Android relay — `app/` (Kotlin, `0.1.0-p1.5`, `versionCode 7`, release-signed — D-030)
+### Android relay — `app/` (Kotlin, `0.1.0-p1.6`, `versionCode 8`, release-signed — D-030)
 
 - `RelayService` — an exported `connectedDevice` foreground service protected by
   `android.permission.DUMP` (D-016), driven by `ACTION_START` / `ACTION_STOP` /
@@ -182,7 +191,7 @@ not in progress.
 - 27 unit/integration tests: SOCKS5 negotiation + RFC 1929 auth, udpgw framing
   (incl. truncated-address rejection), the udpgw server, and the status wire.
 
-### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-17`)
+### Linux client — `desktop/linux/teather/` (Python + PyGObject, Debian `0.1.0-18`)
 
 - `teatherd` — per-user D-Bus service (`systemd --user`), no elevation. Poll
   loop runs `reconcile()` → `health_check()` → `maybe_auto_connect()` every ~3s.
@@ -227,7 +236,7 @@ not in progress.
   `ProtectSystem=strict` + `StateDirectory=teather`, D-Bus activation file, man
   pages, `RECOVERY.md.gz`, the bundled `Teather.apk`. `build-deb.sh` rebuilds
   `tun2proxy` with `--features udpgw` as needed and prefers a release-signed APK.
-- 88 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
+- 90 host unit tests (`python3 -m pytest desktop/linux/tests/test_core.py`).
 
 ### Historical P0
 
@@ -423,6 +432,36 @@ a milestone finishes, make sure the roadmap, this file, `AGENTS.md`'s "Current
 priority", and the README status line agree — a milestone isn't done until they
 do. When this section runs past ~400 lines, drop the entries older than the
 current milestone; git history keeps them.
+
+### 2026-09-03 — Shared design language; GTK visual pass (D-032, `0.1.0-18` / `0.1.0-p1.6`)
+
+- **Trigger:** the owner asked how to polish the utilitarian GTK window and keep
+  it uniform with the Android app and future platform clients.
+- **Decision (D-032):** uniformity comes from a written spec
+  (`docs/DESIGN_LANGUAGE.md`), not a cross-platform UI toolkit (Electron /
+  Flutter / Compose Multiplatform / one Qt client all rejected — they fight
+  "keep Android lightweight"). Each client stays native and follows the spec:
+  same section order and vocabulary, same daemon-driven status-pill model, same
+  accent + pill colour tokens, same icon metaphors. Worst-case fallback the
+  owner accepted: rewrite the same small program per platform.
+- **GTK (`gui.py`):** HeaderBar with a title and an overflow menu (Diagnostics,
+  Restart window); the flat control stack is now labelled sections (Connection /
+  This phone / Preferences / Activity) inside a `ScrolledWindow`; connection
+  state is a coloured **●** pill (`_status_markup`, Pango markup on a label — no
+  CSS provider, so it cannot fight the theme) instead of a "State:" line;
+  Connect / Disconnect / Approve / Rename / Forget / Phone-app carry symbolic
+  icons. No behaviour change.
+- **Android (`MainActivity.kt`, `res/`):** `colors.xml` + `values-night/`
+  carry named palette tokens (`accent`, `surface_sunken`, `status_*`); the
+  theme's `colorAccent` references `@color/accent`; content is grouped under
+  accent section headings; a bold coloured status pill sits above the monospace
+  block. Cosmetic; `SECURITY_VERSION` and `SCHEMA_VERSION` unchanged.
+- **Verified:** 90 host unit tests (2 new for `_status_markup`), 30 Android unit
+  tests, `:app:assembleRelease` + `lintVitalRelease`, `Teather.apk.version`
+  sidecar `8 / 0.1.0-p1.6 / 1`, `0.1.0-18` deb built. `gui.py` imports and the
+  pill helper renders/escapes correctly. Live GTK look is the owner's check
+  after installing `0.1.0-18`; the Android reinstall is optional (cosmetic,
+  schema unchanged).
 
 ### 2026-09-03 — GTK window replaces a stale instance on relaunch (`0.1.0-17`)
 

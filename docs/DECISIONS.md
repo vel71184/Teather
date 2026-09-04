@@ -201,6 +201,47 @@ license file will be added and reuse/redistribution is not granted.
 The choice should reflect whether future commercial reuse without contributing
 changes is acceptable.
 
+## D-032 — Cross-client consistency through a shared design spec, not a shared toolkit
+
+**Status:** Accepted · **Date:** 2026-09-03 (owner-directed)
+
+### Context
+
+Teather already has two front-ends (the Linux GTK desktop client and the Android
+app) and the roadmap adds more (other desktop platforms; phone/receiver clients
+if WireGuard compatibility does not land). The owner wants the experience to feel
+uniform across all of them. The obvious way to get uniformity — a cross-platform
+UI toolkit — conflicts with two standing rules: "keep the Android side
+lightweight" (assistant memory; the app deliberately has no AppCompat) and
+"prefer a focused library over a framework that owns the architecture"
+(`docs/DEVELOPMENT.md`).
+
+### Decision
+
+Uniformity comes from a written design spec (`docs/DESIGN_LANGUAGE.md`), not
+shared UI code. Each client is implemented natively for its platform (GTK 3 /
+PyGObject on Linux, hand-built views on Android, whatever is native on a future
+platform) and follows the spec: the same section order and vocabulary, the same
+status-pill model driven by the daemon's own state words, the same accent and
+pill colour tokens, and the same icon metaphors. Platform chrome, menus, dialogs,
+and background-state surfaces stay native.
+
+Explicitly rejected: Electron, Flutter, Compose Multiplatform, and a single Qt
+client covering every desktop. If a second desktop platform becomes real, it gets
+a thin native shell over the existing daemon; the spec makes that mostly a layout
+exercise. The worst-case fallback the owner accepted is writing the same small
+program again per platform — still consistent because it follows the spec.
+
+### Consequences
+
+- `docs/DESIGN_LANGUAGE.md` is the reference; UI changes on any client are
+  checked against it, and a deliberate change to a shared rule updates the doc.
+- The first application of the spec (`0.1.0-18` / Android `0.1.0-p1.6`) restructured
+  the GTK window into HeaderBar + labelled sections + a status pill, and aligned
+  the Android app's palette tokens, section headings, and status pill to match.
+- No new runtime dependency on any client. The GTK status pill is Pango markup on
+  a label (no CSS provider), so it cannot fight the system theme.
+
 ## D-031 — A security-version layer separate from the wire schema
 
 **Status:** Accepted · **Date:** 2026-09-03

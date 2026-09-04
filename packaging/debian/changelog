@@ -1,3 +1,17 @@
+teather (0.1.0-18) unstable; urgency=medium
+
+  * Visual pass to the shared design language (D-032, docs/DESIGN_LANGUAGE.md).
+    The GTK window gains a HeaderBar, groups its controls into labelled
+    sections (Connection / This phone / Preferences / Activity), and shows
+    connection state as a coloured status pill instead of a "State:" line.
+    Diagnostics and "Restart window" move into a header menu; the primary
+    buttons carry symbolic icons. No behaviour change and no new dependency —
+    the pill is Pango markup, not a CSS provider. Pairs with Android
+    0.1.0-p1.6, which aligns its palette tokens, section headings, and status
+    pill to the same spec (cosmetic; status schema unchanged at 2).
+
+ -- Teather Project <noreply@example.invalid>  Wed, 03 Sep 2026 22:30:00 +0000
+
 teather (0.1.0-17) unstable; urgency=medium
 
   * The GTK window no longer keeps running old code across a package upgrade.
